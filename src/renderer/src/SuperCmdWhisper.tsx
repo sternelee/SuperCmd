@@ -215,6 +215,7 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
   const transcribeInFlightRef = useRef(false);
   const startRequestSeqRef = useRef(0);
   const whisperStateRef = useRef<WhisperState>('idle');
+  const startInFlightRef = useRef(false);
 
   // Native backend refs
   const nativeChunkDisposerRef = useRef<(() => void) | null>(null);
@@ -808,6 +809,7 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
       window.clearTimeout(liveRefineTimerRef.current);
       liveRefineTimerRef.current = null;
     }
+    whisperStateRef.current = 'processing';
     setState('processing');
     setStatusText('Finishing whisper...');
     try {
@@ -918,6 +920,7 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
           liveTypedTextRef.current = '';
           setStatusText('Press start to begin speaking.');
           setErrorText('');
+          whisperStateRef.current = 'idle';
           setState('idle');
           finalizingRef.current = false;
         }
@@ -933,6 +936,7 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
           liveTypedTextRef.current = '';
           setStatusText('Press start to begin speaking.');
           setErrorText('');
+          whisperStateRef.current = 'idle';
           setState('idle');
           finalizingRef.current = false;
         }
@@ -959,6 +963,7 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
           liveTypedTextRef.current = '';
           setStatusText('Press start to begin speaking.');
           setErrorText('');
+          whisperStateRef.current = 'idle';
           setState('idle');
           finalizingRef.current = false;
         }
@@ -974,6 +979,7 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
       liveTypedTextRef.current = '';
       setStatusText('Press start to begin speaking.');
       setErrorText('');
+      whisperStateRef.current = 'idle';
       setState('idle');
       finalizingRef.current = false;
     } finally {
@@ -984,7 +990,10 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
   // ─── Start Listening ───────────────────────────────────────────────
 
   const startListening = useCallback(async () => {
-    if (state === 'listening' || state === 'processing') return;
+    if (startInFlightRef.current) return;
+    const currentState = whisperStateRef.current;
+    if (currentState === 'listening' || currentState === 'processing') return;
+    startInFlightRef.current = true;
     let preflightStream: MediaStream | null = null;
     try {
       const micAccess = await window.electron.whisperEnsureMicrophoneAccess();
@@ -1066,6 +1075,7 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
     setErrorText('');
     setStatusText('Starting microphone...');
     // Optimistically flip to active state so the button toggles immediately.
+    whisperStateRef.current = 'listening';
     setState('listening');
 
     const backend = sessionConfig.backend;
@@ -1219,11 +1229,20 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
         try {
           await window.electron.whisperStartNative(sessionConfig.language);
           if (requestSeq !== startRequestSeqRef.current || finalizingRef.current) {
+            dispose();
+            if (nativeChunkDisposerRef.current === dispose) {
+              nativeChunkDisposerRef.current = null;
+            }
             void window.electron.whisperStopNative().catch(() => {});
             return;
           }
         } catch (err: any) {
+          dispose();
+          if (nativeChunkDisposerRef.current === dispose) {
+            nativeChunkDisposerRef.current = null;
+          }
           setState('error');
+          whisperStateRef.current = 'error';
           setStatusText('Speech recognition failed to start.');
           setErrorText(err?.message || 'Failed to start native speech recognizer.');
           stopVisualizer();
@@ -1234,11 +1253,14 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
       }
     } catch {
       setState('error');
+      whisperStateRef.current = 'error';
       setStatusText('Microphone access denied.');
       setErrorText('Allow microphone permission to use SuperCmd Whisper.');
       stopVisualizer();
+    } finally {
+      startInFlightRef.current = false;
     }
-  }, [state, startVisualizer, stopVisualizer, restoreEditorFocusOnce, startPeriodicTranscription, finalizeAndClose, resolveSessionConfig, startNativeSilenceWatchdog, stopNativeSilenceWatchdog, stopNativeProcessTimer, scheduleNativeProcessTimer, flushNativeCurrentPartial, stopRecording, playRecordingCue]);
+  }, [startVisualizer, stopVisualizer, restoreEditorFocusOnce, startPeriodicTranscription, finalizeAndClose, resolveSessionConfig, startNativeSilenceWatchdog, stopNativeSilenceWatchdog, stopNativeProcessTimer, scheduleNativeProcessTimer, flushNativeCurrentPartial, stopRecording, playRecordingCue]);
 
   // ─── Effects ───────────────────────────────────────────────────────
 
@@ -1283,7 +1305,7 @@ const SuperCmdWhisper: React.FC<SuperCmdWhisperProps> = ({
     const disposeWhisperStart = window.electron.onWhisperStartListening(() => {
       pushToTalkArmedRef.current = PUSH_TO_TALK_MODE;
       const currentState = whisperStateRef.current;
-      if (currentState === 'listening' || currentState === 'processing') {
+      if (startInFlightRef.current || currentState === 'listening' || currentState === 'processing') {
         // Hold-to-talk: repeated keydown callbacks while key is held should not stop capture.
         return;
       }
