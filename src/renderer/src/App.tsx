@@ -108,6 +108,8 @@ const App: React.FC = () => {
   const [memoryActionLoading, setMemoryActionLoading] = useState(false);
   const memoryFeedbackTimerRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const commandsRef = useRef<CommandInfo[]>([]);
+  commandsRef.current = commands;
 
   const restoreLauncherFocus = useCallback(() => {
     requestAnimationFrame(() => {
@@ -213,11 +215,21 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const fetchCommands = useCallback(async () => {
-    setIsLoading(true);
-    const fetchedCommands = await window.electron.getCommands();
-    setCommands(fetchedCommands);
-    setIsLoading(false);
+  const fetchCommands = useCallback(async (options?: { showLoading?: boolean }) => {
+    const shouldShowLoading = options?.showLoading ?? commandsRef.current.length === 0;
+    if (shouldShowLoading) {
+      setIsLoading(true);
+    }
+    try {
+      const fetchedCommands = await window.electron.getCommands();
+      setCommands(fetchedCommands);
+    } catch (error) {
+      console.error('Failed to fetch commands:', error);
+    } finally {
+      if (shouldShowLoading) {
+        setIsLoading(false);
+      }
+    }
   }, []);
 
   // Restore last opened extension on initial mount (app restart)
@@ -384,7 +396,7 @@ const App: React.FC = () => {
       setShowFileSearch(false);
       // Re-fetch commands every time the window is shown
       // so newly installed extensions appear immediately
-      fetchCommands();
+      fetchCommands({ showLoading: false });
       loadLauncherPreferences();
       window.electron.aiIsAvailable().then(setAiAvailable);
       inputRef.current?.focus();

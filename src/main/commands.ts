@@ -59,7 +59,9 @@ export interface CommandInfo {
 let cachedCommands: CommandInfo[] | null = null;
 let cacheTimestamp = 0;
 let inflightDiscovery: Promise<CommandInfo[]> | null = null;
-const CACHE_TTL = 120_000; // 2 min
+let lastStaleRefreshRequestAt = 0;
+const CACHE_TTL = 30 * 60_000; // 30 min
+const STALE_REFRESH_COOLDOWN_MS = 15_000;
 
 // ─── Icon Disk Cache ────────────────────────────────────────────────
 
@@ -862,27 +864,15 @@ async function openSettingsPane(identifier: string): Promise<void> {
 
 // ─── Public API ─────────────────────────────────────────────────────
 
-export async function getAvailableCommands(): Promise<CommandInfo[]> {
-  const now = Date.now();
-  if (cachedCommands && now - cacheTimestamp < CACHE_TTL) {
-    return cachedCommands;
-  }
+async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
+  const t0 = Date.now();
+  console.log('Discovering applications and settings…');
 
-  // Deduplicate concurrent calls: return the in-flight promise if discovery is already running
-  if (inflightDiscovery) {
-    return inflightDiscovery;
-  }
-
-  inflightDiscovery = (async () => {
-    try {
-      const t0 = Date.now();
-      console.log('Discovering applications and settings…');
-
-      // Run discovery sequentially to reduce startup process churn.
-      // On some systems, launching too many plist/icon subprocesses in parallel can
-      // destabilize Electron during early startup.
-      const apps = await discoverApplications();
-      const settings = await discoverSystemSettings();
+  // Run discovery sequentially to reduce startup process churn.
+  // On some systems, launching too many plist/icon subprocesses in parallel can
+  // destabilize Electron during early startup.
+  const apps = await discoverApplications();
+  const settings = await discoverSystemSettings();
 
   apps.sort((a, b) => a.title.localeCompare(b.title));
   settings.sort((a, b) => a.title.localeCompare(b.title));
@@ -1093,19 +1083,53 @@ export async function getAvailableCommands(): Promise<CommandInfo[]> {
     }
   } catch {}
 
-      cachedCommands = allCommands;
-      cacheTimestamp = Date.now();
+  cachedCommands = allCommands;
+  cacheTimestamp = Date.now();
 
-      console.log(
-        `Discovered ${apps.length} apps, ${settings.length} settings panes, ${extensionCommands.length} extension commands, ${scriptCommands.length} script commands in ${Date.now() - t0}ms`
-      );
+  console.log(
+    `Discovered ${apps.length} apps, ${settings.length} settings panes, ${extensionCommands.length} extension commands, ${scriptCommands.length} script commands in ${Date.now() - t0}ms`
+  );
 
-      return cachedCommands;
-    } finally {
+  return cachedCommands;
+}
+
+function ensureBackgroundRefreshForStaleCache(): void {
+  if (!cachedCommands) return;
+  if (inflightDiscovery) return;
+  const now = Date.now();
+  if (now - lastStaleRefreshRequestAt < STALE_REFRESH_COOLDOWN_MS) return;
+  lastStaleRefreshRequestAt = now;
+  inflightDiscovery = discoverAndBuildCommands()
+    .catch((error) => {
+      console.warn('[Commands] Background refresh failed:', error);
+      return cachedCommands || [];
+    })
+    .finally(() => {
       inflightDiscovery = null;
-    }
-  })();
+    });
+}
 
+export async function getAvailableCommands(): Promise<CommandInfo[]> {
+  const now = Date.now();
+  if (cachedCommands && now - cacheTimestamp < CACHE_TTL) {
+    return cachedCommands;
+  }
+
+  // Serve stale cache immediately and refresh in the background to avoid
+  // repeatedly blocking the launcher on app/settings discovery.
+  if (cachedCommands) {
+    ensureBackgroundRefreshForStaleCache();
+    return cachedCommands;
+  }
+
+  // Deduplicate concurrent cold-start calls.
+  if (inflightDiscovery) {
+    return inflightDiscovery;
+  }
+
+  inflightDiscovery = discoverAndBuildCommands().finally(() => {
+    inflightDiscovery = null;
+  });
   return inflightDiscovery;
 }
 
@@ -1138,4 +1162,5 @@ export async function executeCommand(id: string): Promise<boolean> {
 export function invalidateCache(): void {
   cachedCommands = null;
   cacheTimestamp = 0;
+  lastStaleRefreshRequestAt = 0;
 }
