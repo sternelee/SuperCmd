@@ -634,6 +634,83 @@ async function ensureMicrophoneAccess(prompt = true): Promise<MicrophonePermissi
   };
 }
 
+function ensureInputMonitoringRequestBinary(): string | null {
+  const fs = require('fs') as typeof import('fs');
+  const binaryPath = getNativeBinaryPath('input-monitoring-request');
+  if (fs.existsSync(binaryPath)) return binaryPath;
+  try {
+    const { execFileSync } = require('child_process') as typeof import('child_process');
+    const sourceCandidates = [
+      path.join(app.getAppPath(), 'src', 'native', 'input-monitoring-request.swift'),
+      path.join(process.cwd(), 'src', 'native', 'input-monitoring-request.swift'),
+      path.join(__dirname, '..', '..', 'src', 'native', 'input-monitoring-request.swift'),
+    ];
+    const sourcePath = sourceCandidates.find((candidate) => fs.existsSync(candidate));
+    if (!sourcePath) return null;
+    fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
+    execFileSync('swiftc', [
+      '-O',
+      '-o',
+      binaryPath,
+      sourcePath,
+      '-framework',
+      'CoreGraphics',
+    ]);
+    return binaryPath;
+  } catch {
+    return null;
+  }
+}
+
+async function checkInputMonitoringAccess(): Promise<boolean> {
+  if (process.platform !== 'darwin') return true;
+  const binaryPath = ensureInputMonitoringRequestBinary();
+  if (!binaryPath) return false;
+  const { spawn } = require('child_process') as typeof import('child_process');
+  return await new Promise<boolean>((resolve) => {
+    const proc = spawn(binaryPath, ['--check'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let stdout = '';
+    let settled = false;
+    const settle = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    const timeout = setTimeout(() => {
+      try { proc.kill('SIGTERM'); } catch {}
+      settle(false);
+    }, 1400);
+
+    proc.stdout.on('data', (chunk: Buffer | string) => {
+      stdout += String(chunk || '');
+    });
+
+    proc.on('error', () => {
+      clearTimeout(timeout);
+      settle(false);
+    });
+
+    proc.on('close', () => {
+      clearTimeout(timeout);
+      const lines = stdout
+        .split('\n')
+        .map((line: string) => line.trim())
+        .filter(Boolean);
+      for (let i = lines.length - 1; i >= 0; i -= 1) {
+        try {
+          const payload = JSON.parse(lines[i]);
+          if (typeof payload?.granted === 'boolean') {
+            settle(Boolean(payload.granted));
+            return;
+          }
+        } catch {}
+      }
+      settle(false);
+    });
+  });
+}
+
 async function requestOnboardingPermissionAccess(target: OnboardingPermissionTarget): Promise<OnboardingPermissionResult> {
   if (process.platform !== 'darwin') {
     if (target === 'microphone' || target === 'speech-recognition') {
@@ -699,35 +776,37 @@ async function requestOnboardingPermissionAccess(target: OnboardingPermissionTar
     };
   }
 
-  // Input Monitoring: spawn input-monitoring-request which attempts a CGEventTap.
-  // On failure it stays alive for 3.5 s so macOS TCC has time to register
-  // SuperCmd in System Settings → Privacy → Input Monitoring.
-  if (process.platform === 'darwin') {
+  // Input Monitoring: first check whether access is already granted.
+  // If not, launch the helper detached so macOS can add SuperCmd to the
+  // Input Monitoring list and the user can manually enable it.
+  const alreadyGranted = await checkInputMonitoringAccess();
+  if (alreadyGranted) {
+    return {
+      granted: true,
+      requested: false,
+      mode: 'already-granted',
+      status: 'granted',
+      canPrompt: false,
+    };
+  }
+  const binaryPath = ensureInputMonitoringRequestBinary();
+  if (binaryPath) {
     try {
-      const fs = require('fs') as typeof import('fs');
-      const { spawn, execFileSync } = require('child_process') as typeof import('child_process');
-      let binaryPath = getNativeBinaryPath('input-monitoring-request');
-      if (!fs.existsSync(binaryPath)) {
-        const sourceCandidates = [
-          path.join(app.getAppPath(), 'src', 'native', 'input-monitoring-request.swift'),
-          path.join(process.cwd(), 'src', 'native', 'input-monitoring-request.swift'),
-          path.join(__dirname, '..', '..', 'src', 'native', 'input-monitoring-request.swift'),
-        ];
-        const sourcePath = sourceCandidates.find((c) => fs.existsSync(c));
-        if (sourcePath) {
-          fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
-          execFileSync('swiftc', ['-O', '-o', binaryPath, sourcePath]);
-        } else {
-          binaryPath = '';
-        }
-      }
-      if (binaryPath) {
-        // Detached — exits on its own (0.5 s on success, 3.5 s on failure).
-        spawn(binaryPath, [], { stdio: ['ignore', 'ignore', 'ignore'], detached: true }).unref();
-      }
+      const { spawn } = require('child_process') as typeof import('child_process');
+      // Detached — exits on its own (0.5 s on success, 3.5 s on failure).
+      spawn(binaryPath, [], { stdio: ['ignore', 'ignore', 'ignore'], detached: true }).unref();
     } catch {}
   }
-  return { granted: false, requested: true, mode: 'manual' };
+  return {
+    granted: false,
+    requested: Boolean(binaryPath),
+    mode: 'manual',
+    status: 'not-determined',
+    canPrompt: true,
+    error: binaryPath
+      ? undefined
+      : 'Could not prepare Input Monitoring helper. Open System Settings -> Privacy & Security -> Input Monitoring and add SuperCmd manually.',
+  };
 }
 let lastTypingCaretPoint: { x: number; y: number } | null = null;
 let lastCursorPromptSelection = '';
@@ -5244,6 +5323,9 @@ app.whenReady().then(async () => {
     if (process.platform === 'darwin') {
       try {
         statuses['accessibility'] = systemPreferences.isTrustedAccessibilityClient(false);
+      } catch {}
+      try {
+        statuses['input-monitoring'] = await checkInputMonitoringAccess();
       } catch {}
       try {
         const micResult = await ensureMicrophoneAccess(false);

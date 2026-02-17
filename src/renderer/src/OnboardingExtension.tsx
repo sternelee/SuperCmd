@@ -66,6 +66,15 @@ const permissionTargets: Array<{
     iconBg: 'bg-rose-500/22 border-rose-100/30',
   },
   {
+    id: 'input-monitoring',
+    title: 'Input Monitoring',
+    description: 'Required for Fn hold-to-talk detection and other global key monitoring in Whisper mode.',
+    url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent',
+    icon: Keyboard,
+    iconTone: 'text-amber-100',
+    iconBg: 'bg-amber-500/22 border-amber-100/30',
+  },
+  {
     id: 'speech-recognition',
     title: 'Speech Recognition',
     description: 'Required for native speech recognition used by default in Whisper.',
@@ -455,6 +464,8 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
         ? [url, 'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone']
         : id === 'speech-recognition'
           ? [url, 'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_SpeechRecognition']
+          : id === 'input-monitoring'
+            ? [url, 'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ListenEvent']
           : [url];
       let ok = false;
       for (const candidate of candidateUrls) {
