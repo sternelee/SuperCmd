@@ -318,6 +318,7 @@ type SpeakChunkPrepared = {
   text: string;
   audioPath: string;
   wordCues: Array<{ start: number; end: number; wordIndex: number }>;
+  durationMs?: number;
 };
 type SpeakRuntimeOptions = {
   voice: string;
@@ -841,6 +842,26 @@ function parseCueTimeMs(value: any): number {
     }
   }
   return 0;
+}
+
+function probeAudioDurationMs(audioPath: string): number | null {
+  const target = String(audioPath || '').trim();
+  if (!target) return null;
+  if (process.platform !== 'darwin') return null;
+  try {
+    const { spawnSync } = require('child_process');
+    const result = spawnSync('/usr/bin/afinfo', [target], {
+      encoding: 'utf-8',
+      timeout: 4000,
+    });
+    const output = `${String(result?.stdout || '')}\n${String(result?.stderr || '')}`;
+    const secMatch = /estimated duration:\s*([0-9]+(?:\.[0-9]+)?)\s*sec/i.exec(output);
+    const seconds = secMatch ? Number(secMatch[1]) : NaN;
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.round(seconds * 1000);
+    }
+  } catch {}
+  return null;
 }
 
 function normalizePermissionStatus(raw: any): MicrophoneAccessStatus {
@@ -3685,7 +3706,7 @@ async function startSpeakFromSelection(): Promise<boolean> {
                   voice: speakRuntimeOptions.voice,
                   lang,
                   rate: speakRuntimeOptions.rate,
-                  saveSubtitles: false,
+                  saveSubtitles: true,
                   timeoutMs: 45000,
                 })
               : synthesizeWithSystemSay({
@@ -3760,7 +3781,12 @@ async function startSpeakFromSelection(): Promise<boolean> {
             }
           } catch {}
         }
-        resolve({ index, text: session.chunks[index], audioPath, wordCues });
+        const durationMsFromCues =
+          wordCues.length > 0
+            ? Math.max(...wordCues.map((cue) => cue.end))
+            : null;
+        const durationMs = durationMsFromCues || probeAudioDurationMs(audioPath) || undefined;
+        resolve({ index, text: session.chunks[index], audioPath, wordCues, durationMs });
       }).catch((err: any) => {
         const message = String(err?.message || err || 'Speech synthesis failed');
         if (/timed out|timeout/i.test(message)) {
@@ -3788,7 +3814,22 @@ async function startSpeakFromSelection(): Promise<boolean> {
       const startedAt = Date.now();
       let lastWordIndex = -1;
       const wordsInText = prepared.text.split(/\s+/g).filter(Boolean).length;
-      const fallbackMsPerWord = 165;
+      const fallbackWpm = Number(parseSayRateWordsPerMinute(speakRuntimeOptions.rate || '+0%')) || 175;
+      const fallbackMsPerWord = wordsInText > 0
+        ? Math.max(
+            120,
+            Math.min(
+              1200,
+              Math.round(
+                (
+                  (typeof prepared.durationMs === 'number' && Number.isFinite(prepared.durationMs) && prepared.durationMs > 0)
+                    ? prepared.durationMs / wordsInText
+                    : (60000 / Math.max(90, fallbackWpm))
+                )
+              )
+            )
+          )
+        : 0;
       const cueTimer = setInterval(() => {
         if (session.stopRequested || activeSpeakSession?.id !== sessionId) return;
         const elapsed = Date.now() - startedAt;
