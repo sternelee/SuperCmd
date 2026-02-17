@@ -14,6 +14,7 @@ interface HotkeyRecorderProps {
   onChange: (hotkey: string) => void;
   compact?: boolean;
   large?: boolean;
+  active?: boolean;
 }
 
 function keyEventToAccelerator(e: React.KeyboardEvent): string | null {
@@ -68,6 +69,7 @@ const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
   onChange,
   compact,
   large,
+  active,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -122,6 +124,8 @@ const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
             ${
               isRecording
                 ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400 min-w-[80px]'
+                : active
+                  ? 'bg-white/20 border border-white/70 text-white shadow-[0_0_0_2px_rgba(255,255,255,0.14),0_0_18px_rgba(255,255,255,0.28)]'
                 : value
                   ? 'bg-white/[0.06] border border-white/[0.08] text-white/60 hover:border-white/20'
                   : 'text-white/20 hover:text-white/40'
@@ -172,7 +176,9 @@ const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
         ${
           isRecording
             ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400'
-            : 'bg-white/[0.06] border border-white/[0.08] text-white/70 hover:border-white/20'
+            : active
+              ? 'bg-white/20 border border-white/70 text-white shadow-[0_0_0_2px_rgba(255,255,255,0.14),0_0_24px_rgba(255,255,255,0.26)]'
+              : 'bg-white/[0.06] border border-white/[0.08] text-white/70 hover:border-white/20'
         }
       `}
     >

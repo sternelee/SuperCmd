@@ -68,7 +68,7 @@ const permissionTargets: Array<{
   {
     id: 'speech-recognition',
     title: 'Speech Recognition',
-    description: 'Required for native Whisper transcription.',
+    description: 'Required for native speech recognition used by default in Whisper.',
     url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition',
     icon: Volume2,
     iconTone: 'text-emerald-100',
@@ -139,7 +139,7 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
   const [permissionNotes, setPermissionNotes] = useState<Record<string, string>>({});
   const [whisperHoldKey, setWhisperHoldKey] = useState('Fn');
   const [whisperKeyStatus, setWhisperKeyStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [whisperKeyTested, setWhisperKeyTested] = useState(false);
+  const [isHoldKeyActive, setIsHoldKeyActive] = useState(false);
   const [speechLanguage, setSpeechLanguage] = useState('en-US');
   const [spotlightReplaceStatus, setSpotlightReplaceStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const introVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -216,13 +216,6 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
     return () => window.removeEventListener('focus', handleFocus);
   }, [step]);
 
-  // Auto-unlock Continue on step 4 once the user has dictated something.
-  useEffect(() => {
-    if (dictationPracticeText.trim()) {
-      setWhisperKeyTested(true);
-    }
-  }, [dictationPracticeText]);
-
   // Fix 6: Enable Fn watcher when user reaches the Dictation test step (step 4).
   // By this point the user has passed the permissions step, so Input Monitoring
   // should already be granted and it is safe to start the CGEventTap binary.
@@ -233,6 +226,44 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
       void window.electron.disableFnWatcherForOnboarding().catch(() => {});
     };
   }, [step]);
+
+  useEffect(() => {
+    if (step !== 4) {
+      setIsHoldKeyActive(false);
+      return;
+    }
+
+    const holdKey = String(whisperHoldKey || '').trim().toLowerCase();
+    const matchesHoldKey = (key: string) => {
+      if (!holdKey) return false;
+      if (holdKey === 'fn') {
+        return key === 'Fn' || key === 'Function';
+      }
+      return key.toLowerCase() === holdKey;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (matchesHoldKey(event.key)) {
+        setIsHoldKeyActive(true);
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (matchesHoldKey(event.key)) {
+        setIsHoldKeyActive(false);
+      }
+    };
+    const handleWindowBlur = () => setIsHoldKeyActive(false);
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleWindowBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleWindowBlur);
+      setIsHoldKeyActive(false);
+    };
+  }, [step, whisperHoldKey]);
 
   useEffect(() => {
     const video = introVideoRef.current;
@@ -448,10 +479,8 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
   };
 
   const canCompleteOnboarding = hasValidShortcut;
-  const canContinueBase = step !== 2 || canCompleteOnboarding;
-  const canContinueDictation = step !== 4 || whisperKeyTested;
-  const canContinue = canContinueBase && canContinueDictation;
-  const canFinish = canCompleteOnboarding && whisperKeyTested;
+  const canContinue = step !== 2 || canCompleteOnboarding;
+  const canFinish = canCompleteOnboarding;
   const contentBackground = step === 0
     ? 'radial-gradient(circle at 10% 0%, rgba(255, 90, 118, 0.26), transparent 34%), radial-gradient(circle at 92% 2%, rgba(255, 84, 70, 0.19), transparent 36%), linear-gradient(180deg, rgba(5,5,7,0.98) 0%, rgba(8,8,11,0.95) 48%, rgba(10,10,13,0.93) 100%)'
     : 'radial-gradient(circle at 5% 0%, rgba(255, 92, 127, 0.30), transparent 36%), radial-gradient(circle at 100% 10%, rgba(255, 87, 73, 0.24), transparent 38%), radial-gradient(circle at 82% 100%, rgba(84, 212, 255, 0.12), transparent 34%), transparent';
@@ -754,67 +783,54 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
           )}
 
           {step === 4 && (
-            <div className="max-w-6xl mx-auto min-h-full flex items-center">
-              <div className="grid grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)] gap-5 w-full items-center">
-                <div className="space-y-4">
-                  <div className="w-10 h-10 rounded-xl border border-cyan-200/25 bg-cyan-500/15 flex items-center justify-center">
-                    <Mic className="w-5 h-5 text-cyan-100" />
+            <div className="max-w-5xl mx-auto min-h-full flex flex-col items-center justify-center">
+              <div className="grid grid-cols-1 lg:grid-cols-[290px_minmax(0,1fr)] gap-3 w-full items-center">
+                <div className="flex flex-col gap-2">
+                  <div className="w-8 h-8 rounded-lg border border-cyan-200/25 bg-cyan-500/15 flex items-center justify-center">
+                    <Mic className="w-4 h-4 text-cyan-100" />
                   </div>
-                  <h3 className="text-white text-[34px] leading-[1.05] font-semibold">Dictation Mode</h3>
-                  <p className="text-white/72 text-[22px] leading-tight">Test your Whisper hold key first.</p>
-                  <div className="space-y-2 text-white/82 text-[16px]">
-                    <p>1. Hold {whisperKeyCaps.join(' + ')}</p>
-                    <p>2. Read the sample message</p>
-                    <p>3. Release key to insert text</p>
+                  <h3 className="text-white text-[26px] leading-[1.05] font-semibold">Dictation Mode</h3>
+                  <div>
+                    <p className="text-white/58 text-[9px] uppercase tracking-[0.08em] mb-1">How to test</p>
+                    <p className="text-white/72 text-[11px] leading-relaxed">Hold key, read sample, release to insert.</p>
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <HotkeyRecorder value={whisperHoldKey} onChange={handleWhisperKeyChange} compact />
-                    {whisperKeyStatus === 'success' ? <span className="text-xs text-emerald-300">Whisper key updated</span> : null}
+                  <div className="mt-2 flex items-center gap-3 flex-wrap">
+                    <HotkeyRecorder value={whisperHoldKey} onChange={handleWhisperKeyChange} large active={isHoldKeyActive} />
+                    {whisperKeyStatus === 'success' ? <span className="text-xs text-emerald-300">Hold key updated</span> : null}
                     {whisperKeyStatus === 'error' ? <span className="text-xs text-rose-300">Shortcut unavailable</span> : null}
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <p className="text-white/82 text-xs">Dictation language</p>
                     <select
                       value={speechLanguage}
                       onChange={(e) => { void handleSpeechLanguageChange(e.target.value); }}
-                      className="w-full max-w-[260px] bg-white/[0.06] border border-white/[0.18] rounded-md px-3 py-2 text-sm text-white/92 focus:outline-none focus:border-cyan-300/70"
+                      className="w-full max-w-[200px] bg-white/[0.06] border border-white/[0.18] rounded-md px-2 py-1.5 text-xs text-white/92 focus:outline-none focus:border-cyan-300/70"
                     >
                       {SPEECH_LANGUAGE_OPTIONS.map((item) => (
                         <option key={item.value} value={item.value}>{item.label}</option>
                       ))}
                     </select>
-                    <p className="text-white/54 text-[11px]">
-                      Default is English. This language is used for Whisper transcription, including ElevenLabs.
-                    </p>
                   </div>
-                  <button
-                    onClick={() => setWhisperKeyTested((prev) => !prev)}
-                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors ${
-                      whisperKeyTested
-                        ? 'border-emerald-200/35 bg-emerald-500/22 text-emerald-100'
-                        : 'border-white/20 bg-white/[0.10] hover:bg-white/[0.16] text-white/88'
-                    }`}
-                  >
-                    {whisperKeyTested ? <Check className="w-3.5 h-3.5" /> : null}
-                    The whisper key works
-                  </button>
                 </div>
 
-                <div className="rounded-3xl border border-white/[0.16] p-5 bg-white/[0.04]">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/20 bg-white/[0.06] text-white/85 text-xs mb-3">
+                <div className="rounded-3xl border border-white/[0.16] p-3 bg-white/[0.04]">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/20 text-white/85 text-xs mb-2">
                     <Mic className="w-3.5 h-3.5" />
                     Messages sample
                   </div>
-                  <div className="rounded-2xl border border-white/[0.12] bg-white/[0.06] p-4 mb-4">
-                    <p className="text-white/92 text-sm leading-relaxed">“{DICTATION_SAMPLE}”</p>
+                  <div className="rounded-2xl border border-white/[0.12] bg-white/[0.06] p-2.5 mb-2.5">
+                    <p className="text-white/92 text-[15px] leading-relaxed">“{DICTATION_SAMPLE}”</p>
                   </div>
-                  <p className="text-white/70 text-sm mb-2">Hold down your whisper key and read the message above:</p>
+                  <p className="text-white/70 text-sm mb-2">Hold your key and read the message above:</p>
                   <textarea
                     value={dictationPracticeText}
                     onChange={(e) => onDictationPracticeTextChange(e.target.value)}
                     placeholder="Dictated text appears here..."
-                    className="w-full h-40 resize-none rounded-xl border border-cyan-300/55 bg-white/[0.05] px-4 py-3 text-white/90 placeholder:text-white/40 text-base leading-relaxed outline-none shadow-[0_0_0_3px_rgba(34,211,238,0.15)]"
+                    className="w-full h-[250px] resize-none rounded-xl border border-cyan-300/55 bg-white/[0.05] px-4 py-3 text-white/90 placeholder:text-white/40 text-base leading-relaxed outline-none shadow-[0_0_0_3px_rgba(34,211,238,0.15)]"
                   />
+                  <p className="mt-2 text-[11px] text-white/40 leading-relaxed">
+                    Native speech recognition is used by default. For the best experience, use ElevenLabs.
+                  </p>
                 </div>
               </div>
             </div>
@@ -869,15 +885,19 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                       {([
                         { symbol: '⌘', label: 'Cmd' },
                         { symbol: '⇧', label: 'Shift' },
-                        { symbol: 'S', label: null },
+                        { symbol: 'S', label: ''},
                       ] as Array<{ symbol: string; label: string | null }>).map((cap, i) => (
-                        <span
-                          key={i}
-                          className="inline-flex flex-col min-w-[34px] h-9 px-2 items-center justify-center rounded-md border border-white/20 bg-white/[0.10] text-white/85 font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]"
-                        >
-                          <span className="text-sm leading-none">{cap.symbol}</span>
-                          {cap.label && <span className="text-[8px] text-white/50 leading-none mt-0.5">{cap.label}</span>}
-                        </span>
+                        <React.Fragment key={`${cap.symbol}-${i}`}>
+                          <span className="inline-flex items-center gap-2 min-w-[70px] h-9 px-3 rounded-md border border-white/20 bg-white/[0.10] text-white/90 font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]">
+                            <span className="inline-flex w-5 h-5 items-center justify-center rounded bg-white/[0.08] text-[11px] leading-none">
+                              {cap.symbol}
+                            </span>
+                            <span className="text-[11px] text-white/72 leading-none">
+                              {cap.label}
+                            </span>
+                          </span>
+                          {i < 2 ? <span className="text-white/40 text-sm font-semibold">+</span> : null}
+                        </React.Fragment>
                       ))}
                       <p className="text-white/45 text-xs">to hear it read aloud.</p>
                     </div>
