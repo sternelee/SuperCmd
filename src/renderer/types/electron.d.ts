@@ -123,6 +123,15 @@ export interface EdgeTtsVoice {
   style?: string;
 }
 
+export interface ElevenLabsVoice {
+  id: string;
+  name: string;
+  category: 'premade' | 'cloned' | 'generated' | 'professional';
+  description?: string;
+  labels?: Record<string, string>;
+  previewUrl?: string;
+}
+
 export interface AppUpdaterStatus {
   state: 'idle' | 'unsupported' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
   supported: boolean;
@@ -254,6 +263,7 @@ export interface ElectronAPI {
   speakUpdateOptions: (patch: { voice?: string; rate?: string; restartCurrent?: boolean }) => Promise<{ voice: string; rate: string }>;
   speakPreviewVoice: (payload: { voice: string; text?: string; rate?: string; provider?: 'edge-tts' | 'elevenlabs'; model?: string }) => Promise<boolean>;
   edgeTtsListVoices: () => Promise<EdgeTtsVoice[]>;
+  elevenLabsListVoices: () => Promise<{ voices: ElevenLabsVoice[]; error?: string }>;
 
   // Settings
   getSettings: () => Promise<AppSettings>;

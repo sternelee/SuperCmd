@@ -21,7 +21,7 @@ import {
   Volume2,
 } from 'lucide-react';
 import HotkeyRecorder from './HotkeyRecorder';
-import type { AppSettings, AISettings, EdgeTtsVoice } from '../../types/electron';
+import type { AppSettings, AISettings, EdgeTtsVoice, ElevenLabsVoice } from '../../types/electron';
 
 const PROVIDER_OPTIONS = [
   { id: 'openai' as const, label: 'OpenAI', description: 'GPT family models' },
@@ -181,6 +181,9 @@ const AITab: React.FC = () => {
   const [previewingVoice, setPreviewingVoice] = useState(false);
   const [edgeVoices, setEdgeVoices] = useState<EdgeVoiceDef[]>([]);
   const [edgeVoicesLoading, setEdgeVoicesLoading] = useState(false);
+  const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>([]);
+  const [elevenLabsVoicesLoading, setElevenLabsVoicesLoading] = useState(false);
+  const [elevenLabsVoicesError, setElevenLabsVoicesError] = useState<string | null>(null);
   const settingsRef = useRef<AppSettings | null>(null);
   const pullingModelRef = useRef<string | null>(null);
   const selectingOllamaDefaultRef = useRef(false);
@@ -209,7 +212,7 @@ const AITab: React.FC = () => {
             label: String(v.label || '').trim(),
             languageCode: String(v.languageCode || '').trim(),
             languageLabel: String(v.languageLabel || '').trim(),
-            gender: String(v.gender || '').toLowerCase() === 'male' ? 'male' : 'female',
+            gender: (String(v.gender || '').toLowerCase() === 'male' ? 'male' : 'female') as EdgeVoiceGender,
             style: v.style ? String(v.style).trim() : undefined,
           }))
           .filter((v) => v.id && v.label && v.languageCode);
@@ -224,6 +227,39 @@ const AITab: React.FC = () => {
 
     return () => { cancelled = true; };
   }, []);
+
+  // Fetch ElevenLabs voices when API key is present and tab is speak
+  useEffect(() => {
+    let cancelled = false;
+    const fetchVoices = async () => {
+      if (!settings?.ai?.elevenlabsApiKey || activeTab !== 'speak') {
+        setElevenLabsVoices([]);
+        setElevenLabsVoicesError(null);
+        return;
+      }
+      setElevenLabsVoicesLoading(true);
+      setElevenLabsVoicesError(null);
+      try {
+        const result = await window.electron.elevenLabsListVoices();
+        if (cancelled) return;
+        if (result.error) {
+          setElevenLabsVoicesError(result.error);
+          setElevenLabsVoices([]);
+        } else {
+          setElevenLabsVoices(result.voices);
+        }
+      } catch {
+        if (!cancelled) {
+          setElevenLabsVoicesError('Failed to fetch voices.');
+          setElevenLabsVoices([]);
+        }
+      } finally {
+        if (!cancelled) setElevenLabsVoicesLoading(false);
+      }
+    };
+    fetchVoices();
+    return () => { cancelled = true; };
+  }, [settings?.ai?.elevenlabsApiKey, activeTab]);
 
   const updateAI = async (patch: Partial<AISettings>) => {
     if (!settings) return;
@@ -386,7 +422,9 @@ const AITab: React.FC = () => {
     : ai.textToSpeechModel.startsWith('elevenlabs-')
       ? parsedElevenLabsSpeak.model
       : ai.textToSpeechModel;
-  const selectedElevenLabsVoiceId = ELEVENLABS_VOICES.some((voice) => voice.id === parsedElevenLabsSpeak.voiceId)
+  const isValidVoiceId = ELEVENLABS_VOICES.some((voice) => voice.id === parsedElevenLabsSpeak.voiceId) ||
+    elevenLabsVoices.some((voice) => voice.id === parsedElevenLabsSpeak.voiceId);
+  const selectedElevenLabsVoiceId = isValidVoiceId
     ? parsedElevenLabsSpeak.voiceId
     : DEFAULT_ELEVENLABS_VOICE_ID;
 
@@ -1030,7 +1068,18 @@ const AITab: React.FC = () => {
                   </div>
 
                   <div>
-                    <p className="text-[11px] text-white/45 mb-1">ElevenLabs Voice</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[11px] text-white/45">ElevenLabs Voice</p>
+                      {elevenLabsVoicesLoading && (
+                        <span className="text-[10px] text-white/35 flex items-center gap-1">
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          Fetching your voices...
+                        </span>
+                      )}
+                    </div>
+                    {elevenLabsVoicesError && (
+                      <p className="text-[10px] text-amber-300 mb-1.5">{elevenLabsVoicesError}</p>
+                    )}
                     <select
                       value={selectedElevenLabsVoiceId}
                       onChange={(e) =>
@@ -1039,12 +1088,54 @@ const AITab: React.FC = () => {
                         })}
                       className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                     >
-                      {ELEVENLABS_VOICES.map((voice) => (
-                        <option key={voice.id} value={voice.id}>
-                          {voice.label}
-                        </option>
-                      ))}
+                      {ELEVENLABS_VOICES.length > 0 && (
+                        <optgroup label="Built-in Voices">
+                          {ELEVENLABS_VOICES.map((voice) => (
+                            <option key={voice.id} value={voice.id}>
+                              {voice.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {elevenLabsVoices.filter(v => v.category === 'premade' && !ELEVENLABS_VOICES.some(bv => bv.id === v.id)).length > 0 && (
+                        <optgroup label="Additional Premade Voices">
+                          {elevenLabsVoices
+                            .filter(v => v.category === 'premade' && !ELEVENLABS_VOICES.some(bv => bv.id === v.id))
+                            .map((voice) => (
+                              <option key={voice.id} value={voice.id}>
+                                {voice.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                      {elevenLabsVoices.filter(v => v.category === 'cloned' || v.category === 'generated').length > 0 && (
+                        <optgroup label="Your Custom Voices (Cloned/Generated)">
+                          {elevenLabsVoices
+                            .filter(v => v.category === 'cloned' || v.category === 'generated')
+                            .map((voice) => (
+                              <option key={voice.id} value={voice.id}>
+                                {voice.name} {voice.labels?.accent ? `(${voice.labels.accent})` : ''}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                      {elevenLabsVoices.filter(v => v.category === 'professional').length > 0 && (
+                        <optgroup label="Professional Voice Clones">
+                          {elevenLabsVoices
+                            .filter(v => v.category === 'professional')
+                            .map((voice) => (
+                              <option key={voice.id} value={voice.id}>
+                                {voice.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
                     </select>
+                    {elevenLabsVoices.length > 0 && (
+                      <p className="text-[10px] text-white/35 mt-1">
+                        {elevenLabsVoices.length} custom voice{elevenLabsVoices.length !== 1 ? 's' : ''} available from your ElevenLabs account
+                      </p>
+                    )}
                   </div>
 
                   <button
@@ -1053,8 +1144,8 @@ const AITab: React.FC = () => {
                     onClick={async () => {
                       try {
                         setPreviewingVoice(true);
-                        const selectedVoice = ELEVENLABS_VOICES.find((v) => v.id === selectedElevenLabsVoiceId);
-                        const intro = `Hi, this is ${selectedVoice?.label || 'my voice'} from ElevenLabs in SuperCmd.`;
+                        const selectedVoice = ELEVENLABS_VOICES.find((v) => v.id === selectedElevenLabsVoiceId) || elevenLabsVoices.find((v) => v.id === selectedElevenLabsVoiceId);
+                        const intro = `Hi, this is ${selectedVoice?.label || selectedVoice?.name || 'my voice'} from ElevenLabs in SuperCmd.`;
                         await window.electron.speakPreviewVoice({
                           provider: 'elevenlabs',
                           model: speakModelValue,
@@ -1089,6 +1180,7 @@ const AITab: React.FC = () => {
                 <p>Whisper default is Native for fast local dictation.</p>
                 <p>Speak default is Edge TTS with per-language male/female voice selection.</p>
                 <p>English voice options are intentionally limited to US and UK variants.</p>
+                <p>ElevenLabs custom voices (cloned/generated) will appear automatically when your API key is configured.</p>
               </div>
             </div>
           </div>

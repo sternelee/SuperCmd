@@ -15,7 +15,7 @@
  */
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import type { EdgeTtsVoice } from '../../types/electron';
+import type { EdgeTtsVoice, ElevenLabsVoice } from '../../types/electron';
 import { buildReadVoiceOptions, type ReadVoiceOption } from '../utils/command-helpers';
 import { useDetachedPortalWindow } from '../useDetachedPortalWindow';
 
@@ -95,6 +95,7 @@ export function useSpeakManager({
     rate: '+0%',
   });
   const [edgeTtsVoices, setEdgeTtsVoices] = useState<EdgeTtsVoice[]>([]);
+  const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>([]);
   const [configuredEdgeTtsVoice, setConfiguredEdgeTtsVoice] = useState('en-US-EricNeural');
   const [configuredTtsModel, setConfiguredTtsModel] = useState('edge-tts');
 
@@ -155,6 +156,29 @@ export function useSpeakManager({
     };
   }, []);
 
+  // ElevenLabs custom voice list fetch
+  useEffect(() => {
+    let disposed = false;
+    // Only fetch when using ElevenLabs
+    if (!String(configuredTtsModel || '').startsWith('elevenlabs-')) {
+      setElevenLabsVoices([]);
+      return;
+    }
+    window.electron.elevenLabsListVoices()
+      .then((result) => {
+        if (disposed) return;
+        if (result.voices) {
+          setElevenLabsVoices(result.voices);
+        }
+      })
+      .catch(() => {
+        if (!disposed) setElevenLabsVoices([]);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [configuredTtsModel]);
+
   // Auto-sync configured voice when speak view opens
   useEffect(() => {
     if (!showSpeak) {
@@ -181,14 +205,29 @@ export function useSpeakManager({
   const readVoiceOptions = useMemo(
     () => {
       if (String(configuredTtsModel || '').startsWith('elevenlabs-')) {
-        return ELEVENLABS_VOICES.map((voice) => ({
+        // Start with built-in voices
+        const builtInOptions = ELEVENLABS_VOICES.map((voice) => ({
           value: voice.id,
-          label: `${voice.label} (ElevenLabs)`,
+          label: voice.label, // Short label for widget
         }));
+
+        // Add custom voices from ElevenLabs account - use short name only
+        const customVoices = elevenLabsVoices
+          .filter((v) => !ELEVENLABS_VOICES.some((bv) => bv.id === v.id))
+          .map((voice) => {
+            // Extract just the name (remove description after " - ")
+            const shortName = voice.name.split(' - ')[0].trim();
+            return {
+              value: voice.id,
+              label: shortName,
+            };
+          });
+
+        return [...builtInOptions, ...customVoices];
       }
       return buildReadVoiceOptions(edgeTtsVoices, speakOptions.voice, configuredEdgeTtsVoice);
     },
-    [configuredTtsModel, edgeTtsVoices, speakOptions.voice, configuredEdgeTtsVoice]
+    [configuredTtsModel, edgeTtsVoices, elevenLabsVoices, speakOptions.voice, configuredEdgeTtsVoice]
   );
 
   // ── Callbacks ──────────────────────────────────────────────────────
