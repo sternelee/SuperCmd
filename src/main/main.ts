@@ -92,6 +92,7 @@ const ONBOARDING_WINDOW_HEIGHT = 740;
 const CURSOR_PROMPT_WINDOW_WIDTH = 500;
 const CURSOR_PROMPT_WINDOW_HEIGHT = 90;
 const CURSOR_PROMPT_LEFT_OFFSET = 20;
+const PROMPT_WINDOW_PREWARM_DELAY_MS = 420;
 const WHISPER_WINDOW_WIDTH = 266;
 const WHISPER_WINDOW_HEIGHT = 84;
 const DETACHED_WHISPER_WINDOW_NAME = 'supercmd-whisper-window';
@@ -236,6 +237,7 @@ function computeDetachedPopupPosition(
 
 let mainWindow: InstanceType<typeof BrowserWindow> | null = null;
 let promptWindow: InstanceType<typeof BrowserWindow> | null = null;
+let promptWindowPrewarmScheduled = false;
 let settingsWindow: InstanceType<typeof BrowserWindow> | null = null;
 let extensionStoreWindow: InstanceType<typeof BrowserWindow> | null = null;
 let isVisible = false;
@@ -2562,9 +2564,19 @@ function computePromptWindowBounds(
   return { x, y, width, height };
 }
 
-function createPromptWindow(): void {
+function getDefaultPromptWindowBounds(): { x: number; y: number; width: number; height: number } {
+  const area = screen.getPrimaryDisplay().workArea;
+  return {
+    x: area.x + Math.floor((area.width - CURSOR_PROMPT_WINDOW_WIDTH) / 2),
+    y: area.y + Math.floor(area.height * 0.28),
+    width: CURSOR_PROMPT_WINDOW_WIDTH,
+    height: CURSOR_PROMPT_WINDOW_HEIGHT,
+  };
+}
+
+function createPromptWindow(initialBounds?: { x: number; y: number; width: number; height: number }): void {
   if (promptWindow && !promptWindow.isDestroyed()) return;
-  const bounds = computePromptWindowBounds();
+  const bounds = initialBounds || getDefaultPromptWindowBounds();
   promptWindow = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
@@ -2601,12 +2613,22 @@ function createPromptWindow(): void {
   });
 }
 
+function schedulePromptWindowPrewarm(): void {
+  if (promptWindowPrewarmScheduled) return;
+  promptWindowPrewarmScheduled = true;
+  setTimeout(() => {
+    try {
+      createPromptWindow(getDefaultPromptWindowBounds());
+    } catch {}
+  }, PROMPT_WINDOW_PREWARM_DELAY_MS);
+}
+
 function showPromptWindow(
   preCapturedCaretRect?: { x: number; y: number; width: number; height: number } | null,
   preCapturedInputRect?: { x: number; y: number; width: number; height: number } | null,
 ): void {
   if (!promptWindow || promptWindow.isDestroyed()) {
-    createPromptWindow();
+    createPromptWindow(getDefaultPromptWindowBounds());
   }
   if (!promptWindow) return;
   const bounds = computePromptWindowBounds(preCapturedCaretRect, preCapturedInputRect);
@@ -2619,14 +2641,12 @@ function showPromptWindow(
 
 function hidePromptWindow(): void {
   if (!promptWindow || promptWindow.isDestroyed()) return;
-  const win = promptWindow;
-  promptWindow = null;
   lastCursorPromptSelection = '';
   try {
-    win.close();
+    promptWindow.hide();
   } catch {
     try {
-      win.destroy();
+      promptWindow.close();
     } catch {}
   }
 }
@@ -3592,15 +3612,9 @@ async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' =
   if (isCursorPromptCommand) {
     lastCursorPromptSelection = '';
     captureFrontmostAppContext();
-    // Capture caret position NOW, before async work shifts focus
+    // Capture caret/input anchor before prompt focus changes active UI element.
     const earlyCaretRect = getTypingCaretRect();
     const earlyInputRect = earlyCaretRect ? null : getFocusedInputRect();
-    try {
-      const selectedBeforeOpen = String(await getSelectedTextForSpeak() || '').trim();
-      if (selectedBeforeOpen) {
-        lastCursorPromptSelection = selectedBeforeOpen;
-      }
-    } catch {}
     if (source === 'hotkey' && isVisible && launcherMode === 'prompt') {
       hideWindow();
       return true;
@@ -3610,7 +3624,17 @@ async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' =
       hidePromptWindow();
       return true;
     }
+    // Open anchored to the captured typing caret (not mouse pointer).
     showPromptWindow(earlyCaretRect, earlyInputRect);
+    // Snapshot selection in background without synthetic Cmd+C fallback so open
+    // is not blocked and does not trigger beeps in the active app.
+    void getSelectedTextForSpeak({ allowClipboardFallback: false, clipboardWaitMs: 0 })
+      .then((selectedBeforeOpen) => {
+        const selected = String(selectedBeforeOpen || '').trim();
+        if (!selected) return;
+        lastCursorPromptSelection = selected;
+      })
+      .catch(() => {});
     return true;
   }
   if (commandId === 'system-add-to-memory') {
@@ -7884,6 +7908,7 @@ return appURL's |path|() as text`,
   // ─── Window + Shortcuts ─────────────────────────────────────────
 
   createWindow();
+  schedulePromptWindowPrewarm();
   registerGlobalShortcut(settings.globalShortcut);
   registerCommandHotkeys(settings.commandHotkeys);
 
