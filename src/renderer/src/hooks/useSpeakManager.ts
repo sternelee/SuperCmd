@@ -296,11 +296,19 @@ export function useSpeakManager({
       return;
     }
 
-    const next = await window.electron.speakUpdateOptions({
-      voice,
-      restartCurrent: true,
-    });
-    setSpeakOptions(next);
+    // Edge TTS: save to settings and update runtime
+    try {
+      const settings = await window.electron.getSettings();
+      const updated = await window.electron.saveSettings({
+        ai: { ...settings.ai, edgeTtsVoice: voice },
+      } as any);
+      setConfiguredEdgeTtsVoice(String(updated.ai?.edgeTtsVoice || voice));
+      const next = await window.electron.speakUpdateOptions({
+        voice,
+        restartCurrent: true,
+      });
+      setSpeakOptions(next);
+    } catch {}
   }, [configuredTtsModel]);
 
   const handleSpeakRateChange = useCallback(async (rate: string) => {
