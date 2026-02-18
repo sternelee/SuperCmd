@@ -192,7 +192,13 @@ async function* streamOpenAICompatible(
     stream: true,
   });
 
-  const url = new URL('/v1/chat/completions', baseUrl);
+  // Ensure baseUrl ends with /v1 and append /chat/completions
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+  const chatUrl = normalizedBaseUrl.endsWith('/v1') 
+    ? `${normalizedBaseUrl}/chat/completions`
+    : `${normalizedBaseUrl}/v1/chat/completions`;
+  
+  const url = new URL(chatUrl);
   const useHttps = url.protocol === 'https:';
 
   const response = await httpRequest({
