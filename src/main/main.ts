@@ -1463,6 +1463,66 @@ function synthesizeElevenLabsToFile(opts: {
   });
 }
 
+function fetchElevenLabsVoices(apiKey: string): Promise<{ voices: Array<{ id: string; name: string; category: string; description?: string; labels?: Record<string, string>; previewUrl?: string }>; error?: string }> {
+  return new Promise((resolve) => {
+    try {
+      const https = require('https');
+      const req = https.request(
+        {
+          hostname: 'api.elevenlabs.io',
+          path: '/v1/voices',
+          method: 'GET',
+          headers: {
+            'xi-api-key': apiKey,
+            'Accept': 'application/json',
+          },
+        },
+        (res: any) => {
+          let body = '';
+          res.on('data', (chunk: Buffer | string) => { body += String(chunk || ''); });
+          res.on('end', () => {
+            if (res.statusCode && res.statusCode >= 400) {
+              if (res.statusCode === 401) {
+                resolve({ voices: [], error: 'Invalid API key. Please check your ElevenLabs API key.' });
+              } else {
+                resolve({ voices: [], error: `ElevenLabs API error: HTTP ${res.statusCode}` });
+              }
+              return;
+            }
+            try {
+              const parsed = JSON.parse(body);
+              const voices = Array.isArray(parsed.voices) ? parsed.voices : [];
+              const mapped = voices
+                .map((v: any) => ({
+                  id: String(v?.voice_id || ''),
+                  name: String(v?.name || 'Unknown'),
+                  category: String(v?.category || 'premade'),
+                  description: v?.description ? String(v.description) : undefined,
+                  labels: v?.labels && typeof v.labels === 'object' ? v.labels : undefined,
+                  previewUrl: v?.preview_url ? String(v.preview_url) : undefined,
+                }))
+                .filter((v: any) => v.id);
+              resolve({ voices: mapped });
+            } catch (e) {
+              resolve({ voices: [], error: 'Failed to parse ElevenLabs voice list.' });
+            }
+          });
+        }
+      );
+      req.on('error', () => {
+        resolve({ voices: [], error: 'Network error while fetching voices.' });
+      });
+      req.setTimeout(15000, () => {
+        req.destroy();
+        resolve({ voices: [], error: 'Request timed out.' });
+      });
+      req.end();
+    } catch {
+      resolve({ voices: [], error: 'Failed to fetch voices.' });
+    }
+  });
+}
+
 function formatEdgeLocaleLabel(locale: string, rawLabel?: string): string {
   const map: Record<string, string> = {
     'en-US': 'English (US)',
@@ -3999,12 +4059,15 @@ async function startSpeakFromSelection(): Promise<boolean> {
                 attemptResolve(new Error('ElevenLabs TTS configuration is missing.'));
                 return;
               }
+              // Use runtime voice if set, otherwise fall back to config
+              const runtimeVoiceId = String(speakRuntimeOptions.voice || '').trim();
+              const voiceId = runtimeVoiceId || elevenLabsTts.voiceId;
               synthesizeElevenLabsToFile({
                 text: session.chunks[index],
                 audioPath,
                 apiKey: elevenLabsApiKey,
                 modelId: elevenLabsTts.modelId,
-                voiceId: elevenLabsTts.voiceId,
+                voiceId,
                 timeoutMs: 45000,
               }).then(() => attemptResolve(null)).catch((err: any) => {
                 const message = String(err?.message || err || 'ElevenLabs TTS failed');
@@ -5469,6 +5532,15 @@ app.whenReady().then(async () => {
       console.warn('[Speak] Failed to fetch Edge voice catalog:', error);
       return [];
     }
+  });
+
+  ipcMain.handle('elevenlabs-list-voices', async () => {
+    const settings = loadSettings();
+    const apiKey = getElevenLabsApiKey(settings);
+    if (!apiKey) {
+      return { voices: [], error: 'ElevenLabs API key not configured.' };
+    }
+    return fetchElevenLabsVoices(apiKey);
   });
 
   // ─── IPC: Settings ──────────────────────────────────────────────

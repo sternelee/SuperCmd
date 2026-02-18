@@ -137,6 +137,8 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke('speak-preview-voice', payload),
   edgeTtsListVoices: (): Promise<Array<{ id: string; label: string; languageCode: string; languageLabel: string; gender: 'female' | 'male'; style?: string }>> =>
     ipcRenderer.invoke('edge-tts-list-voices'),
+  elevenLabsListVoices: (): Promise<{ voices: Array<{ id: string; name: string; category: string; description?: string; labels?: Record<string, string>; previewUrl?: string }>; error?: string }> =>
+    ipcRenderer.invoke('elevenlabs-list-voices'),
 
   // ─── Settings ───────────────────────────────────────────────────
   getSettings: (): Promise<any> => ipcRenderer.invoke('get-settings'),
