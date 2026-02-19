@@ -21,7 +21,7 @@ const ExtensionStoreApp: React.FC = () => {
     <div className="h-screen flex glass-effect text-white select-none">
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="h-11 drag-region flex-shrink-0" />
-        <div className="flex-1 overflow-hidden p-4 pt-1">
+        <div className="flex-1 overflow-hidden">
           <StoreTab />
         </div>
       </div>
