@@ -1975,6 +1975,9 @@ function startFnSpeakToggleWatcher(): void {
       try {
         const payload = JSON.parse(trimmed);
         if (payload?.pressed) {
+          if (isAIDisabledInSettings()) {
+            continue;
+          }
           const now = Date.now();
           if (now - fnSpeakToggleLastPressedAt < 180) continue;
           fnSpeakToggleLastPressedAt = now;
@@ -2046,6 +2049,10 @@ function syncFnSpeakToggleWatcher(hotkeys: Record<string, string>): void {
   // Exception: fnWatcherOnboardingOverride is set when the user reaches the Dictation
   // test step (step 4) so they can actually test the Fn key during setup.
   if (!loadSettings().hasSeenOnboarding && !fnWatcherOnboardingOverride) {
+    stopFnSpeakToggleWatcher();
+    return;
+  }
+  if (isAIDisabledInSettings()) {
     stopFnSpeakToggleWatcher();
     return;
   }
@@ -3721,7 +3728,29 @@ async function dispatchRendererCustomEvent(eventName: string, detail: any): Prom
   return true;
 }
 
+const AI_DISABLED_SYSTEM_COMMANDS = new Set<string>([
+  'system-cursor-prompt',
+  'system-add-to-memory',
+  'system-supercmd-whisper',
+  'system-supercmd-whisper-toggle',
+  'system-supercmd-whisper-speak-toggle',
+  'system-supercmd-speak',
+]);
+
+function isAIDisabledInSettings(settings?: AppSettings): boolean {
+  const resolved = settings || loadSettings();
+  return resolved.ai?.enabled === false;
+}
+
+function isAIDependentSystemCommand(commandId: string): boolean {
+  return AI_DISABLED_SYSTEM_COMMANDS.has(String(commandId || '').trim());
+}
+
 async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' = 'launcher'): Promise<boolean> {
+  if (isAIDependentSystemCommand(commandId) && isAIDisabledInSettings()) {
+    return false;
+  }
+
   const isWhisperOpenCommand =
     commandId === 'system-supercmd-whisper' ||
     commandId === 'system-supercmd-whisper-toggle';
@@ -5436,7 +5465,9 @@ app.whenReady().then(async () => {
     const commands = await getAvailableCommands();
     const disabled = new Set(s.disabledCommands || []);
     const enabled = new Set((s as any).enabledCommands || []);
+    const aiDisabled = isAIDisabledInSettings(s);
     return commands.filter((c: any) => {
+      if (aiDisabled && isAIDependentSystemCommand(String(c?.id || ''))) return false;
       if (disabled.has(c.id)) return false;
       if (c?.disabledByDefault && !enabled.has(c.id)) return false;
       return true;
@@ -5536,6 +5567,7 @@ app.whenReady().then(async () => {
     'speak-preview-voice',
     async (_event: any, payload?: { voice: string; text?: string; rate?: string; provider?: 'edge-tts' | 'elevenlabs'; model?: string }) => {
       const settings = loadSettings();
+      if (isAIDisabledInSettings(settings)) return false;
       const provider = payload?.provider || (String(settings.ai?.textToSpeechModel || '').startsWith('elevenlabs-') ? 'elevenlabs' : 'edge-tts');
       const voice = String(payload?.voice || speakRuntimeOptions.voice || 'en-US-EricNeural').trim();
       const rate = parseSpeakRateInput(payload?.rate ?? speakRuntimeOptions.rate);
@@ -5699,6 +5731,22 @@ app.whenReady().then(async () => {
           app.dock.hide();
         }
         startClipboardMonitor();
+        syncFnSpeakToggleWatcher(loadSettings().commandHotkeys);
+      }
+      const aiEnabledPatch = patch.ai?.enabled;
+      if (aiEnabledPatch === false) {
+        stopSpeakSession({ resetStatus: true, cleanupWindow: true });
+        mainWindow?.webContents.send('whisper-stop-listening');
+        mainWindow?.webContents.send('whisper-stop-and-close');
+        whisperHoldRequestSeq += 1;
+        stopWhisperHoldWatcher();
+        stopFnSpeakToggleWatcher();
+        if (nativeSpeechProcess) {
+          try { nativeSpeechProcess.kill('SIGTERM'); } catch {}
+          nativeSpeechProcess = null;
+          nativeSpeechStdoutBuffer = '';
+        }
+      } else if (aiEnabledPatch === true) {
         syncFnSpeakToggleWatcher(loadSettings().commandHotkeys);
       }
       return result;
@@ -7431,6 +7479,9 @@ return appURL's |path|() as text`,
   });
 
   ipcMain.handle('whisper-refine-transcript', async (_event: any, transcript: string) => {
+    if (isAIDisabledInSettings()) {
+      return { correctedText: String(transcript || ''), source: 'raw' as const };
+    }
     return await refineWhisperTranscript(transcript);
   });
 
@@ -7438,6 +7489,9 @@ return appURL's |path|() as text`,
     'whisper-transcribe',
     async (_event: any, audioArrayBuffer: ArrayBuffer, options?: { language?: string; mimeType?: string }) => {
       const s = loadSettings();
+      if (isAIDisabledInSettings(s)) {
+        throw new Error('AI is disabled. Enable AI in Settings -> AI to use Whisper.');
+      }
 
       // Parse speechToTextModel to a concrete provider model.
       let provider: 'openai' | 'elevenlabs' = 'openai';
@@ -7509,6 +7563,9 @@ return appURL's |path|() as text`,
         singleUtterance?: boolean;
       }
     ) => {
+    if (isAIDisabledInSettings()) {
+      throw new Error('AI is disabled. Enable AI in Settings -> AI to use Whisper.');
+    }
     // Kill any existing process
     if (nativeSpeechProcess) {
       try { nativeSpeechProcess.kill('SIGTERM'); } catch {}

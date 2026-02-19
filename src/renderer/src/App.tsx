@@ -1013,6 +1013,14 @@ const App: React.FC = () => {
   );
 
   const runLocalSystemCommand = useCallback(async (commandId: string): Promise<boolean> => {
+    if (commandId === 'system-supercmd-whisper' || commandId === 'system-supercmd-speak') {
+      try {
+        const settings = await window.electron.getSettings();
+        if (settings.ai?.enabled === false) {
+          return true;
+        }
+      } catch {}
+    }
     if (commandId === 'system-open-onboarding') {
       await window.electron.setLauncherMode('onboarding');
       whisperSessionRef.current = false;
