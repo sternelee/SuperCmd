@@ -40,7 +40,7 @@ const AdvancedTab: React.FC = () => {
   useEffect(() => {
     window.electron.getSettings().then((next) => {
       setSettings(next);
-      applyBaseColor(next.baseColor || '#181818');
+      applyBaseColor(next.baseColor || '#101113');
     });
   }, []);
 
@@ -157,14 +157,14 @@ const AdvancedTab: React.FC = () => {
           <div className="flex items-center gap-3">
             <input
               type="color"
-              value={normalizeBaseColorHex(settings.baseColor || '#181818')}
+              value={normalizeBaseColorHex(settings.baseColor || '#101113')}
               onInput={(e) => handleBaseColorPreview((e.target as HTMLInputElement).value)}
               onChange={(e) => { void handleBaseColorCommit((e.target as HTMLInputElement).value); }}
               className="w-12 h-8 rounded border border-white/[0.14] bg-transparent cursor-pointer"
             />
             <input
               type="text"
-              value={normalizeBaseColorHex(settings.baseColor || '#181818')}
+              value={normalizeBaseColorHex(settings.baseColor || '#101113')}
               onChange={(e) => handleBaseColorPreview(e.target.value)}
               onBlur={(e) => { void handleBaseColorCommit(e.target.value); }}
               className="w-28 bg-white/[0.05] border border-white/[0.10] rounded-md px-2.5 py-1.5 text-xs text-white/90 outline-none"

@@ -122,7 +122,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ai: { ...DEFAULT_AI_SETTINGS },
   debugMode: false,
   fontSize: 'medium',
-  baseColor: '#181818',
+  baseColor: '#101113',
   hyperKeySource: 'none',
   hyperKeyIncludeShift: true,
   hyperKeyQuickPressAction: 'toggle-caps-lock',

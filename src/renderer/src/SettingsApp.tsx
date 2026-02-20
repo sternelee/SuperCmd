@@ -112,7 +112,7 @@ const SettingsApp: React.FC = () => {
       .then((settings) => {
         if (!disposed) {
           applyAppFontSize(settings.fontSize);
-          applyBaseColor(settings.baseColor || '#181818');
+          applyBaseColor(settings.baseColor || '#101113');
         }
       })
       .catch(() => {
@@ -126,7 +126,7 @@ const SettingsApp: React.FC = () => {
   useEffect(() => {
     const cleanup = window.electron.onSettingsUpdated?.((settings) => {
       applyAppFontSize(settings.fontSize);
-      applyBaseColor(settings.baseColor || '#181818');
+      applyBaseColor(settings.baseColor || '#101113');
     });
     return cleanup;
   }, []);

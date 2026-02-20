@@ -1,4 +1,4 @@
-export const DEFAULT_BASE_COLOR = '#181818';
+export const DEFAULT_BASE_COLOR = '#101113';
 
 function normalizeHex(value: string): string {
   const raw = String(value || '').trim();
@@ -29,4 +29,3 @@ export function applyBaseColor(baseColor: string): void {
   const [r, g, b] = hexToRgb(baseColor);
   document.documentElement.style.setProperty('--sc-base-rgb', `${r}, ${g}, ${b}`);
 }
-
