@@ -5,10 +5,16 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Keyboard, Info, RefreshCw, Download, RotateCcw, Type } from 'lucide-react';
+import { Keyboard, Info, RefreshCw, Download, RotateCcw, Type, Sun, Moon, SunMoon } from 'lucide-react';
 import HotkeyRecorder from './HotkeyRecorder';
 import type { AppSettings, AppUpdaterStatus } from '../../types/electron';
 import { applyAppFontSize, getDefaultAppFontSize } from '../utils/font-size';
+import {
+  getThemePreference,
+  onThemeChange,
+  setThemePreference as applyThemePreference,
+  type ThemePreference,
+} from '../utils/theme';
 
 type FontSizeOption = NonNullable<AppSettings['fontSize']>;
 
@@ -45,7 +51,7 @@ const SettingsRow: React.FC<SettingsRowProps> = ({
 }) => (
   <div
     className={`grid gap-3 px-4 py-3.5 md:px-5 md:grid-cols-[220px_minmax(0,1fr)] ${
-      withBorder ? 'border-b border-white/[0.08]' : ''
+      withBorder ? 'border-b border-[var(--ui-divider)]' : ''
     }`}
   >
     <div className="flex items-start gap-2.5">
@@ -64,6 +70,7 @@ const GeneralTab: React.FC = () => {
   const [updaterStatus, setUpdaterStatus] = useState<AppUpdaterStatus | null>(null);
   const [updaterActionError, setUpdaterActionError] = useState('');
   const [shortcutStatus, setShortcutStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => getThemePreference());
 
   useEffect(() => {
     window.electron.getSettings().then((nextSettings) => {
@@ -90,6 +97,13 @@ const GeneralTab: React.FC = () => {
       disposed = true;
       disposeUpdater();
     };
+  }, []);
+
+  useEffect(() => {
+    const disposeThemeListener = onThemeChange(({ preference }) => {
+      setThemePreference(preference);
+    });
+    return disposeThemeListener;
   }, []);
 
   const handleShortcutChange = async (newShortcut: string) => {
@@ -184,6 +198,11 @@ const GeneralTab: React.FC = () => {
     }
   }, [updaterStatus]);
 
+  const handleThemePreferenceChange = (nextTheme: ThemePreference) => {
+    setThemePreference(nextTheme);
+    applyThemePreference(nextTheme);
+  };
+
   if (!settings) {
     return <div className="p-6 text-white/50 text-[12px]">Loading settings...</div>;
   }
@@ -194,7 +213,7 @@ const GeneralTab: React.FC = () => {
     <div className="w-full max-w-[980px] mx-auto space-y-3">
       <h2 className="text-[15px] font-semibold text-white">General</h2>
 
-      <div className="overflow-hidden rounded-xl border border-white/[0.10] bg-[rgba(20,20,20,0.34)]">
+      <div className="overflow-hidden rounded-xl border border-[var(--ui-panel-border)] bg-[var(--settings-panel-bg)]">
         <SettingsRow
           icon={<Keyboard className="w-4 h-4" />}
           title="Launcher Shortcut"
@@ -214,7 +233,7 @@ const GeneralTab: React.FC = () => {
           title="Font Size"
           description="Scale text size across the app."
         >
-          <div className="inline-flex items-center gap-0.5 rounded-lg border border-white/[0.16] bg-white/[0.03] p-0.5">
+          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--ui-segment-border)] bg-[var(--ui-segment-bg)] p-0.5">
             {FONT_SIZE_OPTIONS.map((option) => {
               const active = selectedFontSize === option.id;
               return (
@@ -224,10 +243,41 @@ const GeneralTab: React.FC = () => {
                   onClick={() => void handleFontSizeChange(option.id)}
                   className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
                     active
-                      ? 'bg-white/[0.2] text-white'
-                      : 'text-white/65 hover:text-white/90 hover:bg-white/[0.08]'
+                      ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
                   }`}
                 >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </SettingsRow>
+
+        <SettingsRow
+          icon={<SunMoon className="w-4 h-4" />}
+          title="Appearance"
+          description="Choose Light, Dark, or follow your system preference."
+        >
+          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--ui-segment-border)] bg-[var(--ui-segment-bg)] p-0.5">
+            {([
+              { id: 'light', label: 'Light', icon: <Sun className="w-3.5 h-3.5" /> },
+              { id: 'system', label: 'System', icon: <SunMoon className="w-3.5 h-3.5" /> },
+              { id: 'dark', label: 'Dark', icon: <Moon className="w-3.5 h-3.5" /> },
+            ] as Array<{ id: ThemePreference; label: string; icon: React.ReactNode }>).map((option) => {
+              const active = themePreference === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => handleThemePreferenceChange(option.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+                    active
+                      ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
+                  }`}
+                >
+                  {option.icon}
                   {option.label}
                 </button>
               );
@@ -276,7 +326,7 @@ const GeneralTab: React.FC = () => {
                 type="button"
                 onClick={handleCheckForUpdates}
                 disabled={!updaterSupported || updaterState === 'checking' || updaterState === 'downloading'}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] border border-white/[0.14] text-white/90 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] border border-[var(--ui-segment-border)] text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${updaterState === 'checking' ? 'animate-spin' : ''}`} />
                 Check for Updates

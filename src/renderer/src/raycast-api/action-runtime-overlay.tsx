@@ -156,15 +156,15 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
         onClick={onClose}
         onKeyDown={handleKeyDown}
         tabIndex={-1}
-        style={{ background: 'rgba(0,0,0,0.15)' }}
+        style={{ background: 'var(--bg-scrim)' }}
       >
         <div
           ref={panelRef}
           className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl"
           style={{
-            background: 'rgba(30,30,34,0.97)',
+            background: 'var(--card-bg)',
             backdropFilter: 'blur(40px)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--border-primary)',
           }}
           onClick={(event) => event.stopPropagation()}
         >

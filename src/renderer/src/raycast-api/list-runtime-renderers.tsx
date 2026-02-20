@@ -52,8 +52,8 @@ export function createListRenderers(deps: ListRendererDeps) {
       >
         <div className="flex items-center gap-2.5 w-full">
           {icon && <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-white/55 text-xs">{renderIcon(icon, 'w-5 h-5', assetsPath)}</div>}
-          <div className="flex-1 min-w-0"><span className="text-[13px] leading-[18px] truncate block" style={{ color: 'rgba(255,255,255,0.9)' }}>{titleStr}</span></div>
-          {subtitleStr && <span className="text-[11px] leading-[16px] flex-shrink-0 truncate max-w-[220px]" style={{ color: 'rgba(255,255,255,0.42)' }}>{subtitleStr}</span>}
+          <div className="flex-1 min-w-0"><span className="text-[13px] leading-[18px] truncate block" style={{ color: 'rgba(var(--on-surface-rgb), 0.9)' }}>{titleStr}</span></div>
+          {subtitleStr && <span className="text-[11px] leading-[16px] flex-shrink-0 truncate max-w-[220px]" style={{ color: 'rgba(var(--on-surface-rgb), 0.42)' }}>{subtitleStr}</span>}
           {accessories?.map((accessory, index) => {
             const accessoryText = typeof accessory?.text === 'string' ? accessory.text : typeof accessory?.text === 'object' ? accessory.text?.value || '' : '';
             const accessoryTextColorRaw = typeof accessory?.text === 'object' ? accessory.text?.color : undefined;
@@ -62,12 +62,12 @@ export function createListRenderers(deps: ListRendererDeps) {
             const accessoryTextColor = resolveTintColor(accessoryTextColorRaw);
             const tagColor = resolveTintColor(tagColorRaw);
             const dateString = accessory?.date ? new Date(accessory.date).toLocaleDateString() : '';
-            const tagBackground = tagColor ? addHexAlpha(tagColor, '22') || 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.1)';
+            const tagBackground = tagColor ? addHexAlpha(tagColor, '22') || 'rgba(var(--on-surface-rgb), 0.1)' : 'rgba(var(--on-surface-rgb), 0.1)';
 
             return (
-              <span key={index} className="text-[12px] leading-5 flex-shrink-0 flex items-center gap-1.5" style={{ color: accessoryTextColor || tagColor || 'rgba(255,255,255,0.35)' }}>
+              <span key={index} className="text-[12px] leading-5 flex-shrink-0 flex items-center gap-1.5" style={{ color: accessoryTextColor || tagColor || 'rgba(var(--on-surface-rgb), 0.35)' }}>
                 {accessory?.icon && <span className="text-[10px]">{renderIcon(accessory.icon, 'w-3 h-3', assetsPath)}</span>}
-                {tagText ? <span className="px-2 py-0.5 rounded text-[11px]" style={{ background: tagBackground, color: tagColor || 'rgba(255,255,255,0.55)' }}>{tagText}</span> : accessoryText || dateString || ''}
+                {tagText ? <span className="px-2 py-0.5 rounded text-[11px]" style={{ background: tagBackground, color: tagColor || 'rgba(var(--on-surface-rgb), 0.55)' }}>{tagText}</span> : accessoryText || dateString || ''}
               </span>
             );
           })}

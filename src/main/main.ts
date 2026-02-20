@@ -7306,7 +7306,11 @@ return appURL's |path|() as text`,
 
   // Get system appearance
   ipcMain.handle('get-appearance', () => {
-    return 'dark';
+    try {
+      return electron.nativeTheme?.shouldUseDarkColors ? 'dark' : 'light';
+    } catch {
+      return 'dark';
+    }
   });
 
   // SQLite query execution (for extensions like cursor-recent-projects)

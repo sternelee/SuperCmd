@@ -187,8 +187,8 @@ export function createDetailRuntime(deps: CreateDetailRuntimeDeps) {
   const MetadataTagListItem = ({ text, color }: { text: unknown; color?: unknown }) => {
     const normalized = resolveMetadataText(text);
     const tint = resolveTintColor(color) || normalized.color;
-    const tagBg = tint ? (deps.addHexAlpha(tint, '22') || 'rgba(255,255,255,0.1)') : 'rgba(255,255,255,0.1)';
-    return <span className="text-xs px-1.5 py-0.5 rounded mr-1" style={{ background: tagBg, color: tint || 'rgba(255,255,255,0.6)' }}>{normalized.value}</span>;
+    const tagBg = tint ? (deps.addHexAlpha(tint, '22') || 'rgba(var(--on-surface-rgb), 0.1)') : 'rgba(var(--on-surface-rgb), 0.1)';
+    return <span className="text-xs px-1.5 py-0.5 rounded mr-1" style={{ background: tagBg, color: tint || 'rgba(var(--on-surface-rgb), 0.6)' }}>{normalized.value}</span>;
   };
 
   const MetadataTagList = Object.assign(

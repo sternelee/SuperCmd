@@ -521,16 +521,15 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
   const canContinue = step !== 2 || canCompleteOnboarding;
   const canFinish = canCompleteOnboarding;
   const contentBackground = step === 0
-    ? 'radial-gradient(circle at 10% 0%, rgba(255, 90, 118, 0.26), transparent 34%), radial-gradient(circle at 92% 2%, rgba(255, 84, 70, 0.19), transparent 36%), linear-gradient(180deg, rgba(5,5,7,0.98) 0%, rgba(8,8,11,0.95) 48%, rgba(10,10,13,0.93) 100%)'
-    : 'radial-gradient(circle at 5% 0%, rgba(255, 92, 127, 0.30), transparent 36%), radial-gradient(circle at 100% 10%, rgba(255, 87, 73, 0.24), transparent 38%), radial-gradient(circle at 82% 100%, rgba(84, 212, 255, 0.12), transparent 34%), transparent';
+    ? 'var(--onboarding-content-bg-step0)'
+    : 'var(--onboarding-content-bg-default)';
 
   return (
     <div className="w-full h-full">
       <div
         className="glass-effect overflow-hidden h-full flex flex-col"
         style={{
-          background:
-            'linear-gradient(140deg, rgba(6, 8, 12, 0.80) 0%, rgba(12, 14, 20, 0.78) 52%, rgba(20, 11, 13, 0.76) 100%)',
+          background: 'var(--onboarding-shell-bg)',
           WebkitBackdropFilter: 'blur(50px) saturate(165%)',
           backdropFilter: 'blur(50px) saturate(165%)',
         }}
@@ -561,8 +560,8 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                 <div
                   className="relative w-full aspect-square rounded-3xl overflow-hidden border border-white/[0.20]"
                   style={{
-                    background: 'rgba(0,0,0,0.92)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.16), 0 14px 30px rgba(0,0,0,0.46)',
+                    background: 'var(--onboarding-video-bg)',
+                    boxShadow: 'var(--onboarding-video-shadow)',
                   }}
                 >
                   <video
@@ -578,10 +577,8 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                 <div
                   className="relative rounded-3xl border border-white/[0.20] p-5 lg:p-6 flex flex-col gap-4 lg:h-[430px] self-center"
                   style={{
-                    background:
-                      'linear-gradient(168deg, rgba(20,20,24,0.86) 0%, rgba(26,26,31,0.72) 48%, rgba(34,20,20,0.52) 100%)',
-                    boxShadow:
-                      'inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -14px 34px rgba(7, 7, 10, 0.45), 0 14px 38px rgba(0,0,0,0.36)',
+                    background: 'var(--onboarding-panel-bg)',
+                    boxShadow: 'var(--onboarding-panel-shadow)',
                   }}
                 >
                   <span className="inline-flex w-fit px-2.5 py-1 rounded-full border border-white/20 bg-white/[0.06] text-[10px] tracking-[0.14em] uppercase text-white/82">
@@ -626,9 +623,8 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                         key={feature.id}
                         className="group rounded-2xl border border-white/[0.14] p-4 transition-all duration-200 hover:translate-y-[-1px] hover:border-white/[0.28] hover:bg-white/[0.09]"
                         style={{
-                          background:
-                            'linear-gradient(160deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03))',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.24), 0 10px 28px rgba(0,0,0,0.28)',
+                          background: 'var(--onboarding-feature-card-bg)',
+                          boxShadow: 'var(--onboarding-feature-card-shadow)',
                         }}
                       >
                         <div className="w-8 h-8 rounded-lg border border-white/25 bg-white/10 flex items-center justify-center mb-2.5">
@@ -650,10 +646,8 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                 <div
                   className="rounded-2xl border border-white/[0.18] p-7"
                   style={{
-                    background:
-                      'linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04))',
-                    boxShadow:
-                      'inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -10px 24px rgba(12, 10, 20, 0.35), 0 12px 30px rgba(0,0,0,0.32)',
+                    background: 'var(--onboarding-shortcut-card-bg)',
+                    boxShadow: 'var(--onboarding-shortcut-card-shadow)',
                   }}
                 >
                   <div className="flex items-center gap-2 mb-2">
@@ -726,9 +720,8 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                 <div
                   className="rounded-3xl border border-white/[0.16] p-5"
                   style={{
-                    background:
-                      'linear-gradient(180deg, rgba(33, 19, 24, 0.82), rgba(16, 17, 25, 0.72))',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14), 0 18px 34px rgba(0,0,0,0.34)',
+                    background: 'var(--onboarding-permission-side-bg)',
+                    boxShadow: 'var(--onboarding-permission-side-shadow)',
                   }}
                 >
                   <p className="text-white text-[20px] leading-tight font-semibold mb-2">Grant Access</p>
@@ -753,13 +746,13 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                         key={target.id}
                         className="rounded-2xl border p-3.5"
                         style={{
-                          borderColor: isDone ? 'rgba(110, 231, 183, 0.44)' : 'rgba(255,255,255,0.16)',
+                          borderColor: isDone ? 'var(--onboarding-permission-border-done)' : 'var(--onboarding-permission-border-pending)',
                           background: isDone
-                            ? 'linear-gradient(160deg, rgba(16, 82, 56, 0.34), rgba(23, 34, 41, 0.26))'
-                            : 'linear-gradient(160deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))',
+                            ? 'var(--onboarding-permission-done-bg)'
+                            : 'var(--onboarding-permission-pending-bg)',
                           boxShadow: isDone
-                            ? 'inset 0 1px 0 rgba(167,243,208,0.35), 0 14px 30px rgba(0,0,0,0.28)'
-                            : 'inset 0 1px 0 rgba(255,255,255,0.22), 0 14px 30px rgba(0,0,0,0.28)',
+                            ? 'var(--onboarding-permission-done-shadow)'
+                            : 'var(--onboarding-permission-pending-shadow)',
                         }}
                       >
                         <div className="flex flex-col gap-3 md:flex-row md:items-start">
@@ -887,8 +880,8 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                 <div
                   className="rounded-2xl border border-white/[0.18] overflow-hidden"
                   style={{
-                    background: 'linear-gradient(180deg, rgba(22,22,28,0.92) 0%, rgba(16,16,22,0.88) 100%)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14), 0 16px 40px rgba(0,0,0,0.38)',
+                    background: 'var(--onboarding-read-card-bg)',
+                    boxShadow: 'var(--onboarding-read-card-shadow)',
                   }}
                 >
                   {/* Article header bar */}
@@ -979,8 +972,7 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
         <div
           className="px-5 py-3.5 border-t border-white/[0.06] flex items-center justify-between"
           style={{
-            background:
-              'linear-gradient(180deg, rgba(25, 20, 28, 0.56) 0%, rgba(11, 12, 17, 0.84) 100%)',
+            background: 'var(--onboarding-footer-bg)',
           }}
         >
           <button

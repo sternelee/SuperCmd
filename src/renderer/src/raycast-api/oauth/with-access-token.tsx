@@ -222,7 +222,7 @@ export function withAccessToken(options: any) {
       }, [oauthLink]);
 
       if (error) {
-        return <div style={{ padding: 16, color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>{error}</div>;
+        return <div style={{ padding: 16, color: 'rgba(var(--on-surface-rgb), 0.8)', fontSize: 13 }}>{error}</div>;
       }
 
       if (oauthNeedsAuth) {
@@ -260,7 +260,7 @@ export function withAccessToken(options: any) {
       }
 
       if (!ready) {
-        return <div style={{ padding: 16, color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>Authorizing...</div>;
+        return <div style={{ padding: 16, color: 'rgba(var(--on-surface-rgb), 0.55)', fontSize: 13 }}>Authorizing...</div>;
       }
 
       return <Component {...props} />;

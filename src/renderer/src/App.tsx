@@ -43,6 +43,7 @@ import {
   getMissingRequiredScriptArguments, toScriptArgumentMapFromArray,
 } from './utils/extension-preferences';
 import { applyAppFontSize, getDefaultAppFontSize } from './utils/font-size';
+import { refreshThemeFromStorage } from './utils/theme';
 import ScriptCommandSetupView from './views/ScriptCommandSetupView';
 import ScriptCommandOutputView from './views/ScriptCommandOutputView';
 import ExtensionPreferenceSetupView from './views/ExtensionPreferenceSetupView';
@@ -301,6 +302,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const cleanupWindowShown = window.electron.onWindowShown((payload) => {
+      refreshThemeFromStorage(false);
       console.log('[WINDOW-SHOWN] fired', payload);
       const isWhisperMode = payload?.mode === 'whisper';
       const isSpeakMode = payload?.mode === 'speak';
@@ -1818,7 +1820,7 @@ const App: React.FC = () => {
     <div className="w-full h-full">
       <div className="glass-effect overflow-hidden h-full flex flex-col relative">
         {/* Search header - transparent background */}
-        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--ui-divider)]">
           <input
             ref={inputRef}
             type="text"
@@ -1832,11 +1834,11 @@ const App: React.FC = () => {
           {searchQuery && aiAvailable && (
             <button
               onClick={() => startAiChat(searchQuery)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.10] transition-colors flex-shrink-0 group"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--soft-pill-bg)] hover:bg-[var(--soft-pill-hover-bg)] transition-colors flex-shrink-0 group"
             >
               <Sparkles className="w-3 h-3 text-white/30 group-hover:text-purple-400 transition-colors" />
               <span className="text-[11px] text-white/30 group-hover:text-white/50 transition-colors">Ask AI</span>
-              <kbd className="text-[10px] text-white/20 bg-white/[0.06] px-1 py-0.5 rounded font-mono leading-none">Tab</kbd>
+              <kbd className="text-[10px] text-white/20 bg-[var(--soft-pill-bg)] px-1 py-0.5 rounded font-mono leading-none">Tab</kbd>
             </button>
           )}
           {searchQuery && (
@@ -1870,8 +1872,8 @@ const App: React.FC = () => {
                   ref={(el) => (itemRefs.current[0] = el)}
                   className={`mx-1 mt-0.5 mb-2 px-6 py-4 rounded-xl cursor-pointer transition-colors border ${
                     selectedIndex === 0
-                      ? 'bg-white/[0.08] border-white/[0.12]'
-                      : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.05]'
+                      ? 'bg-[var(--launcher-card-selected-bg)] border-[var(--launcher-card-selected-border)]'
+                      : 'bg-[var(--launcher-card-bg)] border-[var(--launcher-card-border)] hover:bg-[var(--launcher-card-hover-bg)]'
                   }`}
                   onClick={() => {
                     navigator.clipboard.writeText(calcResult.result);
@@ -1960,7 +1962,7 @@ const App: React.FC = () => {
                                 </div>
                               )}
                               {aliasMatchesSearch ? (
-                                <div className="inline-flex items-center h-5 rounded-md border border-white/[0.20] bg-white/[0.03] px-1.5 text-[10px] font-mono text-white/75 leading-none flex-shrink-0">
+                                <div className="inline-flex items-center h-5 rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-1.5 text-[10px] font-mono text-white/75 leading-none flex-shrink-0">
                                   {commandAlias}
                                 </div>
                               ) : null}
@@ -2021,7 +2023,7 @@ const App: React.FC = () => {
                   {selectedActions[0].title}
                 </button>
                 {selectedActions[0].shortcut && (
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-white/40 font-medium">
                     {renderShortcutLabel(selectedActions[0].shortcut)}
                   </kbd>
                 )}
@@ -2035,8 +2037,8 @@ const App: React.FC = () => {
               className="flex items-center gap-1.5 text-white/50 hover:text-white/70 transition-colors"
             >
               <span className="text-xs font-normal">Actions</span>
-              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">⌘</kbd>
-              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">K</kbd>
+              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-white/40 font-medium">⌘</kbd>
+              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-white/40 font-medium">K</kbd>
             </button>
           </div>
         )}
@@ -2046,7 +2048,7 @@ const App: React.FC = () => {
       <div
         className="fixed inset-0 z-50"
         onClick={() => setShowActions(false)}
-        style={{ background: 'rgba(0,0,0,0.15)' }}
+        style={{ background: 'var(--bg-scrim)' }}
       >
         <div
           ref={actionsOverlayRef}
@@ -2054,9 +2056,9 @@ const App: React.FC = () => {
           tabIndex={0}
           onKeyDown={handleActionsOverlayKeyDown}
           style={{
-            background: 'rgba(30,30,34,0.97)',
+            background: 'var(--card-bg)',
             backdropFilter: 'blur(40px)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--border-primary)',
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -2067,11 +2069,11 @@ const App: React.FC = () => {
                 className={`mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition-colors ${
                   idx === selectedActionIndex
                     ? action.style === 'destructive'
-                      ? 'bg-white/[0.10] text-red-400'
-                      : 'bg-white/[0.10] text-white'
+                      ? 'bg-[var(--overlay-item-active-bg)] text-red-400'
+                      : 'bg-[var(--overlay-item-active-bg)] text-white'
                     : action.style === 'destructive'
-                      ? 'hover:bg-white/[0.06] text-red-400'
-                      : 'hover:bg-white/[0.06] text-white/80'
+                      ? 'hover:bg-[var(--overlay-item-hover-bg)] text-red-400'
+                      : 'hover:bg-[var(--overlay-item-hover-bg)] text-white/80'
                 }`}
                 onClick={async () => {
                   await Promise.resolve(action.execute());
@@ -2082,7 +2084,7 @@ const App: React.FC = () => {
               >
                 <span className="flex-1 text-sm truncate">{action.title}</span>
                 {action.shortcut && (
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] font-medium text-white/70">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-white/70">
                     {renderShortcutLabel(action.shortcut)}
                   </kbd>
                 )}
@@ -2109,9 +2111,9 @@ const App: React.FC = () => {
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 340),
             top: Math.min(contextMenu.y, window.innerHeight - 320),
-            background: 'rgba(30,30,34,0.97)',
+            background: 'var(--card-bg)',
             backdropFilter: 'blur(40px)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--border-primary)',
           }}
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
@@ -2123,11 +2125,11 @@ const App: React.FC = () => {
                 className={`mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition-colors ${
                   idx === selectedContextActionIndex
                     ? action.style === 'destructive'
-                      ? 'bg-white/[0.10] text-red-400'
-                      : 'bg-white/[0.10] text-white'
+                      ? 'bg-[var(--overlay-item-active-bg)] text-red-400'
+                      : 'bg-[var(--overlay-item-active-bg)] text-white'
                     : action.style === 'destructive'
-                      ? 'hover:bg-white/[0.06] text-red-400'
-                      : 'hover:bg-white/[0.06] text-white/80'
+                      ? 'hover:bg-[var(--overlay-item-hover-bg)] text-red-400'
+                      : 'hover:bg-[var(--overlay-item-hover-bg)] text-white/80'
                 }`}
                 onClick={async () => {
                   console.log('[CTX-MENU] clicked action:', action.id, action.title);
@@ -2144,7 +2146,7 @@ const App: React.FC = () => {
               >
                 <span className="flex-1 text-sm truncate">{action.title}</span>
                 {action.shortcut && (
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] font-medium text-white/70">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-white/70">
                     {renderShortcutLabel(action.shortcut)}
                   </kbd>
                 )}

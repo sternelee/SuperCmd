@@ -156,7 +156,7 @@ export function toMenuBarIconPayload(icon: any, assetsPath: string): SerializedM
   const iconToken = src.replace(/^Icon\./, '');
   const dataUrl = renderPhosphorIconDataUrl(iconToken, {
     size: 18,
-    color: tintColor || '#000000',
+    color: tintColor || 'rgb(var(--backdrop-rgb))',
   });
   if (dataUrl) return { iconDataUrl: dataUrl, iconTemplate: !tintColor };
 
@@ -196,7 +196,7 @@ export async function toMenuBarIconPayloadAsync(icon: any, assetsPath: string): 
   const iconToken = src.replace(/^Icon\./, '');
   const dataUrl = await renderPhosphorIconDataUrlForNative(iconToken, {
     size: 18,
-    color: tintColor || '#000000',
+    color: tintColor || 'rgb(var(--backdrop-rgb))',
   });
   if (dataUrl) return { iconDataUrl: dataUrl, iconTemplate: !tintColor };
 

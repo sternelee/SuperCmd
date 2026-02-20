@@ -336,9 +336,9 @@ const SnippetForm: React.FC<SnippetFormProps> = ({ snippet, onSave, onCancel }) 
             top: placeholderMenuPos.top,
             left: placeholderMenuPos.left,
             width: placeholderMenuPos.width,
-            background: 'rgba(26,26,30,0.96)',
+            background: 'var(--bg-overlay-strong)',
             backdropFilter: 'blur(18px)',
-            boxShadow: '0 12px 28px rgba(0,0,0,0.45)',
+            boxShadow: '0 12px 28px rgba(var(--backdrop-rgb), 0.45)',
           }}
         >
           <div className="px-2 py-1.5 border-b border-white/[0.08]">
@@ -1037,10 +1037,10 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
       />
 
       {dynamicPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.25)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(var(--backdrop-rgb), 0.25)' }}>
           <div
             className="w-[520px] max-w-[92vw] rounded-xl border border-white/[0.1] overflow-hidden"
-            style={{ background: 'rgba(24,24,28,0.96)', backdropFilter: 'blur(28px)' }}
+            style={{ background: 'var(--bg-overlay-strong)', backdropFilter: 'blur(28px)' }}
           >
             <div className="px-4 py-3 border-b border-white/[0.08] text-white/85 text-sm font-medium">
               Fill Dynamic Values
@@ -1101,14 +1101,14 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
         <div
           className="fixed inset-0 z-50"
           onClick={() => setShowActions(false)}
-          style={{ background: 'rgba(0,0,0,0.15)' }}
+          style={{ background: 'var(--bg-scrim)' }}
         >
           <div
             className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl"
             style={{
-              background: 'rgba(30,30,34,0.97)',
+              background: 'var(--card-bg)',
               backdropFilter: 'blur(40px)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid var(--border-primary)',
             }}
             onClick={(e) => e.stopPropagation()}
           >

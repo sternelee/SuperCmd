@@ -451,7 +451,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
             className="bg-transparent border-none outline-none text-[14px] font-medium text-white/85 pr-4 appearance-none"
           >
             {scopes.map((scope) => (
-              <option key={scope.id} value={scope.id} className="bg-[#16161a]">
+              <option key={scope.id} value={scope.id} className="bg-[var(--bg-overlay)]">
                 {scope.label}
               </option>
             ))}
@@ -576,7 +576,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
       {showActions ? (
         <div className="absolute inset-0 bg-black/30 flex items-center justify-center" onClick={() => setShowActions(false)}>
           <div
-            className="w-[430px] rounded-2xl border border-white/[0.1] bg-[#1a1a1f]/95 backdrop-blur-xl p-2"
+            className="w-[430px] rounded-2xl border border-white/[0.1] bg-[var(--card-bg)] backdrop-blur-xl p-2"
             onClick={(e) => e.stopPropagation()}
           >
             {selectedActions.length === 0 ? (

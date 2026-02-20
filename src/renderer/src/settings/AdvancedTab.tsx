@@ -65,7 +65,7 @@ const AdvancedTab: React.FC = () => {
     <div className="w-full max-w-[980px] mx-auto space-y-3">
       <h2 className="text-[15px] font-semibold text-white">Advanced</h2>
 
-      <div className="overflow-hidden rounded-xl border border-white/[0.10] bg-[rgba(20,20,20,0.34)]">
+      <div className="overflow-hidden rounded-xl border border-white/[0.10] bg-[var(--settings-panel-bg)]">
         {/* Hyper Key UI is temporarily disabled. */}
         {/* <SettingsRow
           icon={<Command className="w-4 h-4" />}
