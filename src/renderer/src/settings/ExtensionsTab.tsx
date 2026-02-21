@@ -804,7 +804,7 @@ const ExtensionsTab: React.FC<{
   }, [extensionContextMenu, uninstallDialog, busyUninstallExtName]);
 
   if (isLoading) {
-    return <div className="text-white/50 text-sm">Loading extension settings…</div>;
+    return <div className="text-white/50 text-[13px]">Loading extension settings…</div>;
   }
 
   const customExtensionFolders = Array.isArray(settings?.customExtensionFolders)
@@ -819,8 +819,8 @@ const ExtensionsTab: React.FC<{
   return (
     <div className="h-full min-h-0 flex flex-col">
       <div className="flex flex-1 min-h-0 bg-[var(--settings-shell-bg)]">
-        <div className="flex-[0_0_66%] min-w-[600px] h-full border-r border-white/[0.08] flex flex-col">
-          <div className="px-3 py-2 border-b border-white/[0.06]">
+        <div className="flex-[0_0_66%] min-w-[600px] h-full border-r border-[var(--ui-divider)] flex flex-col">
+          <div className="px-3 py-2 border-b border-[var(--ui-divider)]">
             <div className="flex items-center gap-2">
               <div className="relative w-[360px] max-w-full shrink-0">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
@@ -828,14 +828,14 @@ const ExtensionsTab: React.FC<{
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search..."
-                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg pl-9 pr-4 py-1.5 text-sm text-white placeholder-white/30 outline-none focus:border-white/20 transition-colors"
+                  className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-lg pl-9 pr-4 py-1.5 text-[13px] text-white placeholder-white/30 outline-none focus:border-[var(--ui-segment-border)] transition-colors"
                 />
               </div>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setActiveScope('all')}
                   className={`px-2.5 py-1 rounded-md text-xs ${
-                    activeScope === 'all' ? 'bg-white/[0.14] text-white' : 'text-white/50 hover:text-white/80'
+                    activeScope === 'all' ? 'bg-[var(--ui-segment-active-bg)] text-white' : 'text-white/50 hover:text-white/80'
                   }`}
                 >
                   All
@@ -843,7 +843,7 @@ const ExtensionsTab: React.FC<{
                 <button
                   onClick={() => setActiveScope('commands')}
                   className={`px-2.5 py-1 rounded-md text-xs ${
-                    activeScope === 'commands' ? 'bg-white/[0.14] text-white' : 'text-white/50 hover:text-white/80'
+                    activeScope === 'commands' ? 'bg-[var(--ui-segment-active-bg)] text-white' : 'text-white/50 hover:text-white/80'
                   }`}
                 >
                   Commands
@@ -860,7 +860,7 @@ const ExtensionsTab: React.FC<{
                 </button>
                 {showTopActionsMenu ? (
                   <div
-                    className="absolute right-0 mt-1 w-48 rounded-lg border border-white/[0.10] shadow-2xl overflow-hidden z-20"
+                    className="absolute right-0 mt-1 w-48 rounded-lg border border-[var(--ui-panel-border)] shadow-2xl overflow-hidden z-20"
                     style={{
                       background: 'var(--menu-overlay-bg)',
                       backdropFilter: 'blur(48px) saturate(170%)',
@@ -872,7 +872,7 @@ const ExtensionsTab: React.FC<{
                         setShowTopActionsMenu(false);
                         window.electron.openExtensionStoreWindow();
                       }}
-                      className="w-full px-2.5 py-2 text-left text-xs text-white/85 hover:bg-white/[0.08] transition-colors"
+                      className="w-full px-2.5 py-2 text-left text-xs text-white/85 hover:bg-[var(--ui-segment-hover-bg)] transition-colors"
                     >
                       Install from Store
                     </button>
@@ -882,7 +882,7 @@ const ExtensionsTab: React.FC<{
                         void handleAddCustomExtensionFolder();
                       }}
                       disabled={folderBusy}
-                      className="w-full px-2.5 py-2 text-left text-xs text-white/85 hover:bg-white/[0.08] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="w-full px-2.5 py-2 text-left text-xs text-white/85 hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Add Folder
                     </button>
@@ -912,7 +912,7 @@ const ExtensionsTab: React.FC<{
                         }
                       }}
                       disabled={folderBusy}
-                      className="w-full px-2.5 py-2 text-left text-xs text-white/85 hover:bg-white/[0.08] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="w-full px-2.5 py-2 text-left text-xs text-white/85 hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Custom Script
                     </button>
@@ -940,11 +940,11 @@ const ExtensionsTab: React.FC<{
             ) : null}
           </div>
 
-          <div className="grid grid-cols-[1fr_120px_100px_130px_82px] px-4 py-2 text-[11px] uppercase tracking-wider text-white/35 border-b border-white/[0.06]">
-            <div className="pr-2 border-r border-white/[0.06]">Name</div>
-            <div className="px-2 border-r border-white/[0.06]">Type</div>
-            <div className="px-2 border-r border-white/[0.06]">Alias</div>
-            <div className="px-2 border-r border-white/[0.06]">Hotkey</div>
+          <div className="grid grid-cols-[1fr_120px_100px_130px_82px] px-4 py-2 text-[11px] uppercase tracking-wider text-white/35 border-b border-[var(--ui-divider)]">
+            <div className="pr-2 border-r border-[var(--ui-divider)]">Name</div>
+            <div className="px-2 border-r border-[var(--ui-divider)]">Type</div>
+            <div className="px-2 border-r border-[var(--ui-divider)]">Alias</div>
+            <div className="px-2 border-r border-[var(--ui-divider)]">Hotkey</div>
             <div className="pl-2">Enabled</div>
           </div>
 
@@ -955,7 +955,7 @@ const ExtensionsTab: React.FC<{
               filteredSchemas.map((schema) => {
                 const uninstallable = canUninstallExtension(schema.extName);
                 return (
-                <div key={schema.extName} className="border-b border-white/[0.04] last:border-b-0">
+                <div key={schema.extName} className="border-b border-[var(--ui-divider)] last:border-b-0">
                   <button
                     onClick={() => {
                       setSelected({ extName: schema.extName });
@@ -978,8 +978,8 @@ const ExtensionsTab: React.FC<{
                     }}
                     className={`w-full grid grid-cols-[1fr_120px_100px_130px_82px] items-center gap-2 px-4 py-1.5 text-left transition-colors ${
                       selected?.extName === schema.extName && !selected?.cmdName
-                        ? 'bg-white/[0.10]'
-                        : 'hover:bg-white/[0.05]'
+                        ? 'bg-[var(--ui-segment-active-bg)]'
+                        : 'hover:bg-[var(--ui-segment-bg)]'
                     }`}
                   >
                     <span className="flex items-center gap-2 min-w-0">
@@ -1001,18 +1001,18 @@ const ExtensionsTab: React.FC<{
                       ) : (
                         <Puzzle className="w-4 h-4 text-violet-300/80" />
                       )}
-                      <span className="text-sm text-white/90 truncate">{schema.title}</span>
+                      <span className="text-[13px] text-white/90 truncate">{schema.title}</span>
                     </span>
-                    <span className="text-sm text-white/55">{getSchemaTypeLabel(schema.extName)}</span>
-                    <span className="text-sm text-white/45">--</span>
-                    <span className="text-sm text-white/45">--</span>
+                    <span className="text-[13px] text-white/55">{getSchemaTypeLabel(schema.extName)}</span>
+                    <span className="text-[13px] text-white/45">--</span>
+                    <span className="text-[13px] text-white/45">--</span>
                     <span className="flex items-center justify-start">
                       <input
                         type="checkbox"
                         checked={schema.commands.every((cmd) => isCommandEnabled(resolveCommandInfo(schema.extName, cmd.name)))}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => setExtensionEnabled(schema, e.target.checked)}
-                        className="w-4 h-4"
+                        className="settings-checkbox"
                       />
                     </span>
                   </button>
@@ -1028,8 +1028,8 @@ const ExtensionsTab: React.FC<{
                         key={`${schema.extName}/${cmd.name}`}
                         className={`ml-7 mr-2 mb-0.5 rounded-md px-2 py-1 ${
                           selected?.extName === schema.extName && selected?.cmdName === cmd.name
-                            ? 'bg-white/[0.10]'
-                            : 'hover:bg-white/[0.04]'
+                            ? 'bg-[var(--ui-segment-active-bg)]'
+                            : 'hover:bg-[var(--ui-segment-bg)]'
                         }`}
                       >
                         <div className="grid grid-cols-[1fr_120px_100px_130px_82px] items-center gap-2">
@@ -1077,13 +1077,13 @@ const ExtensionsTab: React.FC<{
                                     }
                                   }}
                                   placeholder="Add Alias"
-                                  className="h-6 w-full min-w-0 rounded-md border border-white/[0.18] bg-white/[0.02] px-2 font-mono text-[11px] text-white/80 placeholder-white/38 outline-none focus:border-white/[0.36]"
+                                  className="h-6 w-full min-w-0 rounded-md border border-[var(--ui-segment-border)] bg-[var(--ui-segment-bg)] px-2 font-mono text-[11px] text-white/80 placeholder-white/38 outline-none focus:border-[var(--ui-segment-border)]"
                                 />
                               ) : currentAlias ? (
                                 <button
                                   type="button"
                                   onClick={() => startAliasEditing(commandInfo.id)}
-                                  className="inline-flex h-6 max-w-full items-center rounded-md border border-white/[0.18] bg-white/[0.02] px-2 font-mono text-[11px] text-white/72 hover:border-white/[0.28] hover:text-white/78 transition-colors"
+                                  className="inline-flex h-6 max-w-full items-center rounded-md border border-[var(--ui-segment-border)] bg-[var(--ui-segment-bg)] px-2 font-mono text-[11px] text-white/72 hover:border-[var(--ui-segment-border)] hover:text-white/78 transition-colors"
                                   title="Edit alias"
                                 >
                                   <span className="truncate">{currentAlias}</span>
@@ -1115,7 +1115,7 @@ const ExtensionsTab: React.FC<{
                                   type="checkbox"
                                   checked={enabled}
                                   onChange={(e) => setCommandEnabled(commandInfo, e.target.checked)}
-                                  className="w-4 h-4"
+                                  className="settings-checkbox"
                                 />
                               </span>
                             </>
@@ -1136,7 +1136,7 @@ const ExtensionsTab: React.FC<{
         </div>
 
         <div className="flex-1 min-w-0 h-full min-h-0 overflow-hidden flex flex-col">
-          <div className="px-4 py-2 border-b border-white/[0.06]">
+          <div className="px-4 py-2 border-b border-[var(--ui-divider)]">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-white/45">
               <Folder className="w-3.5 h-3.5 text-white/55" />
               <span>Custom Folders</span>
@@ -1151,7 +1151,7 @@ const ExtensionsTab: React.FC<{
                 customExtensionFolders.map((folderPath) => (
                   <div
                     key={folderPath}
-                    className="inline-flex max-w-[240px] items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1"
+                    className="inline-flex max-w-[240px] items-center gap-1 rounded-md border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] px-2 py-1"
                     title={folderPath}
                   >
                     <span className="truncate text-[11px] text-white/75">{getFolderName(folderPath)}</span>
@@ -1179,10 +1179,10 @@ const ExtensionsTab: React.FC<{
           </div>
           <div className="flex-1 min-h-0 overflow-hidden">
           {!selectedSchema ? (
-            <div className="h-full flex items-center justify-center text-sm text-white/35">Select an extension</div>
+            <div className="h-full flex items-center justify-center text-[13px] text-white/35">Select an extension</div>
           ) : (
             <div className="h-full min-h-0 flex flex-col">
-              <div className="px-4 py-3 border-b border-white/[0.06]">
+              <div className="px-4 py-3 border-b border-[var(--ui-divider)]">
                 <div className="flex items-center gap-2">
                   {selectedSchema.iconDataUrl ? (
                     <img src={selectedSchema.iconDataUrl} alt="" className="w-5 h-5 rounded object-contain" draggable={false} />
@@ -1197,7 +1197,7 @@ const ExtensionsTab: React.FC<{
                   ) : (
                     <Puzzle className="w-5 h-5 text-violet-300/80" />
                   )}
-                  <div className="text-sm font-semibold text-white/90">
+                  <div className="text-[13px] font-semibold text-white/90">
                     {selectedCommandSchema ? selectedCommandSchema.title : selectedSchema.title}
                   </div>
                 </div>
@@ -1214,6 +1214,7 @@ const ExtensionsTab: React.FC<{
                         type="checkbox"
                         checked={isCommandEnabled(selectedCommandInfo)}
                         onChange={(e) => setCommandEnabled(selectedCommandInfo, e.target.checked)}
+                        className="settings-checkbox"
                       />
                       Enabled
                     </label>
@@ -1236,7 +1237,7 @@ const ExtensionsTab: React.FC<{
                     <button
                       type="button"
                       onClick={() => handleOAuthLogout(selectedSchema.extName)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-white/[0.08] hover:bg-white/[0.14] text-white/80 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--ui-segment-hover-bg)] hover:bg-[var(--ui-segment-active-bg)] text-white/80 transition-colors"
                     >
                       <LogOut className="w-3 h-3" />
                       Logout
@@ -1278,10 +1279,10 @@ const ExtensionsTab: React.FC<{
           }}
         >
           <div
-            className="glass-effect w-[296px] max-w-[82vw] rounded-xl border border-white/[0.10] p-3 shadow-2xl"
+            className="glass-effect w-[296px] max-w-[82vw] rounded-xl border border-[var(--ui-panel-border)] p-3 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-md bg-white/[0.04] border border-white/[0.08]">
+            <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-md bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)]">
               {uninstallDialog.iconDataUrl ? (
                 <img
                   src={uninstallDialog.iconDataUrl}
@@ -1306,7 +1307,7 @@ const ExtensionsTab: React.FC<{
                 type="button"
                 disabled={Boolean(busyUninstallExtName)}
                 onClick={() => setUninstallDialog(null)}
-                className="flex-1 rounded-md border border-white/[0.12] bg-white/[0.04] px-2.5 py-1.5 text-[12px] font-medium text-white/80 hover:bg-white/[0.08] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex-1 rounded-md border border-[var(--ui-segment-border)] bg-[var(--ui-segment-bg)] px-2.5 py-1.5 text-[12px] font-medium text-white/80 hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Cancel
               </button>
@@ -1332,7 +1333,7 @@ const ExtensionsTab: React.FC<{
           }}
         >
           <div
-            className="absolute min-w-[150px] rounded-xl border border-white/[0.12] shadow-2xl p-1"
+            className="absolute min-w-[150px] rounded-xl border border-[var(--ui-segment-border)] shadow-2xl p-1"
             style={{
               left: Math.min(extensionContextMenu.x, window.innerWidth - 180),
               top: Math.min(extensionContextMenu.y, window.innerHeight - 120),
@@ -1354,7 +1355,7 @@ const ExtensionsTab: React.FC<{
                 });
                 setExtensionContextMenu(null);
               }}
-              className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-300/90 hover:text-red-200 hover:bg-white/[0.08] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full rounded-lg px-3 py-2 text-left text-[13px] text-red-300/90 hover:text-red-200 hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {busyUninstallExtName === extensionContextMenu.extName ? 'Uninstalling…' : 'Uninstall'}
             </button>
@@ -1408,7 +1409,7 @@ const PreferenceSection: React.FC<{
                     type="checkbox"
                     checked={Boolean(value)}
                     onChange={(e) => setPreferenceValue(extName, pref, e.target.checked, cmdName)}
-                    className="w-4 h-4"
+                    className="settings-checkbox"
                   />
                 </label>
               </div>
@@ -1423,7 +1424,7 @@ const PreferenceSection: React.FC<{
                   <select
                     value={textValue}
                     onChange={(e) => setPreferenceValue(extName, pref, e.target.value, cmdName)}
-                    className="w-full bg-white/[0.05] border border-white/[0.10] rounded-md px-2.5 py-1.5 text-xs text-white/90 outline-none"
+                    className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-panel-border)] rounded-md px-2.5 py-1.5 text-xs text-white/90 outline-none"
                   >
                     <option value="">Select an option</option>
                     {(pref.data || []).map((opt) => (
@@ -1439,13 +1440,13 @@ const PreferenceSection: React.FC<{
                       value={textValue}
                       placeholder={pref.placeholder || ''}
                       onChange={(e) => setPreferenceValue(extName, pref, e.target.value, cmdName)}
-                      className="flex-1 bg-white/[0.05] border border-white/[0.10] rounded-md px-2.5 py-1.5 text-xs text-white/90 placeholder-white/30 outline-none"
+                      className="flex-1 bg-[var(--ui-segment-bg)] border border-[var(--ui-panel-border)] rounded-md px-2.5 py-1.5 text-xs text-white/90 placeholder-white/30 outline-none"
                     />
                     {(type === 'file' || type === 'directory' || type === 'appPicker') && (
                       <button
                         type="button"
                         onClick={() => pickPathForPreference(extName, pref, cmdName)}
-                        className="px-2 py-1.5 text-[11px] rounded-md border border-white/[0.12] text-white/70 hover:bg-white/[0.06]"
+                        className="px-2 py-1.5 text-[11px] rounded-md border border-[var(--ui-segment-border)] text-white/70 hover:bg-[var(--ui-segment-bg)]"
                       >
                         Browse
                       </button>

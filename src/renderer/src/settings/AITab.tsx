@@ -505,7 +505,7 @@ const AITab: React.FC = () => {
       className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors ${
         activeTab === id
           ? 'bg-blue-500/25 text-blue-200 border border-blue-400/30'
-          : 'bg-white/[0.03] text-white/55 border border-white/[0.08] hover:text-white/80 hover:bg-white/[0.06]'
+          : 'bg-[var(--ui-segment-bg)] text-white/55 border border-[var(--ui-divider)] hover:text-white/80 hover:bg-[var(--ui-segment-bg)]'
       }`}
     >
       {label}
@@ -521,14 +521,14 @@ const AITab: React.FC = () => {
   }> = ({ icon, title, description, withBorder = true, children }) => (
     <div
       className={`grid gap-3 px-4 py-3.5 md:px-5 md:grid-cols-[220px_minmax(0,1fr)] ${
-        withBorder ? 'border-b border-white/[0.08]' : ''
+        withBorder ? 'border-b border-[var(--ui-divider)]' : ''
       }`}
     >
       <div className="flex items-start gap-2.5">
-        <div className="mt-0.5 text-white/65 shrink-0">{icon}</div>
+        <div className="mt-0.5 text-[var(--text-muted)] shrink-0">{icon}</div>
         <div className="min-w-0">
-          <h3 className="text-[13px] font-semibold text-white/95">{title}</h3>
-          <p className="mt-0.5 text-[12px] text-white/50 leading-snug">{description}</p>
+          <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">{title}</h3>
+          <p className="mt-0.5 text-[12px] text-[var(--text-muted)] leading-snug">{description}</p>
         </div>
       </div>
       <div className="flex items-center min-h-[32px]">{children}</div>
@@ -557,7 +557,7 @@ const AITab: React.FC = () => {
 
   return (
     <div className="w-full max-w-[980px] mx-auto">
-      <div className="overflow-hidden rounded-xl border border-white/[0.10] bg-[var(--settings-panel-bg)]">
+      <div className="overflow-hidden rounded-xl border border-[var(--ui-panel-border)] bg-[var(--settings-panel-bg)]">
       <AIRow
         icon={<Brain className="w-4 h-4" />}
         title="Enable AI"
@@ -580,7 +580,7 @@ const AITab: React.FC = () => {
         </div>
       </AIRow>
 
-      <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/[0.08] md:px-5 overflow-x-auto">
+      <div className="flex items-center gap-1.5 px-4 py-3 border-b border-[var(--ui-divider)] md:px-5 overflow-x-auto">
         <TabButton id="api-keys" label="API Keys" />
         <TabButton id="llm" label="LLM" />
         <TabButton id="whisper" label="SuperCmd Whisper" />
@@ -599,7 +599,7 @@ const AITab: React.FC = () => {
                       value={ai.openaiApiKey}
                       onChange={(e) => updateAI({ openaiApiKey: e.target.value.trim() })}
                       placeholder="sk-..."
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                     />
                     <button
                       onClick={() => setShowOpenAIKey(!showOpenAIKey)}
@@ -618,7 +618,7 @@ const AITab: React.FC = () => {
                       value={ai.anthropicApiKey}
                       onChange={(e) => updateAI({ anthropicApiKey: e.target.value.trim() })}
                       placeholder="sk-ant-..."
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                     />
                     <button
                       onClick={() => setShowAnthropicKey(!showAnthropicKey)}
@@ -637,7 +637,7 @@ const AITab: React.FC = () => {
                       value={ai.elevenlabsApiKey || ''}
                       onChange={(e) => updateAI({ elevenlabsApiKey: e.target.value.trim() })}
                       placeholder="xi-..."
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                     />
                     <button
                       onClick={() => setShowElevenLabsKey(!showElevenLabsKey)}
@@ -648,7 +648,7 @@ const AITab: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pt-1 border-t border-white/[0.06]">
+                <div className="pt-1 border-t border-[var(--ui-divider)]">
                   <p className="text-[13px] font-semibold text-white/95">Supermemory</p>
                   <p className="text-[12px] text-white/50 mt-0.5 leading-snug">Memory backend for long-term context.</p>
                 </div>
@@ -661,7 +661,7 @@ const AITab: React.FC = () => {
                       value={ai.supermemoryApiKey || ''}
                       onChange={(e) => updateAI({ supermemoryApiKey: e.target.value.trim() })}
                       placeholder="sm-..."
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                     />
                     <button
                       onClick={() => setShowSupermemoryKey(!showSupermemoryKey)}
@@ -679,7 +679,7 @@ const AITab: React.FC = () => {
                     value={ai.supermemoryClient || ''}
                     onChange={(e) => updateAI({ supermemoryClient: e.target.value.trim() })}
                     placeholder="client-123"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                   />
                   <p className="text-[10px] text-white/35 mt-1">Used to scope user memory retrieval.</p>
                 </div>
@@ -691,7 +691,7 @@ const AITab: React.FC = () => {
                     value={ai.supermemoryBaseUrl || 'https://api.supermemory.ai'}
                     onChange={(e) => updateAI({ supermemoryBaseUrl: e.target.value.trim() })}
                     placeholder="https://api.supermemory.ai"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                   />
                 </div>
 
@@ -700,6 +700,7 @@ const AITab: React.FC = () => {
                     type="checkbox"
                     checked={Boolean(ai.supermemoryLocalMode)}
                     onChange={(e) => updateAI({ supermemoryLocalMode: e.target.checked })}
+                    className="settings-checkbox"
                   />
                   <span>Use local Supermemory mode (allow requests without API key)</span>
                 </label>
@@ -747,7 +748,7 @@ const AITab: React.FC = () => {
                         className={`rounded-md border px-2 py-2 text-left transition-colors ${
                           ai.provider === p.id
                             ? 'bg-blue-500/15 border-blue-500/35 text-blue-100'
-                            : 'bg-white/[0.02] border-white/[0.08] text-white/70 hover:bg-white/[0.05]'
+                            : 'bg-[var(--ui-segment-bg)] border-[var(--ui-divider)] text-white/70 hover:bg-[var(--ui-segment-bg)]'
                         }`}
                       >
                         <div className="text-xs font-medium leading-tight">{p.label}</div>
@@ -765,7 +766,7 @@ const AITab: React.FC = () => {
                       value={ai.ollamaBaseUrl}
                       onChange={(e) => updateAI({ ollamaBaseUrl: e.target.value.trim() })}
                       placeholder="http://localhost:11434"
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                     />
                   </div>
                 )}
@@ -779,7 +780,7 @@ const AITab: React.FC = () => {
                         value={ai.openaiCompatibleBaseUrl}
                         onChange={(e) => updateAI({ openaiCompatibleBaseUrl: e.target.value.trim() })}
                         placeholder="https://api.openrouter.ai/v1"
-                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                        className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                       />
                       <p className="text-[10px] text-white/35 mt-1">Include /v1 if your provider uses it (e.g., https://api.openai.com/v1)</p>
                     </div>
@@ -792,7 +793,7 @@ const AITab: React.FC = () => {
                           value={ai.openaiCompatibleApiKey}
                           onChange={(e) => updateAI({ openaiCompatibleApiKey: e.target.value.trim() })}
                           placeholder="sk-..."
-                          className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                          className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 pr-9 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                         />
                         <button
                           onClick={() => setShowOpenAICompatibleKey(!showOpenAICompatibleKey)}
@@ -816,7 +817,7 @@ const AITab: React.FC = () => {
                           });
                         }}
                         placeholder="anthropic/claude-3.5-sonnet"
-                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
+                        className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 placeholder-white/30 focus:outline-none focus:border-blue-500/50"
                       />
                       <p className="text-[10px] text-white/35 mt-1">The exact model name your provider expects (e.g., gpt-4o, meta-llama/llama-3.1-70b-instruct)</p>
                     </div>
@@ -828,7 +829,7 @@ const AITab: React.FC = () => {
                   <select
                     value={ai.defaultModel}
                     onChange={(e) => updateAI({ defaultModel: e.target.value })}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                   >
                     <option value="">Auto (provider default)</option>
                     {genericModels.map((m) => (
@@ -840,7 +841,7 @@ const AITab: React.FC = () => {
                 </div>
 
               {ai.provider === 'ollama' && (
-                <div className="pt-3 border-t border-white/[0.08]">
+                <div className="pt-3 border-t border-[var(--ui-divider)]">
                   <div className="flex items-center justify-between mb-2.5">
                     <h3 className="text-[13px] font-semibold text-white/95">Ollama Models</h3>
                     {ollamaRunning && (
@@ -899,7 +900,7 @@ const AITab: React.FC = () => {
                           const isDeleting = deletingModel === model.name;
 
                           return (
-                            <div key={model.name} className="rounded-md border border-white/[0.05] bg-white/[0.01] px-2.5 py-2">
+                            <div key={model.name} className="rounded-md border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] px-2.5 py-2">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -945,7 +946,7 @@ const AITab: React.FC = () => {
 
                               {isPulling && pullProgress.percent > 0 && (
                                 <div className="mt-2">
-                                  <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                                  <div className="w-full h-1.5 bg-[var(--ui-segment-bg)] rounded-full overflow-hidden">
                                     <div
                                       className="h-full bg-blue-500 rounded-full transition-all duration-300"
                                       style={{ width: `${pullProgress.percent}%` }}
@@ -968,7 +969,7 @@ const AITab: React.FC = () => {
 
         {activeTab === 'whisper' && (
           <>
-          <div className="px-4 py-3 md:px-5 border-b border-white/[0.08] flex items-center justify-between gap-3">
+          <div className="px-4 py-3 md:px-5 border-b border-[var(--ui-divider)] flex items-center justify-between gap-3">
             <div>
               <h3 className="text-[13px] font-semibold text-white/95">Enable SuperCmd Whisper</h3>
               <p className="text-[12px] text-white/50 mt-0.5 leading-snug">Toggle speech-to-text features.</p>
@@ -980,7 +981,7 @@ const AITab: React.FC = () => {
             />
           </div>
           <div className={`grid grid-cols-1 xl:grid-cols-2 gap-0 ${ai.whisperEnabled === false ? 'opacity-65 pointer-events-none select-none' : ''}`}>
-            <div className="px-4 py-3.5 md:px-5 space-y-3 border-b border-white/[0.08] xl:border-b-0 xl:border-r xl:border-white/[0.08]">
+            <div className="px-4 py-3.5 md:px-5 space-y-3 border-b border-[var(--ui-divider)] xl:border-b-0 xl:border-r xl:border-[var(--ui-divider)]">
               <div className="flex items-center gap-2">
                 <Mic className="w-4 h-4 text-white/65 shrink-0" />
                 <div>
@@ -994,7 +995,7 @@ const AITab: React.FC = () => {
                 <select
                   value={whisperModelValue}
                   onChange={(e) => updateAI({ speechToTextModel: e.target.value })}
-                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
+                  className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                 >
                   {WHISPER_STT_OPTIONS.map((m) => (
                     <option key={m.id} value={m.id}>{m.label}</option>
@@ -1018,7 +1019,7 @@ const AITab: React.FC = () => {
                 </div>
               )}
 
-              <div className="pt-2 border-t border-white/[0.08] space-y-2">
+              <div className="pt-2 border-t border-[var(--ui-divider)] space-y-2">
                 <p className="text-[12px] text-white/50">Whisper Hotkeys</p>
                 <div>
                   <p className="text-[12px] text-white/50 mb-1.5">Start/Stop Speaking</p>
@@ -1067,7 +1068,7 @@ const AITab: React.FC = () => {
                   <select
                     value={ai.speechCorrectionModel || ''}
                     onChange={(e) => updateAI({ speechCorrectionModel: e.target.value })}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                   >
                     <option value="">Use Generic Default Model</option>
                     {correctionModelOptions.map((m) => (
@@ -1084,7 +1085,7 @@ const AITab: React.FC = () => {
 
         {activeTab === 'speak' && (
           <>
-          <div className="px-4 py-3 md:px-5 border-b border-white/[0.08] flex items-center justify-between gap-3">
+          <div className="px-4 py-3 md:px-5 border-b border-[var(--ui-divider)] flex items-center justify-between gap-3">
             <div>
               <h3 className="text-[13px] font-semibold text-white/95">Enable SuperCmd Read</h3>
               <p className="text-[12px] text-white/50 mt-0.5 leading-snug">Toggle text-to-speech features.</p>
@@ -1096,7 +1097,7 @@ const AITab: React.FC = () => {
             />
           </div>
           <div className={`grid grid-cols-1 xl:grid-cols-2 gap-0 ${ai.readEnabled === false ? 'opacity-65 pointer-events-none select-none' : ''}`}>
-            <div className="px-4 py-3.5 md:px-5 space-y-3 border-b border-white/[0.08] xl:border-b-0 xl:border-r xl:border-white/[0.08]">
+            <div className="px-4 py-3.5 md:px-5 space-y-3 border-b border-[var(--ui-divider)] xl:border-b-0 xl:border-r xl:border-[var(--ui-divider)]">
               <div className="flex items-center gap-2">
                 <Volume2 className="w-4 h-4 text-white/65 shrink-0" />
                 <div>
@@ -1119,7 +1120,7 @@ const AITab: React.FC = () => {
                       textToSpeechModel: buildElevenLabsSpeakModel(nextModel, selectedElevenLabsVoiceId),
                     });
                   }}
-                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
+                  className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                 >
                   {SPEAK_TTS_OPTIONS.map((m) => (
                     <option key={m.id} value={m.id}>{m.label}</option>
@@ -1128,7 +1129,7 @@ const AITab: React.FC = () => {
               </div>
 
               {speakModelValue === 'edge-tts' && (
-                <div className="pt-2 border-t border-white/[0.08] space-y-2.5">
+                <div className="pt-2 border-t border-[var(--ui-divider)] space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[12px] text-white/50">Edge TTS Voice</p>
                     {edgeVoicesLoading && (
@@ -1144,7 +1145,7 @@ const AITab: React.FC = () => {
                     <select
                       value={selectedEdgeLanguageCode}
                       onChange={(e) => handleEdgeLanguageChange(e.target.value)}
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                     >
                       {edgeLanguageOptions.map((lang) => (
                         <option key={lang.code} value={lang.code}>{lang.label}</option>
@@ -1157,7 +1158,7 @@ const AITab: React.FC = () => {
                     <select
                       value={selectedEdgeGender}
                       onChange={(e) => handleEdgeGenderChange(e.target.value as EdgeVoiceGender)}
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                     >
                       <option value="female">Female</option>
                       <option value="male">Male</option>
@@ -1169,7 +1170,7 @@ const AITab: React.FC = () => {
                     <select
                       value={selectedEdgeVoice.id}
                       onChange={(e) => applyEdgeVoice(e.target.value)}
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                     >
                       {(voicesForLanguageAndGender.length > 0 ? voicesForLanguageAndGender : voicesForLanguage).map((voice) => (
                         <option key={voice.id} value={voice.id}>
@@ -1205,7 +1206,7 @@ const AITab: React.FC = () => {
               )}
 
               {speakModelValue.startsWith('elevenlabs-') && (
-                <div className="pt-2 border-t border-white/[0.08] space-y-2.5">
+                <div className="pt-2 border-t border-[var(--ui-divider)] space-y-2.5">
                   <div>
                     <p className="text-[12px] text-white/50 mb-1">ElevenLabs Model</p>
                     <select
@@ -1214,7 +1215,7 @@ const AITab: React.FC = () => {
                         updateAI({
                           textToSpeechModel: buildElevenLabsSpeakModel(e.target.value, selectedElevenLabsVoiceId),
                         })}
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                     >
                       {SPEAK_TTS_OPTIONS.filter((m) => m.id.startsWith('elevenlabs-')).map((m) => (
                         <option key={m.id} value={m.id}>{m.label}</option>
@@ -1241,7 +1242,7 @@ const AITab: React.FC = () => {
                         updateAI({
                           textToSpeechModel: buildElevenLabsSpeakModel(speakModelValue, e.target.value),
                         })}
-                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-white/90 focus:outline-none focus:border-blue-500/50"
                     >
                       {ELEVENLABS_VOICES.length > 0 && (
                         <optgroup label="Built-in Voices">

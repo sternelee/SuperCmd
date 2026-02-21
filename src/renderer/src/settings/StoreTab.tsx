@@ -309,13 +309,13 @@ const StoreTab: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   return (
     <div className={embedded ? '' : 'h-full flex flex-col'}>
       <div className="w-full h-full flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--ui-divider)]">
           <h2 className="text-[15px] font-semibold text-white">{embedded ? 'Community' : 'Store'}</h2>
           <span className="text-[12px] text-white/45">Installed extensions appear first.</span>
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col">
-          <div className="px-4 py-3 border-b border-white/[0.08] flex items-center gap-3">
+          <div className="px-4 py-3 border-b border-[var(--ui-divider)] flex items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
               <input
@@ -323,13 +323,13 @@ const StoreTab: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                 placeholder="Search extensions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-white/[0.20] transition-colors"
+                className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--ui-segment-border)] transition-colors"
               />
             </div>
             <button
               onClick={() => loadCatalog(true)}
               disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/60 hover:text-white/85 border border-white/[0.10] bg-white/[0.03] hover:bg-white/[0.08] rounded-lg transition-colors disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/60 hover:text-white/85 border border-[var(--ui-panel-border)] bg-[var(--ui-segment-bg)] hover:bg-[var(--ui-segment-hover-bg)] rounded-lg transition-colors disabled:opacity-40"
             >
               <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
@@ -366,7 +366,7 @@ const StoreTab: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 
           {sortedCatalog.length > 0 && (
             <div className="grid grid-cols-12 flex-1 min-h-0">
-              <div className="col-span-5 border-r border-white/[0.08] min-h-0">
+              <div className="col-span-5 border-r border-[var(--ui-divider)] min-h-0">
                 <div ref={listRef} className="space-y-1 h-full overflow-y-auto custom-scrollbar px-2 py-2">
                   {sortedCatalog.map((ext) => {
                     const selected = selectedName === ext.name;
@@ -381,10 +381,10 @@ const StoreTab: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                           setDetailTab('overview');
                         }}
                         className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                          selected ? 'bg-white/[0.10]' : 'hover:bg-white/[0.05]'
+                          selected ? 'bg-[var(--ui-segment-active-bg)]' : 'hover:bg-[var(--ui-segment-bg)]'
                         }`}
                       >
-                        <div className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <div className="w-9 h-9 rounded-lg bg-[var(--ui-segment-bg)] flex items-center justify-center overflow-hidden flex-shrink-0">
                           <img
                             src={ext.iconUrl}
                             alt=""
@@ -439,7 +439,7 @@ const StoreTab: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 
           {!isLoading && (
             <div
-              className="flex items-center px-4 py-3.5 border-t border-white/[0.10]"
+              className="flex items-center px-4 py-3.5 border-t border-[var(--ui-panel-border)]"
               style={{
                 background:
                   'var(--menu-overlay-bg)',
@@ -477,10 +477,10 @@ const StoreTab: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                   >
                     {selectedInstalled ? 'Update Extension' : 'Install Extension'}
                   </button>
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--ui-segment-hover-bg)] text-[11px] text-white/40 font-medium">
                     ⌘
                   </kbd>
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--ui-segment-hover-bg)] text-[11px] text-white/40 font-medium">
                     ↩
                   </kbd>
                 </div>
@@ -491,8 +491,8 @@ const StoreTab: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                 className="flex items-center gap-1.5 text-white/50 hover:text-white/70 transition-colors"
               >
                 <span className="text-xs font-medium">Actions</span>
-                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">⌘</kbd>
-                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">K</kbd>
+                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--ui-segment-hover-bg)] text-[11px] text-white/40 font-medium">⌘</kbd>
+                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--ui-segment-hover-bg)] text-[11px] text-white/40 font-medium">K</kbd>
               </button>
             </div>
           )}
@@ -523,8 +523,8 @@ const DetailTabButton: React.FC<{
     onClick={onClick}
     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors ${
       active
-        ? 'bg-white/[0.12] text-white'
-        : 'bg-white/[0.04] text-white/60 hover:text-white/85'
+        ? 'bg-[var(--ui-segment-active-bg)] text-white'
+        : 'bg-[var(--ui-segment-bg)] text-white/60 hover:text-white/85'
     }`}
   >
     {icon}
@@ -536,7 +536,7 @@ const ContributorAvatar: React.FC<{ name: string }> = ({ name }) => {
   const [imgFailed, setImgFailed] = useState(false);
   return (
     <div className="flex items-center gap-2 w-full">
-      <div className="w-5 h-5 rounded-full bg-white/[0.10] overflow-hidden flex items-center justify-center text-[10px] text-white/85">
+      <div className="w-5 h-5 rounded-full bg-[var(--ui-segment-active-bg)] overflow-hidden flex items-center justify-center text-[10px] text-white/85">
         {!imgFailed ? (
           <img
             src={avatarUrlFor(name)}
@@ -568,8 +568,8 @@ const CommunityDetails: React.FC<{
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-start gap-3 pb-3 border-b border-white/[0.08]">
-        <div className="w-12 h-12 rounded-xl bg-white/[0.06] overflow-hidden flex items-center justify-center">
+      <div className="flex items-start gap-3 pb-3 border-b border-[var(--ui-divider)]">
+        <div className="w-12 h-12 rounded-xl bg-[var(--ui-segment-bg)] overflow-hidden flex items-center justify-center">
           <img src={ext.iconUrl} alt="" className="w-12 h-12 object-contain" draggable={false} />
         </div>
         <div className="flex-1 min-w-0">
@@ -622,7 +622,7 @@ const CommunityDetails: React.FC<{
                     <button
                       key={`${url}-${idx}`}
                       onClick={() => window.electron.openUrl(url)}
-                      className="rounded-md overflow-hidden border border-white/[0.08] bg-white/[0.03] hover:border-white/[0.20] transition-colors"
+                      className="rounded-md overflow-hidden border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] hover:border-[var(--ui-segment-border)] transition-colors"
                     >
                       <img src={url} alt="" className="w-full h-24 object-cover" draggable={false} />
                     </button>
@@ -663,7 +663,7 @@ const CommunityDetails: React.FC<{
                   ext.categories.map((cat) => (
                     <span
                       key={cat}
-                      className="text-[11px] px-2 py-0.5 rounded bg-white/[0.08] text-white/75"
+                      className="text-[11px] px-2 py-0.5 rounded bg-[var(--ui-segment-hover-bg)] text-white/75"
                     >
                       {cat}
                     </span>
@@ -680,7 +680,7 @@ const CommunityDetails: React.FC<{
           <div className="space-y-2">
             {visibleCommands.length > 0 ? (
               visibleCommands.map((cmd) => (
-                <div key={cmd.name || cmd.title} className="pb-2 border-b border-white/[0.06] last:border-b-0">
+                <div key={cmd.name || cmd.title} className="pb-2 border-b border-[var(--ui-divider)] last:border-b-0">
                   <div className="flex items-start gap-2">
                     <img src={ext.iconUrl} alt="" className="w-4 h-4 object-contain mt-0.5 rounded-sm" draggable={false} />
                     <div>
@@ -720,7 +720,7 @@ const CommunityDetails: React.FC<{
                 <button
                   key={`${url}-${idx}`}
                   onClick={() => window.electron.openUrl(url)}
-                  className="w-full rounded-lg overflow-hidden border border-white/[0.08] bg-white/[0.02] hover:border-white/[0.18] transition-colors"
+                  className="w-full rounded-lg overflow-hidden border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] hover:border-[var(--ui-segment-border)] transition-colors"
                 >
                   <img src={url} alt="" className="w-full max-h-56 object-cover" draggable={false} />
                 </button>

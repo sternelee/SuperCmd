@@ -55,10 +55,10 @@ const SettingsRow: React.FC<SettingsRowProps> = ({
     }`}
   >
     <div className="flex items-start gap-2.5">
-      <div className="mt-0.5 text-white/65 shrink-0">{icon}</div>
+      <div className="mt-0.5 text-[var(--text-muted)] shrink-0">{icon}</div>
       <div className="min-w-0">
-        <h3 className="text-[13px] font-semibold text-white/95">{title}</h3>
-        <p className="mt-0.5 text-[12px] text-white/50 leading-snug">{description}</p>
+        <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">{title}</h3>
+        <p className="mt-0.5 text-[12px] text-[var(--text-muted)] leading-snug">{description}</p>
       </div>
     </div>
     <div className="flex items-center min-h-[32px]">{children}</div>
@@ -204,14 +204,14 @@ const GeneralTab: React.FC = () => {
   };
 
   if (!settings) {
-    return <div className="p-6 text-white/50 text-[12px]">Loading settings...</div>;
+    return <div className="p-6 text-[var(--text-muted)] text-[12px]">Loading settings...</div>;
   }
 
   const selectedFontSize = settings.fontSize || getDefaultAppFontSize();
 
   return (
     <div className="w-full max-w-[980px] mx-auto space-y-3">
-      <h2 className="text-[15px] font-semibold text-white">General</h2>
+      <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">General</h2>
 
       <div className="overflow-hidden rounded-xl border border-[var(--ui-panel-border)] bg-[var(--settings-panel-bg)]">
         <SettingsRow
@@ -233,7 +233,7 @@ const GeneralTab: React.FC = () => {
           title="Font Size"
           description="Scale text size across the app."
         >
-          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--ui-segment-border)] bg-[var(--ui-segment-bg)] p-0.5">
+          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] p-0.5">
             {FONT_SIZE_OPTIONS.map((option) => {
               const active = selectedFontSize === option.id;
               return (
@@ -259,7 +259,7 @@ const GeneralTab: React.FC = () => {
           title="Appearance"
           description="Choose Light, Dark, or follow your system preference."
         >
-          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--ui-segment-border)] bg-[var(--ui-segment-bg)] p-0.5">
+          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] p-0.5">
             {([
               { id: 'light', label: 'Light', icon: <Sun className="w-3.5 h-3.5" /> },
               { id: 'system', label: 'System', icon: <SunMoon className="w-3.5 h-3.5" /> },
@@ -292,10 +292,10 @@ const GeneralTab: React.FC = () => {
         >
           <div className="w-full space-y-2">
             <div>
-              <p className="text-[13px] font-semibold text-white/92 leading-snug">
+              <p className="text-[13px] font-semibold text-[var(--text-primary)] leading-snug">
                 {updaterPrimaryMessage}
               </p>
-              <p className="text-[12px] text-white/45 mt-0.5 leading-tight">
+              <p className="text-[12px] text-[var(--text-subtle)] mt-0.5 leading-tight">
                 Current version: v{currentVersion}
                 {updaterStatus?.latestVersion ? ` · Latest: v${updaterStatus.latestVersion}` : ''}
               </p>
@@ -303,13 +303,13 @@ const GeneralTab: React.FC = () => {
 
             {updaterState === 'downloading' && (
               <div>
-                <div className="w-full h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                <div className="w-full h-1 rounded-full bg-[var(--ui-segment-hover-bg)] overflow-hidden">
                   <div
                     className="h-full bg-cyan-400 transition-all duration-200"
                     style={{ width: `${updaterProgress}%` }}
                   />
                 </div>
-                <p className="mt-0.5 text-[12px] text-white/45">
+                <p className="mt-0.5 text-[12px] text-[var(--text-subtle)]">
                   {updaterProgress.toFixed(0)}% · {formatBytes(updaterStatus?.transferredBytes)} / {formatBytes(updaterStatus?.totalBytes)}
                 </p>
               </div>
@@ -326,7 +326,7 @@ const GeneralTab: React.FC = () => {
                 type="button"
                 onClick={handleCheckForUpdates}
                 disabled={!updaterSupported || updaterState === 'checking' || updaterState === 'downloading'}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] border border-[var(--ui-segment-border)] text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] border border-[var(--ui-divider)] text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${updaterState === 'checking' ? 'animate-spin' : ''}`} />
                 Check for Updates
@@ -361,7 +361,7 @@ const GeneralTab: React.FC = () => {
           description="Version information."
           withBorder={false}
         >
-          <p className="text-[13px] font-semibold text-white/88 leading-snug">
+          <p className="text-[13px] font-semibold text-[var(--text-primary)] leading-snug">
             SuperCmd v{currentVersion}
           </p>
         </SettingsRow>

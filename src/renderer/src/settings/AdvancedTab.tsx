@@ -20,14 +20,14 @@ const SettingsRow: React.FC<SettingsRowProps> = ({
 }) => (
   <div
     className={`grid gap-3 px-4 py-3.5 md:px-5 md:grid-cols-[220px_minmax(0,1fr)] ${
-      withBorder ? 'border-b border-white/[0.08]' : ''
+      withBorder ? 'border-b border-[var(--ui-divider)]' : ''
     }`}
   >
     <div className="flex items-start gap-2.5">
-      <div className="mt-0.5 text-white/65 shrink-0">{icon}</div>
+      <div className="mt-0.5 text-[var(--text-muted)] shrink-0">{icon}</div>
       <div className="min-w-0">
-        <h3 className="text-[13px] font-semibold text-white/95">{title}</h3>
-        <p className="mt-0.5 text-[12px] text-white/50 leading-snug">{description}</p>
+        <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">{title}</h3>
+        <p className="mt-0.5 text-[12px] text-[var(--text-muted)] leading-snug">{description}</p>
       </div>
     </div>
     <div className="flex items-center min-h-[32px]">{children}</div>
@@ -45,7 +45,7 @@ const AdvancedTab: React.FC = () => {
   }, []);
 
   if (!settings) {
-    return <div className="p-6 text-white/50 text-[12px]">Loading advanced settings...</div>;
+    return <div className="p-6 text-[var(--text-muted)] text-[12px]">Loading advanced settings...</div>;
   }
 
   const handleBaseColorPreview = (value: string) => {
@@ -63,9 +63,9 @@ const AdvancedTab: React.FC = () => {
 
   return (
     <div className="w-full max-w-[980px] mx-auto space-y-3">
-      <h2 className="text-[15px] font-semibold text-white">Advanced</h2>
+      <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">Advanced</h2>
 
-      <div className="overflow-hidden rounded-xl border border-white/[0.10] bg-[var(--settings-panel-bg)]">
+      <div className="overflow-hidden rounded-xl border border-[var(--ui-panel-border)] bg-[var(--settings-panel-bg)]">
         {/* Hyper Key UI is temporarily disabled. */}
         {/* <SettingsRow
           icon={<Command className="w-4 h-4" />}
@@ -77,7 +77,7 @@ const AdvancedTab: React.FC = () => {
             <select
               value={settings.hyperKeySource || 'none'}
               onChange={(e) => { void handleHyperKeySourceChange(e.target.value as AppSettings['hyperKeySource']); }}
-              className="w-full max-w-[520px] bg-white/[0.04] border border-white/[0.12] rounded-lg px-3 py-2.5 text-sm text-white/92 outline-none"
+              className="w-full max-w-[520px] bg-[var(--ui-segment-bg)] border border-[var(--ui-segment-border)] rounded-lg px-3 py-2.5 text-sm text-white/92 outline-none"
             >
               {HYPER_KEY_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -90,7 +90,7 @@ const AdvancedTab: React.FC = () => {
                   type="checkbox"
                   checked={Boolean(settings.hyperReplaceModifierGlyphsWithHyper)}
                   onChange={(e) => { void handleHyperReplaceGlyphsChange(e.target.checked); }}
-                  className="w-4 h-4 rounded border border-white/[0.18] bg-transparent"
+                  className="w-4 h-4 rounded border border-[var(--ui-segment-border)] bg-transparent"
                 />
                 Replace occurrences of ^⌥⇧⌘ with ✦
               </label>
@@ -101,7 +101,7 @@ const AdvancedTab: React.FC = () => {
                     type="checkbox"
                     checked={Boolean(settings.hyperKeyIncludeShift)}
                     onChange={(e) => { void handleHyperIncludeShiftChange(e.target.checked); }}
-                    className="w-4 h-4 rounded border border-white/[0.18] bg-transparent"
+                    className="w-4 h-4 rounded border border-[var(--ui-segment-border)] bg-transparent"
                   />
                   Include shift in Hyper Key
                 </label>
@@ -114,7 +114,7 @@ const AdvancedTab: React.FC = () => {
                     <select
                       value={settings.hyperKeyQuickPressAction || 'toggle-caps-lock'}
                       onChange={(e) => { void handleHyperQuickPressActionChange(e.target.value as AppSettings['hyperKeyQuickPressAction']); }}
-                      className="w-full max-w-[520px] bg-white/[0.04] border border-white/[0.12] rounded-lg px-3 py-2.5 text-sm text-white/92 outline-none"
+                      className="w-full max-w-[520px] bg-[var(--ui-segment-bg)] border border-[var(--ui-segment-border)] rounded-lg px-3 py-2.5 text-sm text-white/92 outline-none"
                     >
                       <option value="none">Does Nothing</option>
                       <option value="toggle-caps-lock">Toggles Caps Lock</option>
@@ -142,7 +142,7 @@ const AdvancedTab: React.FC = () => {
                 setSettings((prev) => (prev ? { ...prev, debugMode } : prev));
                 await window.electron.saveSettings({ debugMode });
               }}
-              className="w-4 h-4 rounded accent-cyan-400"
+              className="settings-checkbox"
             />
             Enable debug mode
           </label>
@@ -160,14 +160,14 @@ const AdvancedTab: React.FC = () => {
               value={normalizeBaseColorHex(settings.baseColor || '#101113')}
               onInput={(e) => handleBaseColorPreview((e.target as HTMLInputElement).value)}
               onChange={(e) => { void handleBaseColorCommit((e.target as HTMLInputElement).value); }}
-              className="w-12 h-8 rounded border border-white/[0.14] bg-transparent cursor-pointer"
+              className="settings-color-input w-12 h-8 rounded border border-[var(--ui-divider)] bg-transparent cursor-pointer"
             />
             <input
               type="text"
               value={normalizeBaseColorHex(settings.baseColor || '#101113')}
               onChange={(e) => handleBaseColorPreview(e.target.value)}
               onBlur={(e) => { void handleBaseColorCommit(e.target.value); }}
-              className="w-28 bg-white/[0.05] border border-white/[0.10] rounded-md px-2.5 py-1.5 text-xs text-white/90 outline-none"
+              className="w-28 bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-1.5 text-xs text-white/90 outline-none"
             />
           </div>
         </SettingsRow>
