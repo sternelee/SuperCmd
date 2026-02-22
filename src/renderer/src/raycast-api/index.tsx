@@ -82,6 +82,7 @@ import {
   withCache,
 } from './platform-runtime';
 import type { Tool } from './platform-runtime';
+import { onThemeChange } from '../utils/theme';
 
 export { Icon, Color, Image, Keyboard, renderIcon };
 export { OAuth, OAuthService, withAccessToken, getAccessToken, resetAccessToken };
@@ -276,10 +277,20 @@ export const environment: Record<string, any> = {
   },
 };
 
-// Force dark mode as the default extension theme.
 if (typeof document !== 'undefined') {
-  document.documentElement.classList.add('dark');
-  document.documentElement.style.colorScheme = 'dark';
+  const applyEnvironmentTheme = () => {
+    const isDark = document.documentElement.classList.contains('dark');
+    environment.appearance = isDark ? 'dark' : 'light';
+    environment.theme = { name: isDark ? 'dark' : 'light' };
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+  };
+
+  applyEnvironmentTheme();
+  onThemeChange(({ theme }) => {
+    environment.appearance = theme;
+    environment.theme = { name: theme };
+    document.documentElement.style.colorScheme = theme;
+  });
 }
 
 // =====================================================================
@@ -343,14 +354,14 @@ export class Toast {
     this.hide(); // clear any existing
     this._el = document.createElement('div');
     const styleColor =
-      this.style === ToastStyle.Failure ? 'rgba(255,60,60,0.85)' :
-      this.style === ToastStyle.Animated ? 'rgba(60,60,255,0.85)' :
-      'rgba(40,180,80,0.85)';
+      this.style === ToastStyle.Failure ? 'var(--toast-error-bg)' :
+      this.style === ToastStyle.Animated ? 'var(--toast-info-bg)' :
+      'var(--toast-success-bg)';
 
     this._el.style.cssText =
       'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);' +
       'padding:8px 16px;border-radius:8px;font-size:13px;z-index:99999;' +
-      `color:#fff;backdrop-filter:blur(20px);max-width:400px;text-align:center;background:${styleColor}`;
+      `color:var(--toast-fg);backdrop-filter:blur(20px);max-width:400px;text-align:center;background:${styleColor}`;
 
     this._el.textContent = this.title + (this.message ? ` — ${this.message}` : '');
     document.body.appendChild(this._el);

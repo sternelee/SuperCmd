@@ -150,31 +150,58 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
       groups[groups.length - 1].items.push({ action, idx: groupIndex++ });
     }
 
+    const isGlassyTheme =
+      document.documentElement.classList.contains('sc-glassy') ||
+      document.body.classList.contains('sc-glassy');
+
     return (
       <div
         className="fixed inset-0 z-50"
         onClick={onClose}
         onKeyDown={handleKeyDown}
         tabIndex={-1}
-        style={{ background: 'rgba(0,0,0,0.15)' }}
+        style={{ background: 'var(--bg-scrim)' }}
       >
         <div
           ref={panelRef}
-          className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl"
-          style={{
-            background: 'rgba(30,30,34,0.97)',
-            backdropFilter: 'blur(40px)',
-            border: '1px solid rgba(255,255,255,0.08)',
-          }}
+          className={`absolute bottom-12 right-3 w-80 max-h-[65vh] overflow-hidden flex flex-col ${
+            isGlassyTheme ? 'rounded-3xl p-1' : 'rounded-xl shadow-2xl'
+          }`}
+          style={
+            isGlassyTheme
+              ? {
+                  background: `
+                    linear-gradient(160deg,
+                      rgba(255, 255, 255, 0.16) 0%,
+                      rgba(255, 255, 255, 0.035) 38%,
+                      rgba(255, 255, 255, 0.07) 100%
+                    ),
+                    rgba(var(--surface-base-rgb), 0.58)
+                  `,
+                  backdropFilter: 'blur(128px) saturate(195%) contrast(107%) brightness(1.03)',
+                  WebkitBackdropFilter: 'blur(128px) saturate(195%) contrast(107%) brightness(1.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  boxShadow: `
+                    0 28px 58px -14px rgba(0, 0, 0, 0.42),
+                    inset 0 -1px 0 0 rgba(0, 0, 0, 0.08)
+                  `,
+                }
+              : {
+                  background: 'var(--card-bg)',
+                  backdropFilter: 'blur(40px)',
+                  WebkitBackdropFilter: 'blur(40px)',
+                  border: '1px solid var(--border-primary)',
+                }
+          }
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex-1 overflow-y-auto py-1">
+          <div className="action-overlay-scroll flex-1 overflow-y-auto py-1">
             {filteredActions.length === 0 ? (
               <div className="px-3 py-4 text-center text-white/30 text-sm">No matching actions</div>
             ) : (
               groups.map((group, groupPosition) => (
                 <div key={groupPosition}>
-                  {groupPosition > 0 && <hr className="border-white/[0.06] my-0.5" />}
+                  {groupPosition > 0 && <hr className="border-[var(--ui-divider)] my-0.5" />}
                   {group.title && (
                     <div className="px-3 pt-1.5 pb-0.5 text-[10px] uppercase tracking-wider text-white/25 font-medium select-none">
                       {group.title}
@@ -184,9 +211,20 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
                     <div
                       key={idx}
                       data-action-idx={idx}
-                      className={`mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition-colors ${
-                        idx === selectedIdx ? 'bg-blue-500/90' : 'hover:bg-white/[0.06]'
+                      className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
+                        idx === selectedIdx
+                          ? 'bg-white/[0.18]'
+                          : 'hover:bg-white/[0.08]'
                       }`}
+                      style={
+                        idx === selectedIdx
+                          ? {
+                              background: 'var(--action-menu-selected-bg)',
+                              borderColor: 'var(--action-menu-selected-border)',
+                              boxShadow: 'var(--action-menu-selected-shadow)',
+                            }
+                          : undefined
+                      }
                       onClick={() => onExecute(action)}
                       onMouseMove={() => setSelectedIdx(idx)}
                     >
@@ -227,7 +265,7 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
               ))
             )}
           </div>
-          <div className="border-t border-white/[0.06] px-3 py-2">
+          <div className="border-t border-[var(--ui-divider)] px-3 py-2">
             <input
               ref={filterRef}
               type="text"

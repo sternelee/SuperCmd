@@ -114,7 +114,10 @@ export function resolveTintColor(tintColor: any): string | undefined {
     return isValidCssColor(normalized) ? normalized : undefined;
   }
   if (typeof tintColor === 'object') {
-    const raw = tintColor.dark || tintColor.light;
+    const prefersDark = document.documentElement.classList.contains('dark');
+    const raw = prefersDark
+      ? (tintColor.dark || tintColor.light)
+      : (tintColor.light || tintColor.dark);
     if (typeof raw !== 'string') return undefined;
     const normalized = normalizeCssColor(raw);
     return isValidCssColor(normalized) ? normalized : undefined;

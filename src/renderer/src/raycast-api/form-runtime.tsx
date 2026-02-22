@@ -146,8 +146,8 @@ export function createFormRuntime(deps: FormRuntimeDeps) {
             setShowActions(true);
           }}
         >
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
-            <button onClick={pop} className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0 p-0.5">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--ui-divider)]">
+            <button onClick={pop} className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0 p-0.5">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M19 12H5M12 19l-7-7 7-7" />
               </svg>
@@ -156,7 +156,7 @@ export function createFormRuntime(deps: FormRuntimeDeps) {
 
           <div className="flex-1 overflow-y-auto py-4 px-4">
             {isLoading ? (
-              <div className="flex items-center justify-center h-full text-white/50">
+              <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
                 <p className="text-sm">Loading…</p>
               </div>
             ) : (
@@ -165,28 +165,28 @@ export function createFormRuntime(deps: FormRuntimeDeps) {
           </div>
 
           {formActions.length > 0 && (
-            <div className="sc-glass-footer flex items-center px-4 py-3">
-              <div className="flex items-center gap-2 text-white/40 text-xs flex-1 min-w-0 font-medium">
+            <div className="sc-glass-footer flex items-center px-4 py-2.5">
+              <div className="flex items-center gap-2 text-[var(--text-subtle)] text-xs flex-1 min-w-0 font-normal">
                 {footerIcon ? <img src={footerIcon} alt="" className="w-4 h-4 rounded-sm object-contain flex-shrink-0" /> : null}
                 <span className="truncate">{footerTitle}</span>
               </div>
               {primaryAction && (
-                <button type="button" onClick={() => primaryAction.execute()} className="flex items-center gap-2 mr-3 text-white hover:text-white/90 transition-colors">
-                  <span className="text-white text-xs font-semibold">{primaryAction.title}</span>
+                <button type="button" onClick={() => primaryAction.execute()} className="flex items-center gap-2 mr-3 text-[var(--text-primary)] hover:text-[var(--text-secondary)] transition-colors">
+                  <span className="text-xs font-semibold">{primaryAction.title}</span>
                   {primaryAction.shortcut ? (
                     <span className="flex items-center gap-0.5">{renderShortcut(primaryAction.shortcut)}</span>
                   ) : (
                     <>
-                      <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">⌘</kbd>
-                      <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">↩</kbd>
+                      <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">⌘</kbd>
+                      <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">↩</kbd>
                     </>
                   )}
                 </button>
               )}
-              <button onClick={() => setShowActions(true)} className="flex items-center gap-1.5 text-white/50 hover:text-white/70 transition-colors">
-                <span className="text-xs font-medium">Actions</span>
-                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">⌘</kbd>
-                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">K</kbd>
+              <button onClick={() => setShowActions(true)} className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
+                <span className="text-xs font-normal">Actions</span>
+                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">⌘</kbd>
+                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">K</kbd>
               </button>
             </div>
           )}

@@ -16,6 +16,7 @@ interface HotkeyRecorderProps {
   compact?: boolean;
   large?: boolean;
   active?: boolean;
+  variant?: 'default' | 'whisper';
 }
 
 type KeyboardLikeEvent = Pick<
@@ -172,6 +173,7 @@ const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
   compact,
   large,
   active,
+  variant = 'default',
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -287,8 +289,9 @@ const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
   }, [isRecording]);
 
   if (compact) {
+    const isWhisper = variant === 'whisper';
     return (
-      <div className="inline-flex items-center gap-1">
+      <div className={`inline-flex items-center ${isWhisper ? 'gap-1.5' : 'gap-1'}`}>
         <div
           ref={ref}
           tabIndex={0}
@@ -298,16 +301,25 @@ const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
             setIsRecording(false);
           }}
           className={`
-            inline-flex items-center justify-center px-2.5 py-1 rounded text-[13px] leading-none cursor-pointer
+            inline-flex items-center justify-center rounded text-[13px] leading-none cursor-pointer
             transition-all select-none outline-none
+            ${isWhisper ? 'min-h-[34px] min-w-[84px] px-3 py-1.5 rounded-md text-[14px] font-medium' : 'px-2.5 py-1'}
             ${
               isRecording
-                ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400 min-w-[80px]'
+                  ? isWhisper
+                    ? 'bg-[var(--accent-soft)] border border-dashed border-[var(--accent)] text-[var(--accent)] min-w-[80px]'
+                    : 'bg-blue-500/20 border border-blue-500/40 text-blue-400 min-w-[80px]'
                 : active
-                  ? 'bg-white/20 border border-white/70 text-white shadow-[0_0_0_2px_rgba(255,255,255,0.14),0_0_18px_rgba(255,255,255,0.28)]'
+                  ? isWhisper
+                    ? 'bg-[var(--ui-segment-active-bg)] border border-dashed border-[var(--ui-segment-border)] text-[var(--text-primary)]'
+                    : 'bg-[var(--ui-segment-active-bg)] border border-[var(--ui-divider)] text-[var(--text-primary)]'
                 : value
-                  ? 'bg-white/[0.06] border border-white/[0.08] text-white/60 hover:border-white/20'
-                  : 'text-white/20 hover:text-white/40'
+                  ? isWhisper
+                    ? 'bg-[var(--ui-segment-bg)] border border-dashed border-[var(--ui-segment-border)] text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
+                    : 'bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] text-[var(--text-secondary)] hover:border-[var(--ui-segment-border)]'
+                  : isWhisper
+                    ? 'bg-[var(--ui-segment-bg)] border border-dashed border-[var(--ui-segment-border)] text-[var(--text-muted)] hover:bg-[var(--ui-segment-hover-bg)]'
+                    : 'text-white/20 hover:text-white/40'
             }
           `}
         >
@@ -330,7 +342,7 @@ const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
               onChange('');
               setIsRecording(false);
             }}
-            className="w-6 h-6 rounded flex items-center justify-center text-red-300/75 hover:text-red-200 hover:bg-red-500/20 transition-colors"
+            className="w-6 h-6 rounded flex items-center justify-center text-[color:var(--status-danger-text)] hover:text-[color:var(--status-danger)] hover:bg-[color:var(--status-danger-soft)] transition-colors"
             title="Remove hotkey"
             aria-label="Remove hotkey"
           >
@@ -358,8 +370,8 @@ const HotkeyRecorder: React.FC<HotkeyRecorderProps> = ({
           isRecording
             ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400'
             : active
-              ? 'bg-white/20 border border-white/70 text-white shadow-[0_0_0_2px_rgba(255,255,255,0.14),0_0_24px_rgba(255,255,255,0.26)]'
-              : 'bg-white/[0.06] border border-white/[0.08] text-white/70 hover:border-white/20'
+              ? 'bg-[var(--ui-segment-active-bg)] border border-[var(--ui-divider)] text-[var(--text-primary)]'
+              : 'bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] text-[var(--text-secondary)] hover:border-[var(--ui-segment-border)]'
         }
       `}
     >

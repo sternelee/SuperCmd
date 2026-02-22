@@ -306,7 +306,7 @@ export function renderPhosphorIcon(input: string, className: string, tint?: stri
     <IconComponent
       className={className}
       weight={weight}
-      style={{ color: tint || 'rgba(255,255,255,0.92)' }}
+      style={{ color: tint || 'rgba(var(--on-surface-rgb), 0.92)' }}
     />
   );
 }
@@ -319,7 +319,7 @@ export function renderPhosphorIconDataUrl(
   if (!spec) return undefined;
   const { icon: IconComponent, weight } = spec;
   const size = Number.isFinite(Number(options?.size)) ? Math.max(8, Number(options?.size)) : 16;
-  const color = String(options?.color || '#000000');
+  const color = String(options?.color || 'rgb(var(--backdrop-rgb))');
   const finalWeight = options?.weight || weight;
 
   const svg = renderToStaticMarkup(
@@ -395,7 +395,7 @@ export function renderPhosphorIconDataUrlForNative(
   options?: { size?: number; color?: string; weight?: PhosphorIconWeight }
 ): Promise<string | undefined> {
   const size = Number.isFinite(Number(options?.size)) ? Math.max(8, Number(options?.size)) : 16;
-  const color = String(options?.color || '#000000');
+  const color = String(options?.color || 'rgb(var(--backdrop-rgb))');
   const weight = options?.weight || 'regular';
   const cacheKey = `${input}::${size}::${color}::${weight}`;
   const cached = nativeIconDataUrlCache.get(cacheKey);

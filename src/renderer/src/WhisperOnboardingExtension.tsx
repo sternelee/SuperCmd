@@ -36,7 +36,7 @@ const WhisperOnboardingExtension: React.FC<WhisperOnboardingExtensionProps> = ({
       <div
         className="glass-effect overflow-hidden h-full flex flex-col"
         style={{
-          background: 'rgba(12, 14, 19, 0.86)',
+          background: 'var(--whisper-onboarding-shell-bg)',
           WebkitBackdropFilter: 'blur(42px) saturate(148%)',
           backdropFilter: 'blur(42px) saturate(148%)',
         }}
@@ -57,8 +57,7 @@ const WhisperOnboardingExtension: React.FC<WhisperOnboardingExtensionProps> = ({
         <div
           className="flex-1 overflow-y-auto p-6"
           style={{
-            background:
-              'radial-gradient(circle at 15% 8%, rgba(77, 196, 255, 0.12), transparent 42%), radial-gradient(circle at 84% 0%, rgba(143, 255, 188, 0.10), transparent 38%), radial-gradient(circle at 50% 100%, rgba(128, 112, 255, 0.08), transparent 36%), transparent',
+            background: 'var(--whisper-onboarding-page-bg)',
           }}
         >
           <div className="max-w-5xl mx-auto space-y-4">
@@ -66,8 +65,7 @@ const WhisperOnboardingExtension: React.FC<WhisperOnboardingExtensionProps> = ({
               <div
                 className="absolute inset-0 pointer-events-none rounded-xl"
                 style={{
-                  background:
-                    'radial-gradient(circle at 10% 0%, rgba(77, 196, 255, 0.09), transparent 40%), radial-gradient(circle at 100% 10%, rgba(143, 255, 188, 0.07), transparent 36%)',
+                  background: 'var(--whisper-onboarding-card-bg)',
                 }}
               />
               <div className="relative z-10">

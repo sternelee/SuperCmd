@@ -36,6 +36,7 @@ export interface AISettings {
 }
 
 export type AppFontSize = 'small' | 'medium' | 'large';
+export type AppUiStyle = 'default' | 'glassy';
 
 export interface AppSettings {
   globalShortcut: string;
@@ -53,6 +54,7 @@ export interface AppSettings {
   commandMetadata?: Record<string, { subtitle?: string }>;
   debugMode: boolean;
   fontSize: AppFontSize;
+  uiStyle: AppUiStyle;
   baseColor: string;
   appUpdaterLastCheckedAt: number;
   hyperKeySource:
@@ -129,6 +131,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ai: { ...DEFAULT_AI_SETTINGS },
   debugMode: false,
   fontSize: 'medium',
+  uiStyle: 'default',
   baseColor: '#101113',
   appUpdaterLastCheckedAt: 0,
   hyperKeySource: 'none',
@@ -143,6 +146,12 @@ function normalizeFontSize(value: any): AppFontSize {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'small' || normalized === 'large') return normalized;
   return 'medium';
+}
+
+function normalizeUiStyle(value: any): AppUiStyle {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'glassy') return 'glassy';
+  return 'default';
 }
 
 function normalizeBaseColor(value: any): string {
@@ -266,6 +275,7 @@ export function loadSettings(): AppSettings {
       commandMetadata: parsed.commandMetadata ?? {},
       debugMode: parsed.debugMode ?? DEFAULT_SETTINGS.debugMode,
       fontSize: normalizeFontSize(parsed.fontSize),
+      uiStyle: normalizeUiStyle(parsed.uiStyle),
       baseColor: normalizeBaseColor(parsed.baseColor),
       appUpdaterLastCheckedAt: Number.isFinite(Number(parsed.appUpdaterLastCheckedAt))
         ? Math.max(0, Number(parsed.appUpdaterLastCheckedAt))

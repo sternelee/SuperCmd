@@ -43,8 +43,8 @@ const AiChatView: React.FC<AiChatViewProps> = ({
       <div className="w-full h-full">
         <div className="glass-effect overflow-hidden h-full flex flex-col">
           {/* AI header — editable input */}
-          <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
-            <Sparkles className="w-4 h-4 text-purple-400 flex-shrink-0" />
+          <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--ui-divider)]">
+            <Sparkles className="w-4 h-4 text-[var(--accent)] flex-shrink-0" />
             <input
               ref={aiInputRef}
               type="text"
@@ -60,21 +60,21 @@ const AiChatView: React.FC<AiChatViewProps> = ({
                 }
               }}
               placeholder="Ask AI anything..."
-              className="flex-1 bg-transparent border-none outline-none text-white/90 placeholder-white/30 text-[15px] font-light tracking-wide min-w-0"
+              className="flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] text-[15px] font-light tracking-wide min-w-0"
               autoFocus
             />
             {aiQuery.trim() && (
               <button
                 onClick={() => submitAiQuery(aiQuery)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-purple-500/15 hover:bg-purple-500/25 transition-colors flex-shrink-0 group"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md border border-[var(--ui-segment-border)] bg-[var(--ui-segment-active-bg)] hover:bg-[var(--ui-segment-hover-bg)] transition-colors flex-shrink-0 group"
               >
-                <span className="text-[11px] text-purple-400/70 group-hover:text-purple-400 transition-colors">Ask</span>
-                <kbd className="text-[10px] text-purple-400/40 bg-purple-500/10 px-1 py-0.5 rounded font-mono leading-none">Enter</kbd>
+                <span className="text-[11px] text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">Ask</span>
+                <kbd className="text-[10px] text-[var(--text-muted)] bg-[var(--kbd-bg)] px-1 py-0.5 rounded font-mono leading-none">Enter</kbd>
               </button>
             )}
             <button
               onClick={exitAiMode}
-              className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+              className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -86,15 +86,15 @@ const AiChatView: React.FC<AiChatViewProps> = ({
             className="flex-1 overflow-y-auto custom-scrollbar p-5"
           >
             {aiResponse ? (
-              <div className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap font-light">
+              <div className="text-[var(--text-primary)] text-sm leading-relaxed whitespace-pre-wrap font-normal">
                 {aiResponse}
               </div>
             ) : aiStreaming ? (
-              <div className="flex items-center gap-2 text-white/40 text-sm">
+              <div className="flex items-center gap-2 text-[var(--text-muted)] text-sm">
                 <div className="flex gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-pulse" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-pulse" style={{ animationDelay: '0.2s' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" style={{ animationDelay: '0.2s' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" style={{ animationDelay: '0.4s' }} />
                 </div>
                 Thinking...
               </div>
@@ -102,13 +102,13 @@ const AiChatView: React.FC<AiChatViewProps> = ({
           </div>
 
           {/* Footer */}
-          <div className="sc-glass-footer px-4 py-3.5 flex items-center justify-between text-xs text-white/40 font-medium">
+          <div className="sc-glass-footer px-4 py-2.5 flex items-center justify-between text-xs text-[var(--text-subtle)] font-normal">
             <span>{aiStreaming ? 'Streaming...' : 'AI Response'}</span>
             <div className="flex items-center gap-2">
-              <kbd className="text-[10px] text-white/20 bg-white/[0.06] px-1.5 py-0.5 rounded font-mono">Enter</kbd>
-              <span className="text-[10px] text-white/20">Ask</span>
-              <kbd className="text-[10px] text-white/20 bg-white/[0.06] px-1.5 py-0.5 rounded font-mono">Esc</kbd>
-              <span className="text-[10px] text-white/20">Back</span>
+              <kbd className="text-[10px] text-[var(--text-muted)] bg-[var(--kbd-bg)] px-1.5 py-0.5 rounded font-mono">Enter</kbd>
+              <span className="text-[10px] text-[var(--text-muted)]">Ask</span>
+              <kbd className="text-[10px] text-[var(--text-muted)] bg-[var(--kbd-bg)] px-1.5 py-0.5 rounded font-mono">Esc</kbd>
+              <span className="text-[10px] text-[var(--text-muted)]">Back</span>
             </div>
           </div>
         </div>

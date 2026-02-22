@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import StoreTab from './settings/StoreTab';
 import { applyAppFontSize, getDefaultAppFontSize } from './utils/font-size';
 import { applyBaseColor } from './utils/base-color';
+import { applyUiStyle } from './utils/ui-style';
 
 const ExtensionStoreApp: React.FC = () => {
   useEffect(() => {
@@ -10,11 +11,15 @@ const ExtensionStoreApp: React.FC = () => {
       .then((settings) => {
         if (!disposed) {
           applyAppFontSize(settings.fontSize);
+          applyUiStyle(settings.uiStyle || 'default');
           applyBaseColor(settings.baseColor || '#101113');
         }
       })
       .catch(() => {
-        if (!disposed) applyAppFontSize(getDefaultAppFontSize());
+        if (!disposed) {
+          applyAppFontSize(getDefaultAppFontSize());
+          applyUiStyle('default');
+        }
       });
     return () => {
       disposed = true;
@@ -24,6 +29,7 @@ const ExtensionStoreApp: React.FC = () => {
   useEffect(() => {
     const cleanup = window.electron.onSettingsUpdated?.((settings) => {
       applyAppFontSize(settings.fontSize);
+      applyUiStyle(settings.uiStyle || 'default');
       applyBaseColor(settings.baseColor || '#101113');
     });
     return cleanup;

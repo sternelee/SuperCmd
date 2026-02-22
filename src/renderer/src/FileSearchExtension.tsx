@@ -132,6 +132,9 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
   const [isLoading, setIsLoading] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
+  const isGlassyTheme =
+    document.documentElement.classList.contains('sc-glassy') ||
+    document.body.classList.contains('sc-glassy');
   const [iconsByPath, setIconsByPath] = useState<Record<string, string>>({});
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [opening, setOpening] = useState(false);
@@ -451,7 +454,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
             className="bg-transparent border-none outline-none text-[14px] font-medium text-white/85 pr-4 appearance-none"
           >
             {scopes.map((scope) => (
-              <option key={scope.id} value={scope.id} className="bg-[#16161a]">
+              <option key={scope.id} value={scope.id} className="bg-[var(--bg-overlay)]">
                 {scope.label}
               </option>
             ))}
@@ -576,7 +579,23 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
       {showActions ? (
         <div className="absolute inset-0 bg-black/30 flex items-center justify-center" onClick={() => setShowActions(false)}>
           <div
-            className="w-[430px] rounded-2xl border border-white/[0.1] bg-[#1a1a1f]/95 backdrop-blur-xl p-2"
+            className="w-[430px] rounded-2xl border p-2"
+            style={
+              isGlassyTheme
+                ? {
+                    background:
+                      'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+                    backdropFilter: 'blur(96px) saturate(190%)',
+                    WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+                    borderColor: 'rgba(var(--on-surface-rgb), 0.05)',
+                  }
+                : {
+                    background: 'var(--card-bg)',
+                    backdropFilter: 'blur(40px)',
+                    WebkitBackdropFilter: 'blur(40px)',
+                    borderColor: 'var(--border-primary)',
+                  }
+            }
             onClick={(e) => e.stopPropagation()}
           >
             {selectedActions.length === 0 ? (
@@ -590,9 +609,20 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                     await Promise.resolve(action.execute());
                     setShowActions(false);
                   }}
-                  className={`w-full px-3 py-2 rounded-lg text-left flex items-center justify-between transition-colors ${
-                    index === selectedActionIndex ? 'bg-white/[0.12] text-white' : 'text-white/80 hover:bg-white/[0.07]'
+                  className={`w-full px-3 py-2 rounded-lg border border-transparent text-left flex items-center justify-between transition-colors ${
+                    index === selectedActionIndex
+                      ? 'bg-white/[0.18] text-white'
+                      : 'text-white/80 hover:bg-white/[0.08]'
                   }`}
+                  style={
+                    index === selectedActionIndex
+                      ? {
+                          background: 'var(--action-menu-selected-bg)',
+                          borderColor: 'var(--action-menu-selected-border)',
+                          boxShadow: 'var(--action-menu-selected-shadow)',
+                        }
+                      : undefined
+                  }
                 >
                   <span className="text-sm">{action.title}</span>
                   <span className="text-xs text-white/40">{action.shortcut}</span>

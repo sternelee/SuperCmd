@@ -2623,17 +2623,14 @@ function createWindow(): void {
     height: DEFAULT_WINDOW_HEIGHT,
     x: Math.floor((screenWidth - DEFAULT_WINDOW_WIDTH) / 2),
     y: Math.floor(screenHeight * 0.2),
-    titleBarStyle: 'hidden',
-    titleBarOverlay: false,
-    hasShadow: true,
+    frame: false,
+    hasShadow: false,
     resizable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
     show: false,
     transparent: true,
     backgroundColor: '#00000000',
-    vibrancy: 'fullscreen-ui',
-    visualEffectState: 'active',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -4975,6 +4972,7 @@ function openSettingsWindow(payload?: SettingsNavigationPayload): void {
     backgroundColor: '#00000000',
     vibrancy: 'hud',
     visualEffectState: 'active',
+    hasShadow: false,
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -5043,6 +5041,7 @@ function openExtensionStoreWindow(): void {
     backgroundColor: '#00000000',
     vibrancy: 'hud',
     visualEffectState: 'active',
+    hasShadow: false,
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -7378,7 +7377,11 @@ return appURL's |path|() as text`,
 
   // Get system appearance
   ipcMain.handle('get-appearance', () => {
-    return 'dark';
+    try {
+      return electron.nativeTheme?.shouldUseDarkColors ? 'dark' : 'light';
+    } catch {
+      return 'dark';
+    }
   });
 
   // SQLite query execution (for extensions like cursor-recent-projects)

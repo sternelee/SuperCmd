@@ -45,15 +45,19 @@ export function createListRenderers(deps: ListRendererDeps) {
     return (
       <div
         data-idx={dataIdx}
-        className={`mx-2 px-3 py-1.5 rounded-xl min-h-[38px] flex items-center cursor-pointer transition-all ${isSelected ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]'}`}
+        className={`mx-2 px-3 py-1.5 rounded-xl min-h-[38px] border flex items-center cursor-pointer transition-colors ${
+          isSelected
+            ? 'border-transparent bg-[var(--launcher-card-selected-bg)]'
+            : 'border-transparent hover:border-[var(--launcher-card-border)] hover:bg-[var(--launcher-card-hover-bg)]'
+        }`}
         onClick={onActivate}
         onMouseMove={onSelect}
         onContextMenu={onContextAction}
       >
         <div className="flex items-center gap-2.5 w-full">
-          {icon && <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-white/55 text-xs">{renderIcon(icon, 'w-5 h-5', assetsPath)}</div>}
-          <div className="flex-1 min-w-0"><span className="text-[13px] leading-[18px] truncate block" style={{ color: 'rgba(255,255,255,0.9)' }}>{titleStr}</span></div>
-          {subtitleStr && <span className="text-[11px] leading-[16px] flex-shrink-0 truncate max-w-[220px]" style={{ color: 'rgba(255,255,255,0.42)' }}>{subtitleStr}</span>}
+          {icon && <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-[var(--text-muted)] text-xs">{renderIcon(icon, 'w-5 h-5', assetsPath)}</div>}
+          <div className="flex-1 min-w-0"><span className="text-[13px] leading-[18px] truncate block" style={{ color: 'rgba(var(--on-surface-rgb), 0.9)' }}>{titleStr}</span></div>
+          {subtitleStr && <span className="text-[11px] leading-[16px] flex-shrink-0 truncate max-w-[220px]" style={{ color: 'var(--text-muted)' }}>{subtitleStr}</span>}
           {accessories?.map((accessory, index) => {
             const accessoryText = typeof accessory?.text === 'string' ? accessory.text : typeof accessory?.text === 'object' ? accessory.text?.value || '' : '';
             const accessoryTextColorRaw = typeof accessory?.text === 'object' ? accessory.text?.color : undefined;
@@ -62,12 +66,12 @@ export function createListRenderers(deps: ListRendererDeps) {
             const accessoryTextColor = resolveTintColor(accessoryTextColorRaw);
             const tagColor = resolveTintColor(tagColorRaw);
             const dateString = accessory?.date ? new Date(accessory.date).toLocaleDateString() : '';
-            const tagBackground = tagColor ? addHexAlpha(tagColor, '22') || 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.1)';
+            const tagBackground = tagColor ? addHexAlpha(tagColor, '2E') || 'rgba(var(--on-surface-rgb), 0.12)' : 'rgba(var(--on-surface-rgb), 0.12)';
 
             return (
-              <span key={index} className="text-[12px] leading-5 flex-shrink-0 flex items-center gap-1.5" style={{ color: accessoryTextColor || tagColor || 'rgba(255,255,255,0.35)' }}>
+              <span key={index} className="text-[12px] leading-5 flex-shrink-0 flex items-center gap-1.5" style={{ color: accessoryTextColor || tagColor || 'var(--text-muted)' }}>
                 {accessory?.icon && <span className="text-[10px]">{renderIcon(accessory.icon, 'w-3 h-3', assetsPath)}</span>}
-                {tagText ? <span className="px-2 py-0.5 rounded text-[11px]" style={{ background: tagBackground, color: tagColor || 'rgba(255,255,255,0.55)' }}>{tagText}</span> : accessoryText || dateString || ''}
+                {tagText ? <span className="px-2 py-0.5 rounded text-[11px]" style={{ background: tagBackground, color: tagColor || 'var(--text-secondary)' }}>{tagText}</span> : accessoryText || dateString || ''}
               </span>
             );
           })}
@@ -81,7 +85,11 @@ export function createListRenderers(deps: ListRendererDeps) {
     return (
       <div
         data-idx={dataIdx}
-        className={`relative rounded-2xl cursor-pointer transition-all overflow-hidden flex items-center justify-center ${isSelected ? 'ring-2 ring-white/70 bg-white/[0.10]' : 'bg-white/[0.05] hover:bg-white/[0.08]'}`}
+        className={`relative rounded-2xl border cursor-pointer transition-colors overflow-hidden flex items-center justify-center ${
+          isSelected
+            ? 'border-transparent bg-[var(--launcher-card-selected-bg)]'
+            : 'border-[var(--launcher-card-border)] bg-[var(--launcher-card-bg)] hover:bg-[var(--launcher-card-hover-bg)]'
+        }`}
         style={{ minHeight: '96px' }}
         onClick={onActivate}
         onMouseMove={onSelect}
@@ -108,10 +116,10 @@ export function createListRenderers(deps: ListRendererDeps) {
     if (registerEmptyView) return null;
 
     return (
-      <div className="flex flex-col items-center justify-center h-full text-white/40 py-12">
+      <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)] py-12">
         {icon && <div className="text-2xl mb-2 opacity-40">{typeof icon === 'string' ? icon : '○'}</div>}
         {title && <p className="text-sm font-medium">{title}</p>}
-        {description && <p className="text-xs text-white/25 mt-1 max-w-xs text-center">{description}</p>}
+        {description && <p className="text-xs text-[var(--text-subtle)] mt-1 max-w-xs text-center">{description}</p>}
       </div>
     );
   }
@@ -140,23 +148,32 @@ export function createListRenderers(deps: ListRendererDeps) {
     }, [defaultValue, items, onChange, value]);
 
     return (
-      <select
-        value={value ?? internalValue}
-        onChange={(event) => {
-          const nextValue = event.target.value;
-          setInternalValue(nextValue);
-          onChange?.(nextValue);
-        }}
-        title={tooltip}
-        className="bg-white/[0.06] border border-white/[0.08] rounded-md px-2.5 py-1 text-[13px] text-white/70 outline-none cursor-pointer appearance-none pr-6"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'right 6px center',
-        }}
-      >
-        {items.map((item) => <option key={item.value} value={item.value}>{item.title}</option>)}
-      </select>
+      <div className="relative">
+        <select
+          value={value ?? internalValue}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setInternalValue(nextValue);
+            onChange?.(nextValue);
+          }}
+          title={tooltip}
+          className="bg-[var(--ui-segment-bg)] border border-[var(--ui-segment-border)] rounded-md px-2.5 py-1 text-[13px] text-[var(--text-primary)] outline-none cursor-pointer appearance-none pr-7"
+        >
+          {items.map((item) => <option key={item.value} value={item.value}>{item.title}</option>)}
+        </select>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-subtle)]"
+          aria-hidden="true"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </div>
     );
   }
 

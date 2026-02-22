@@ -336,9 +336,9 @@ const SnippetForm: React.FC<SnippetFormProps> = ({ snippet, onSave, onCancel }) 
             top: placeholderMenuPos.top,
             left: placeholderMenuPos.left,
             width: placeholderMenuPos.width,
-            background: 'rgba(26,26,30,0.96)',
+            background: 'var(--bg-overlay-strong)',
             backdropFilter: 'blur(18px)',
-            boxShadow: '0 12px 28px rgba(0,0,0,0.45)',
+            boxShadow: '0 12px 28px rgba(var(--backdrop-rgb), 0.45)',
           }}
         >
           <div className="px-2 py-1.5 border-b border-white/[0.08]">
@@ -409,6 +409,9 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
   const firstDynamicInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const isGlassyTheme =
+    document.documentElement.classList.contains('sc-glassy') ||
+    document.body.classList.contains('sc-glassy');
 
   const loadSnippets = useCallback(async () => {
     setIsLoading(true);
@@ -1037,10 +1040,10 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
       />
 
       {dynamicPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.25)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(var(--backdrop-rgb), 0.25)' }}>
           <div
             className="w-[520px] max-w-[92vw] rounded-xl border border-white/[0.1] overflow-hidden"
-            style={{ background: 'rgba(24,24,28,0.96)', backdropFilter: 'blur(28px)' }}
+            style={{ background: 'var(--bg-overlay-strong)', backdropFilter: 'blur(28px)' }}
           >
             <div className="px-4 py-3 border-b border-white/[0.08] text-white/85 text-sm font-medium">
               Fill Dynamic Values
@@ -1101,28 +1104,47 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
         <div
           className="fixed inset-0 z-50"
           onClick={() => setShowActions(false)}
-          style={{ background: 'rgba(0,0,0,0.15)' }}
+          style={{ background: 'var(--bg-scrim)' }}
         >
           <div
             className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl"
-            style={{
-              background: 'rgba(30,30,34,0.97)',
-              backdropFilter: 'blur(40px)',
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}
+            style={
+              isGlassyTheme
+                ? {
+                    background: 'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+                    backdropFilter: 'blur(96px) saturate(190%)',
+                    WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+                    border: '1px solid rgba(var(--on-surface-rgb), 0.05)',
+                  }
+                : {
+                    background: 'var(--card-bg)',
+                    backdropFilter: 'blur(40px)',
+                    WebkitBackdropFilter: 'blur(40px)',
+                    border: '1px solid var(--border-primary)',
+                  }
+            }
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 overflow-y-auto py-1">
               {actions.map((action, idx) => (
                 <div
                   key={idx}
-                  className={`mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition-colors ${
-                    idx === selectedActionIndex ? 'bg-white/[0.08]' : ''
+                  className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
+                    idx === selectedActionIndex ? 'bg-white/[0.18]' : ''
                   } ${
                     action.style === 'destructive'
-                      ? 'hover:bg-white/[0.06] text-red-400'
-                      : 'hover:bg-white/[0.06] text-white/80'
+                      ? 'hover:bg-white/[0.08] text-red-400'
+                      : 'hover:bg-white/[0.08] text-white/80'
                   }`}
+                  style={
+                    idx === selectedActionIndex
+                      ? {
+                          background: 'var(--action-menu-selected-bg)',
+                          borderColor: 'var(--action-menu-selected-border)',
+                          boxShadow: 'var(--action-menu-selected-shadow)',
+                        }
+                      : undefined
+                  }
                   onMouseMove={() => setSelectedActionIndex(idx)}
                   onClick={() => {
                     action.execute();

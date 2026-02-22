@@ -5,10 +5,17 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Keyboard, Info, RefreshCw, Download, RotateCcw, Type } from 'lucide-react';
+import { Keyboard, Info, RefreshCw, Download, RotateCcw, Type, Sun, Moon, SunMoon, Sparkles } from 'lucide-react';
 import HotkeyRecorder from './HotkeyRecorder';
 import type { AppSettings, AppUpdaterStatus } from '../../types/electron';
 import { applyAppFontSize, getDefaultAppFontSize } from '../utils/font-size';
+import {
+  getThemePreference,
+  onThemeChange,
+  setThemePreference as applyThemePreference,
+  type ThemePreference,
+} from '../utils/theme';
+import { applyUiStyle, normalizeUiStyle, type UiStylePreference } from '../utils/ui-style';
 
 type FontSizeOption = NonNullable<AppSettings['fontSize']>;
 
@@ -45,14 +52,14 @@ const SettingsRow: React.FC<SettingsRowProps> = ({
 }) => (
   <div
     className={`grid gap-3 px-4 py-3.5 md:px-5 md:grid-cols-[220px_minmax(0,1fr)] ${
-      withBorder ? 'border-b border-white/[0.08]' : ''
+      withBorder ? 'border-b border-[var(--ui-divider)]' : ''
     }`}
   >
     <div className="flex items-start gap-2.5">
-      <div className="mt-0.5 text-white/65 shrink-0">{icon}</div>
+      <div className="mt-0.5 text-[var(--text-muted)] shrink-0">{icon}</div>
       <div className="min-w-0">
-        <h3 className="text-[13px] font-semibold text-white/95">{title}</h3>
-        <p className="mt-0.5 text-[12px] text-white/50 leading-snug">{description}</p>
+        <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">{title}</h3>
+        <p className="mt-0.5 text-[12px] text-[var(--text-muted)] leading-snug">{description}</p>
       </div>
     </div>
     <div className="flex items-center min-h-[32px]">{children}</div>
@@ -64,6 +71,8 @@ const GeneralTab: React.FC = () => {
   const [updaterStatus, setUpdaterStatus] = useState<AppUpdaterStatus | null>(null);
   const [updaterActionError, setUpdaterActionError] = useState('');
   const [shortcutStatus, setShortcutStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => getThemePreference());
+  const [uiStyle, setUiStyle] = useState<UiStylePreference>('default');
 
   useEffect(() => {
     window.electron.getSettings().then((nextSettings) => {
@@ -73,7 +82,15 @@ const GeneralTab: React.FC = () => {
         ...nextSettings,
         fontSize: normalizedFontSize,
       });
+      setUiStyle(normalizeUiStyle(nextSettings.uiStyle));
     });
+  }, []);
+
+  useEffect(() => {
+    const cleanup = window.electron.onSettingsUpdated?.((nextSettings) => {
+      setUiStyle(normalizeUiStyle(nextSettings.uiStyle));
+    });
+    return cleanup;
   }, []);
 
   useEffect(() => {
@@ -90,6 +107,13 @@ const GeneralTab: React.FC = () => {
       disposed = true;
       disposeUpdater();
     };
+  }, []);
+
+  useEffect(() => {
+    const disposeThemeListener = onThemeChange(({ preference }) => {
+      setThemePreference(preference);
+    });
+    return disposeThemeListener;
   }, []);
 
   const handleShortcutChange = async (newShortcut: string) => {
@@ -184,17 +208,38 @@ const GeneralTab: React.FC = () => {
     }
   }, [updaterStatus]);
 
+  const handleThemePreferenceChange = (nextTheme: ThemePreference) => {
+    setThemePreference(nextTheme);
+    applyThemePreference(nextTheme);
+  };
+
+  const handleUiStyleChange = async (nextStyle: UiStylePreference) => {
+    if (!settings) return;
+    const previousStyle = normalizeUiStyle(settings.uiStyle);
+    if (previousStyle === nextStyle) return;
+    setUiStyle(nextStyle);
+    setSettings((prev) => (prev ? { ...prev, uiStyle: nextStyle } : prev));
+    applyUiStyle(nextStyle);
+    try {
+      await window.electron.saveSettings({ uiStyle: nextStyle });
+    } catch {
+      setUiStyle(previousStyle);
+      setSettings((prev) => (prev ? { ...prev, uiStyle: previousStyle } : prev));
+      applyUiStyle(previousStyle);
+    }
+  };
+
   if (!settings) {
-    return <div className="p-6 text-white/50 text-[12px]">Loading settings...</div>;
+    return <div className="p-6 text-[var(--text-muted)] text-[12px]">Loading settings...</div>;
   }
 
   const selectedFontSize = settings.fontSize || getDefaultAppFontSize();
 
   return (
     <div className="w-full max-w-[980px] mx-auto space-y-3">
-      <h2 className="text-[15px] font-semibold text-white">General</h2>
+      <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">General</h2>
 
-      <div className="overflow-hidden rounded-xl border border-white/[0.10] bg-[rgba(20,20,20,0.34)]">
+      <div className="overflow-hidden rounded-xl border border-[var(--ui-panel-border)] bg-[var(--settings-panel-bg)]">
         <SettingsRow
           icon={<Keyboard className="w-4 h-4" />}
           title="Launcher Shortcut"
@@ -214,7 +259,7 @@ const GeneralTab: React.FC = () => {
           title="Font Size"
           description="Scale text size across the app."
         >
-          <div className="inline-flex items-center gap-0.5 rounded-lg border border-white/[0.16] bg-white/[0.03] p-0.5">
+          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] p-0.5">
             {FONT_SIZE_OPTIONS.map((option) => {
               const active = selectedFontSize === option.id;
               return (
@@ -224,8 +269,68 @@ const GeneralTab: React.FC = () => {
                   onClick={() => void handleFontSizeChange(option.id)}
                   className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
                     active
-                      ? 'bg-white/[0.2] text-white'
-                      : 'text-white/65 hover:text-white/90 hover:bg-white/[0.08]'
+                      ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </SettingsRow>
+
+        <SettingsRow
+          icon={<SunMoon className="w-4 h-4" />}
+          title="Appearance"
+          description="Choose Light, Dark, or follow your system preference."
+        >
+          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] p-0.5">
+            {([
+              { id: 'light', label: 'Light', icon: <Sun className="w-3.5 h-3.5" /> },
+              { id: 'system', label: 'System', icon: <SunMoon className="w-3.5 h-3.5" /> },
+              { id: 'dark', label: 'Dark', icon: <Moon className="w-3.5 h-3.5" /> },
+            ] as Array<{ id: ThemePreference; label: string; icon: React.ReactNode }>).map((option) => {
+              const active = themePreference === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => handleThemePreferenceChange(option.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+                    active
+                      ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
+                  }`}
+                >
+                  {option.icon}
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </SettingsRow>
+
+        <SettingsRow
+          icon={<Sparkles className="w-4 h-4" />}
+          title="Visual Style"
+          description="Use Default look or enable a glassy macOS Tahoe-inspired style."
+        >
+          <div className="inline-flex items-center gap-0.5 rounded-lg border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] p-0.5">
+            {([
+              { id: 'default', label: 'Default' },
+              { id: 'glassy', label: 'Glassy' },
+            ] as Array<{ id: UiStylePreference; label: string }>).map((option) => {
+              const active = uiStyle === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => void handleUiStyleChange(option.id)}
+                  className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+                    active
+                      ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
                   }`}
                 >
                   {option.label}
@@ -242,10 +347,10 @@ const GeneralTab: React.FC = () => {
         >
           <div className="w-full space-y-2">
             <div>
-              <p className="text-[13px] font-semibold text-white/92 leading-snug">
+              <p className="text-[13px] font-semibold text-[var(--text-primary)] leading-snug">
                 {updaterPrimaryMessage}
               </p>
-              <p className="text-[12px] text-white/45 mt-0.5 leading-tight">
+              <p className="text-[12px] text-[var(--text-subtle)] mt-0.5 leading-tight">
                 Current version: v{currentVersion}
                 {updaterStatus?.latestVersion ? ` · Latest: v${updaterStatus.latestVersion}` : ''}
               </p>
@@ -253,13 +358,13 @@ const GeneralTab: React.FC = () => {
 
             {updaterState === 'downloading' && (
               <div>
-                <div className="w-full h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                <div className="w-full h-1 rounded-full bg-[var(--ui-segment-hover-bg)] overflow-hidden">
                   <div
                     className="h-full bg-cyan-400 transition-all duration-200"
                     style={{ width: `${updaterProgress}%` }}
                   />
                 </div>
-                <p className="mt-0.5 text-[12px] text-white/45">
+                <p className="mt-0.5 text-[12px] text-[var(--text-subtle)]">
                   {updaterProgress.toFixed(0)}% · {formatBytes(updaterStatus?.transferredBytes)} / {formatBytes(updaterStatus?.totalBytes)}
                 </p>
               </div>
@@ -276,7 +381,7 @@ const GeneralTab: React.FC = () => {
                 type="button"
                 onClick={handleCheckForUpdates}
                 disabled={!updaterSupported || updaterState === 'checking' || updaterState === 'downloading'}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] border border-white/[0.14] text-white/90 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] border border-[var(--ui-divider)] text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${updaterState === 'checking' ? 'animate-spin' : ''}`} />
                 Check for Updates
@@ -311,7 +416,7 @@ const GeneralTab: React.FC = () => {
           description="Version information."
           withBorder={false}
         >
-          <p className="text-[13px] font-semibold text-white/88 leading-snug">
+          <p className="text-[13px] font-semibold text-[var(--text-primary)] leading-snug">
             SuperCmd v{currentVersion}
           </p>
         </SettingsRow>

@@ -12,6 +12,7 @@ import AITab from './settings/AITab';
 import ExtensionsTab from './settings/ExtensionsTab';
 import { applyAppFontSize, getDefaultAppFontSize } from './utils/font-size';
 import { applyBaseColor } from './utils/base-color';
+import { applyUiStyle } from './utils/ui-style';
 import AdvancedTab from './settings/AdvancedTab';
 
 type Tab = 'general' | 'ai' | 'extensions' | 'advanced';
@@ -112,11 +113,15 @@ const SettingsApp: React.FC = () => {
       .then((settings) => {
         if (!disposed) {
           applyAppFontSize(settings.fontSize);
+          applyUiStyle(settings.uiStyle || 'default');
           applyBaseColor(settings.baseColor || '#101113');
         }
       })
       .catch(() => {
-        if (!disposed) applyAppFontSize(getDefaultAppFontSize());
+        if (!disposed) {
+          applyAppFontSize(getDefaultAppFontSize());
+          applyUiStyle('default');
+        }
       });
     return () => {
       disposed = true;
@@ -126,6 +131,7 @@ const SettingsApp: React.FC = () => {
   useEffect(() => {
     const cleanup = window.electron.onSettingsUpdated?.((settings) => {
       applyAppFontSize(settings.fontSize);
+      applyUiStyle(settings.uiStyle || 'default');
       applyBaseColor(settings.baseColor || '#101113');
     });
     return cleanup;
@@ -134,23 +140,23 @@ const SettingsApp: React.FC = () => {
   return (
     <div className="h-screen glass-effect text-white select-none flex flex-col">
       <div className="h-10 drag-region" />
-      <div className="px-5 pb-2.5 border-b border-white/[0.06]">
+      <div className="px-5 pb-2.5 border-b border-[var(--ui-divider)]">
         <div className="relative flex items-center justify-center">
-          <div className="absolute left-0 text-[12px] font-semibold text-white/90 flex items-center gap-1.5">
+          <div className="absolute left-0 text-[12px] font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
             <img src={supercmdLogo} alt="" className="w-3.5 h-3.5 object-contain" draggable={false} />
             SuperCmd Settings
           </div>
-          <div className="inline-flex items-stretch overflow-hidden rounded-md border border-white/[0.12] bg-white/[0.04]">
+          <div className="inline-flex items-stretch overflow-hidden rounded-md border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)]">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] transition-colors ${
-                  tab.id !== tabs[0].id ? 'border-l border-white/[0.10]' : ''
+                  tab.id !== tabs[0].id ? 'border-l border-[var(--ui-divider)]' : ''
                 } ${
                   activeTab === tab.id
-                    ? 'bg-white/[0.16] text-white'
-                    : 'text-white/60 hover:text-white/85 hover:bg-white/[0.06]'
+                    ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
                 }`}
               >
                 {tab.icon}

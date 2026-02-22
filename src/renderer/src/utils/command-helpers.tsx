@@ -259,8 +259,11 @@ export function renderCommandIcon(command: CommandInfo): React.ReactNode {
     );
   }
   return (
-    <div className="w-5 h-5 rounded bg-gray-500/20 flex items-center justify-center">
-      <Settings className="w-3 h-3 text-gray-400" />
+    <div
+      className="w-5 h-5 rounded flex items-center justify-center"
+      style={{ background: 'var(--icon-neutral-bg)', color: 'var(--icon-neutral-fg)' }}
+    >
+      <Settings className="w-3 h-3" />
     </div>
   );
 }
@@ -288,8 +291,11 @@ export function getSystemCommandFallbackIcon(commandId: string): React.ReactNode
 
   if (commandId === 'system-clipboard-manager') {
     return (
-      <div className="w-5 h-5 rounded bg-cyan-500/20 flex items-center justify-center">
-        <Clipboard className="w-3 h-3 text-cyan-300" />
+      <div
+        className="w-5 h-5 rounded flex items-center justify-center"
+        style={{ background: 'var(--icon-clipboard-bg)', color: 'var(--icon-clipboard-fg)' }}
+      >
+        <Clipboard className="w-3 h-3" />
       </div>
     );
   }
@@ -301,8 +307,11 @@ export function getSystemCommandFallbackIcon(commandId: string): React.ReactNode
     commandId === 'system-export-snippets'
   ) {
     return (
-      <div className="w-5 h-5 rounded bg-amber-500/20 flex items-center justify-center">
-        <FileText className="w-3 h-3 text-amber-300" />
+      <div
+        className="w-5 h-5 rounded flex items-center justify-center"
+        style={{ background: 'var(--icon-snippet-bg)', color: 'var(--icon-snippet-fg)' }}
+      >
+        <FileText className="w-3 h-3" />
       </div>
     );
   }
@@ -312,16 +321,22 @@ export function getSystemCommandFallbackIcon(commandId: string): React.ReactNode
     commandId === 'system-open-script-commands'
   ) {
     return (
-      <div className="w-5 h-5 rounded bg-emerald-500/20 flex items-center justify-center">
-        <TerminalSquare className="w-3 h-3 text-emerald-300" />
+      <div
+        className="w-5 h-5 rounded flex items-center justify-center"
+        style={{ background: 'var(--icon-script-bg)', color: 'var(--icon-script-fg)' }}
+      >
+        <TerminalSquare className="w-3 h-3" />
       </div>
     );
   }
 
   if (commandId === 'system-search-files') {
     return (
-      <div className="w-5 h-5 rounded bg-emerald-500/20 flex items-center justify-center">
-        <Search className="w-3 h-3 text-emerald-300" />
+      <div
+        className="w-5 h-5 rounded flex items-center justify-center"
+        style={{ background: 'var(--icon-search-bg)', color: 'var(--icon-search-fg)' }}
+      >
+        <Search className="w-3 h-3" />
       </div>
     );
   }

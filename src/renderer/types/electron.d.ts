@@ -168,6 +168,7 @@ export interface AppSettings {
   commandMetadata?: Record<string, { subtitle?: string }>;
   debugMode: boolean;
   fontSize: 'small' | 'medium' | 'large';
+  uiStyle: 'default' | 'glassy';
   baseColor: string;
   appUpdaterLastCheckedAt: number;
   hyperKeySource:

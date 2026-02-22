@@ -162,8 +162,10 @@ export function createGridItemsRuntime(resolveIconSrc: (src: string) => string) 
     return (
       <div
         data-idx={dataIdx}
-        className={`relative rounded-lg cursor-pointer transition-all overflow-hidden flex flex-col ${
-          isSelected ? 'ring-2 ring-blue-500 bg-white/[0.08]' : 'hover:bg-white/[0.04]'
+        className={`relative rounded-lg border cursor-pointer transition-colors overflow-hidden flex flex-col ${
+          isSelected
+            ? 'border-transparent bg-[var(--launcher-card-selected-bg)]'
+            : 'border-[var(--launcher-card-border)] bg-[var(--launcher-card-bg)] hover:bg-[var(--launcher-card-hover-bg)]'
         }`}
         style={{ height: '160px' }}
         onClick={onActivate}
@@ -178,15 +180,15 @@ export function createGridItemsRuntime(resolveIconSrc: (src: string) => string) 
               {renderIcon(renderableContent, 'w-full h-full object-contain')}
             </div>
           ) : (
-            <div className="w-full h-full bg-white/[0.03] rounded flex items-center justify-center text-white/20 text-2xl">
+            <div className="w-full h-full bg-[var(--surface-tint-2)] rounded flex items-center justify-center text-[var(--text-subtle)] text-2xl">
               {title ? title.charAt(0) : '?'}
             </div>
           )}
         </div>
         {title && (
           <div className="px-2 pb-2 pt-1 flex-shrink-0">
-            <p className="truncate text-[11px] text-white/70 text-center">{title}</p>
-            {subtitle && <p className="truncate text-[9px] text-white/30 text-center">{subtitle}</p>}
+            <p className="truncate text-[11px] text-[var(--text-secondary)] text-center">{title}</p>
+            {subtitle && <p className="truncate text-[9px] text-[var(--text-subtle)] text-center">{subtitle}</p>}
           </div>
         )}
       </div>

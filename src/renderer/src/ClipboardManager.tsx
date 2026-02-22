@@ -38,6 +38,9 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const actionsOverlayRef = useRef<HTMLDivElement>(null);
+  const isGlassyTheme =
+    document.documentElement.classList.contains('sc-glassy') ||
+    document.body.classList.contains('sc-glassy');
 
   const loadHistory = useCallback(async (withLoading = false) => {
     if (withLoading) setIsLoading(true);
@@ -354,10 +357,10 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
   return (
     <div className="w-full h-full flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
       {/* Header - transparent background same as main screen */}
-      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--ui-divider)]">
         <button
           onClick={onClose}
-          className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
+          className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0"
           title="Back"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -368,13 +371,13 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
           placeholder="Search clipboard history..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 bg-transparent border-none outline-none text-white/95 placeholder-white/45 text-[15px] font-medium tracking-[0.005em]"
+          className="flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] text-[15px] font-medium tracking-[0.005em]"
           autoFocus
         />
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+            className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -382,15 +385,15 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex items-center gap-1 px-5 py-2.5 border-b border-white/[0.06]">
+      <div className="flex items-center gap-1 px-5 py-2.5 border-b border-[var(--ui-divider)]">
         {['all', 'text', 'image', 'url', 'file'].map((type) => (
           <button
             key={type}
             onClick={() => setFilterType(type as any)}
-            className={`px-2.5 py-1 text-xs rounded transition-colors ${
+            className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
               filterType === type
-                ? 'bg-white/10 text-white/90'
-                : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)] border-[var(--ui-segment-border)]'
+                : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)] hover:border-[var(--ui-segment-border)] hover:bg-[var(--ui-segment-hover-bg)]'
             }`}
           >
             {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -403,14 +406,14 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
         {/* Left: List (40%) */}
         <div
           ref={listRef}
-          className="w-[40%] overflow-y-auto custom-scrollbar border-r border-white/[0.06]"
+          className="w-[40%] overflow-y-auto custom-scrollbar border-r border-[var(--ui-divider)]"
         >
           {isLoading ? (
-            <div className="flex items-center justify-center h-full text-white/50">
+            <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
               <p className="text-sm">Loading history...</p>
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-white/50">
+            <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
               <p className="text-sm">No items found</p>
             </div>
           ) : (
@@ -419,10 +422,10 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
                 <div
                   key={item.id}
                   ref={(el) => (itemRefs.current[index] = el)}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                     index === selectedIndex
-                      ? 'bg-white/10'
-                      : 'hover:bg-white/5'
+                      ? 'bg-[var(--launcher-card-selected-bg)] border-transparent'
+                      : 'border-transparent hover:border-[var(--launcher-card-border)] hover:bg-[var(--launcher-card-hover-bg)]'
                   }`}
                   onClick={() => setSelectedIndex(index)}
                   onDoubleClick={() => handlePasteItem(item)}
@@ -436,21 +439,21 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
                           className="w-8 h-8 object-cover rounded flex-shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="text-white/70 text-sm truncate">
+                          <div className="text-[var(--text-secondary)] text-sm truncate">
                             Image
                           </div>
-                          <div className="text-white/40 text-xs">
+                          <div className="text-[var(--text-muted)] text-xs">
                             {item.metadata?.width} × {item.metadata?.height}
                           </div>
                         </div>
                       </>
                     ) : (
                       <>
-                        <div className="text-white/40 flex-shrink-0">
+                        <div className="text-[var(--text-muted)] flex-shrink-0">
                           {getItemIcon(item.type)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-white/80 text-sm truncate">
+                          <div className="text-[var(--text-secondary)] text-sm truncate">
                             {item.preview || item.content}
                           </div>
                         </div>
@@ -472,26 +475,26 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
                   <img
                     src={`file://${selectedItem.content}`}
                     alt="Clipboard"
-                    className="w-full rounded-lg border border-white/10"
+                    className="w-full rounded-lg border border-[var(--border-primary)]"
                   />
                 </div>
               ) : (
-                <pre className="text-white/80 text-xs whitespace-pre-wrap break-words font-mono leading-normal">
+                <pre className="text-[var(--text-secondary)] text-xs whitespace-pre-wrap break-words font-mono leading-normal">
                   {selectedItem.content}
                 </pre>
               )}
 
-              <div className="mt-4 pt-3 border-t border-white/[0.08]">
+              <div className="mt-4 pt-3 border-t border-[var(--ui-divider)]">
                 <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="text-white/35">Date</span>
-                  <span className="text-white/65 text-right truncate">
+                  <span className="text-[var(--text-subtle)]">Date</span>
+                  <span className="text-[var(--text-muted)] text-right truncate">
                     {formatDate(selectedItem.timestamp)}
                   </span>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full text-white/50">
+            <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
               <p className="text-sm">Select an item to preview</p>
             </div>
           )}
@@ -521,16 +524,29 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
         <div 
           className="fixed inset-0 z-50" 
           onClick={() => setShowActions(false)}
-          style={{ background: 'rgba(0,0,0,0.15)' }}
+          style={{ background: 'var(--bg-scrim)' }}
         >
           <div
             ref={actionsOverlayRef}
-            className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl"
+            className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0"
             tabIndex={0}
-            style={{ 
-              background: 'rgba(30,30,34,0.97)', 
-              backdropFilter: 'blur(40px)', 
-              border: '1px solid rgba(255,255,255,0.08)' 
+            style={
+              isGlassyTheme
+                ? {
+                    background: 'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+                    backdropFilter: 'blur(96px) saturate(190%)',
+                    WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+                    border: '1px solid rgba(var(--on-surface-rgb), 0.05)',
+                  }
+                : {
+                    background: 'var(--card-bg)',
+                    backdropFilter: 'blur(40px)',
+                    WebkitBackdropFilter: 'blur(40px)',
+                    border: '1px solid var(--border-primary)',
+                  }
+            }
+            onFocus={(e) => {
+              (e.currentTarget as HTMLDivElement).style.outline = 'none';
             }}
             onClick={e => e.stopPropagation()}
           >
@@ -538,13 +554,26 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
               {actions.map((action, idx) => (
                 <div
                   key={idx}
-                  className={`mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition-colors ${
-                    idx === selectedActionIndex ? 'bg-white/[0.08]' : ''
+                  className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
+                    idx === selectedActionIndex
+                      ? action.style === 'destructive'
+                        ? 'bg-white/[0.18] text-[var(--status-danger-faded)]'
+                        : 'bg-white/[0.18] text-[var(--text-primary)]'
+                      : ''
                   } ${
                     action.style === 'destructive'
-                      ? 'hover:bg-white/[0.06] text-red-400'
-                      : 'hover:bg-white/[0.06] text-white/80'
+                      ? 'hover:bg-white/[0.08] text-[var(--status-danger-faded)]'
+                      : 'hover:bg-white/[0.08] text-[var(--text-secondary)]'
                   }`}
+                  style={
+                    idx === selectedActionIndex
+                      ? {
+                          background: 'var(--action-menu-selected-bg)',
+                          borderColor: 'var(--action-menu-selected-border)',
+                          boxShadow: 'var(--action-menu-selected-shadow)',
+                        }
+                      : undefined
+                  }
                   onMouseMove={() => setSelectedActionIndex(idx)}
                   onClick={() => {
                     action.execute();
@@ -552,7 +581,7 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
                   }}
                 >
                   {action.icon ? (
-                    <span className={action.style === 'destructive' ? 'text-red-400' : 'text-white/60'}>
+                    <span className={action.style === 'destructive' ? 'text-[var(--status-danger-faded)]' : 'text-[var(--text-muted)]'}>
                       {action.icon}
                     </span>
                   ) : null}
@@ -564,7 +593,7 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
                       {action.shortcut.map((key, keyIdx) => (
                         <kbd
                           key={`${idx}-${key}-${keyIdx}`}
-                          className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] font-medium text-white/70"
+                          className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-[var(--text-muted)]"
                         >
                           {key}
                         </kbd>
