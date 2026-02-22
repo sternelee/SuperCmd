@@ -162,9 +162,11 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
           ref={panelRef}
           className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl"
           style={{
-            background: 'var(--card-bg)',
-            backdropFilter: 'blur(40px)',
-            border: '1px solid var(--border-primary)',
+            background:
+              'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+            backdropFilter: 'blur(96px) saturate(190%)',
+            WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+            border: '1px solid rgba(var(--on-surface-rgb), 0.05)',
           }}
           onClick={(event) => event.stopPropagation()}
         >
@@ -174,7 +176,7 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
             ) : (
               groups.map((group, groupPosition) => (
                 <div key={groupPosition}>
-                  {groupPosition > 0 && <hr className="border-white/[0.06] my-0.5" />}
+                  {groupPosition > 0 && <hr className="border-[var(--ui-divider)] my-0.5" />}
                   {group.title && (
                     <div className="px-3 pt-1.5 pb-0.5 text-[10px] uppercase tracking-wider text-white/25 font-medium select-none">
                       {group.title}
@@ -184,9 +186,21 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
                     <div
                       key={idx}
                       data-action-idx={idx}
-                      className={`mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition-colors ${
-                        idx === selectedIdx ? 'bg-blue-500/90' : 'hover:bg-white/[0.06]'
+                      className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
+                        idx === selectedIdx
+                          ? 'bg-white/[0.18]'
+                          : 'hover:bg-white/[0.08]'
                       }`}
+                      style={
+                        idx === selectedIdx
+                          ? {
+                              background: 'rgba(255, 255, 255, 0.13)',
+                              borderColor: 'transparent',
+                              boxShadow:
+                                'inset 0 1px 0 rgba(255,255,255,0.10)',
+                            }
+                          : undefined
+                      }
                       onClick={() => onExecute(action)}
                       onMouseMove={() => setSelectedIdx(idx)}
                     >
@@ -227,7 +241,7 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
               ))
             )}
           </div>
-          <div className="border-t border-white/[0.06] px-3 py-2">
+          <div className="border-t border-[var(--ui-divider)] px-3 py-2">
             <input
               ref={filterRef}
               type="text"

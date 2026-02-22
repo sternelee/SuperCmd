@@ -862,9 +862,11 @@ const ExtensionsTab: React.FC<{
                   <div
                     className="absolute right-0 mt-1 w-48 rounded-lg border border-[var(--ui-panel-border)] shadow-2xl overflow-hidden z-20"
                     style={{
-                      background: 'var(--menu-overlay-bg)',
-                      backdropFilter: 'blur(48px) saturate(170%)',
-                      WebkitBackdropFilter: 'blur(48px) saturate(170%)',
+                      background:
+                        'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+                      backdropFilter: 'blur(96px) saturate(190%)',
+                      WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+                      borderColor: 'rgba(var(--on-surface-rgb), 0.05)',
                     }}
                   >
                     <button
@@ -1337,9 +1339,11 @@ const ExtensionsTab: React.FC<{
             style={{
               left: Math.min(extensionContextMenu.x, window.innerWidth - 180),
               top: Math.min(extensionContextMenu.y, window.innerHeight - 120),
-              background: 'var(--menu-overlay-bg)',
-              backdropFilter: 'blur(48px) saturate(170%)',
-              WebkitBackdropFilter: 'blur(48px) saturate(170%)',
+              background:
+                'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+              backdropFilter: 'blur(96px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+              borderColor: 'rgba(var(--on-surface-rgb), 0.05)',
             }}
             onClick={(event) => event.stopPropagation()}
             onContextMenu={(event) => event.preventDefault()}

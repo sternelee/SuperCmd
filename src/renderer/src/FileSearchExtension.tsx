@@ -576,7 +576,14 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
       {showActions ? (
         <div className="absolute inset-0 bg-black/30 flex items-center justify-center" onClick={() => setShowActions(false)}>
           <div
-            className="w-[430px] rounded-2xl border border-white/[0.1] bg-[var(--card-bg)] backdrop-blur-xl p-2"
+            className="w-[430px] rounded-2xl border p-2"
+            style={{
+              background:
+                'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+              backdropFilter: 'blur(96px) saturate(190%)',
+              WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+              borderColor: 'rgba(var(--on-surface-rgb), 0.05)',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {selectedActions.length === 0 ? (
@@ -590,9 +597,21 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                     await Promise.resolve(action.execute());
                     setShowActions(false);
                   }}
-                  className={`w-full px-3 py-2 rounded-lg text-left flex items-center justify-between transition-colors ${
-                    index === selectedActionIndex ? 'bg-white/[0.12] text-white' : 'text-white/80 hover:bg-white/[0.07]'
+                  className={`w-full px-3 py-2 rounded-lg border border-transparent text-left flex items-center justify-between transition-colors ${
+                    index === selectedActionIndex
+                      ? 'bg-white/[0.18] text-white'
+                      : 'text-white/80 hover:bg-white/[0.08]'
                   }`}
+                  style={
+                    index === selectedActionIndex
+                      ? {
+                          background: 'rgba(255, 255, 255, 0.13)',
+                          borderColor: 'transparent',
+                          boxShadow:
+                            'inset 0 1px 0 rgba(255,255,255,0.10)',
+                        }
+                      : undefined
+                  }
                 >
                   <span className="text-sm">{action.title}</span>
                   <span className="text-xs text-white/40">{action.shortcut}</span>

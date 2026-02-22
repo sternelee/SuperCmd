@@ -528,9 +528,10 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
             className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl"
             tabIndex={0}
             style={{ 
-              background: 'var(--card-bg)', 
-              backdropFilter: 'blur(40px)', 
-              border: '1px solid var(--border-primary)' 
+              background: 'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)', 
+              backdropFilter: 'blur(96px) saturate(190%)', 
+              WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+              border: '1px solid rgba(var(--on-surface-rgb), 0.05)' 
             }}
             onClick={e => e.stopPropagation()}
           >
@@ -538,17 +539,27 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
               {actions.map((action, idx) => (
                 <div
                   key={idx}
-                  className={`mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition-colors ${
+                  className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
                     idx === selectedActionIndex
                       ? action.style === 'destructive'
-                        ? 'bg-[var(--overlay-item-active-bg)] text-[var(--status-danger-faded)]'
-                        : 'bg-[var(--overlay-item-active-bg)] text-[var(--text-primary)]'
+                        ? 'bg-white/[0.18] text-[var(--status-danger-faded)]'
+                        : 'bg-white/[0.18] text-[var(--text-primary)]'
                       : ''
                   } ${
                     action.style === 'destructive'
-                      ? 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--status-danger-faded)]'
-                      : 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--text-secondary)]'
+                      ? 'hover:bg-white/[0.08] text-[var(--status-danger-faded)]'
+                      : 'hover:bg-white/[0.08] text-[var(--text-secondary)]'
                   }`}
+                  style={
+                    idx === selectedActionIndex
+                      ? {
+                          background: 'rgba(255, 255, 255, 0.13)',
+                          borderColor: 'transparent',
+                          boxShadow:
+                            'inset 0 1px 0 rgba(255,255,255,0.10)',
+                        }
+                      : undefined
+                  }
                   onMouseMove={() => setSelectedActionIndex(idx)}
                   onClick={() => {
                     action.execute();

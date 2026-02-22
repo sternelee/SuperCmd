@@ -2060,9 +2060,11 @@ const App: React.FC = () => {
           tabIndex={0}
           onKeyDown={handleActionsOverlayKeyDown}
           style={{
-            background: 'var(--card-bg)',
-            backdropFilter: 'blur(40px)',
-            border: '1px solid var(--border-primary)',
+            background:
+              'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+            backdropFilter: 'blur(96px) saturate(190%)',
+            WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+            border: '1px solid rgba(var(--on-surface-rgb), 0.05)',
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -2070,15 +2072,25 @@ const App: React.FC = () => {
             {selectedActions.map((action, idx) => (
               <div
                 key={action.id}
-                className={`mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition-colors ${
+                className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
                   idx === selectedActionIndex
                     ? action.style === 'destructive'
-                      ? 'bg-[var(--overlay-item-active-bg)] text-red-400'
-                      : 'bg-[var(--overlay-item-active-bg)] text-white'
+                      ? 'bg-white/[0.18] text-red-400'
+                      : 'bg-white/[0.18] text-white'
                     : action.style === 'destructive'
-                      ? 'hover:bg-[var(--overlay-item-hover-bg)] text-red-400'
-                      : 'hover:bg-[var(--overlay-item-hover-bg)] text-white/80'
+                      ? 'hover:bg-white/[0.08] text-red-400'
+                      : 'hover:bg-white/[0.08] text-white/80'
                 }`}
+                style={
+                  idx === selectedActionIndex
+                    ? {
+                        background: 'rgba(255, 255, 255, 0.13)',
+                        borderColor: 'transparent',
+                        boxShadow:
+                          'inset 0 1px 0 rgba(255,255,255,0.10)',
+                      }
+                    : undefined
+                }
                 onClick={async () => {
                   await Promise.resolve(action.execute());
                   setShowActions(false);
@@ -2115,9 +2127,11 @@ const App: React.FC = () => {
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 340),
             top: Math.min(contextMenu.y, window.innerHeight - 320),
-            background: 'var(--card-bg)',
-            backdropFilter: 'blur(40px)',
-            border: '1px solid var(--border-primary)',
+            background:
+              'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+            backdropFilter: 'blur(96px) saturate(190%)',
+            WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+            border: '1px solid rgba(var(--on-surface-rgb), 0.05)',
           }}
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
@@ -2126,15 +2140,25 @@ const App: React.FC = () => {
             {contextActions.map((action, idx) => (
               <div
                 key={`ctx-${action.id}`}
-                className={`mx-1 px-2.5 py-1.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition-colors ${
+                className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
                   idx === selectedContextActionIndex
                     ? action.style === 'destructive'
-                      ? 'bg-[var(--overlay-item-active-bg)] text-red-400'
-                      : 'bg-[var(--overlay-item-active-bg)] text-white'
+                      ? 'bg-white/[0.18] text-red-400'
+                      : 'bg-white/[0.18] text-white'
                     : action.style === 'destructive'
-                      ? 'hover:bg-[var(--overlay-item-hover-bg)] text-red-400'
-                      : 'hover:bg-[var(--overlay-item-hover-bg)] text-white/80'
+                      ? 'hover:bg-white/[0.08] text-red-400'
+                      : 'hover:bg-white/[0.08] text-white/80'
                 }`}
+                style={
+                  idx === selectedContextActionIndex
+                    ? {
+                        background: 'rgba(255, 255, 255, 0.13)',
+                        borderColor: 'transparent',
+                        boxShadow:
+                          'inset 0 1px 0 rgba(255,255,255,0.10)',
+                      }
+                    : undefined
+                }
                 onClick={async () => {
                   console.log('[CTX-MENU] clicked action:', action.id, action.title);
                   try {
