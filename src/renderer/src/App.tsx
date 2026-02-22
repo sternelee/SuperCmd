@@ -1987,7 +1987,7 @@ const App: React.FC = () => {
         {/* Footer actions */}
         {!isLoading && (
           <div
-            className="sc-glass-footer absolute bottom-0 left-0 right-0 z-10 flex items-center px-4 py-2.5"
+            className="sc-glass-footer sc-launcher-footer absolute bottom-0 left-0 right-0 z-10 flex items-center px-4 py-2.5"
           >
             <div
               className={`flex items-center gap-2 text-xs flex-1 min-w-0 font-normal truncate ${

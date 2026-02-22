@@ -314,6 +314,10 @@ select {
   background: var(--scrollbar-track);
 }
 
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 *::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: 999px;
@@ -325,55 +329,76 @@ select {
   background: var(--scrollbar-thumb-hover);
 }
 
+html,
+body,
 #root {
   width: 100vw;
   height: 100vh;
+  background: transparent;
+}
+
+html {
+  overflow: hidden;
 }
 
 /* Glass effect background - native macOS-style frosted glass */
 .glass-effect {
+  --glass-radius: 14px;
   background:
     linear-gradient(180deg, rgba(var(--on-surface-rgb), 0.06), rgba(var(--on-surface-rgb), 0.02)),
     rgba(var(--surface-base-rgb), 0.96);
   -webkit-backdrop-filter: blur(54px) saturate(170%);
   backdrop-filter: blur(54px) saturate(170%);
   position: relative;
-  border-radius: 14px;
+  border-radius: var(--glass-radius);
   border: none;
   background-clip: padding-box;
   box-shadow: none;
+  overflow: hidden;
 }
 
 .glass-effect::after {
   content: '';
   position: absolute;
-  inset: 1px;
-  border-radius: 13px;
+  inset: 0;
+  border-radius: var(--glass-radius);
   border: 1px solid var(--glass-outline);
   pointer-events: none;
+  z-index: 9999;
 }
 
 .sc-glassy .glass-effect {
+  --glass-radius: 22px;
   background:
     linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)),
     rgba(var(--surface-base-rgb), 0.5);
   -webkit-backdrop-filter: blur(96px) saturate(190%);
   backdrop-filter: blur(96px) saturate(190%);
-  border-radius: 22px;
+  border-radius: var(--glass-radius);
+  border: none;
 }
 
 .sc-glassy .glass-effect::after {
-  inset: 1px;
-  border-radius: 21px;
   border: 1px solid rgba(var(--on-surface-rgb), 0.24);
 }
 
 .sc-glassy .sc-glass-footer {
+  border-top: none;
   background:
     linear-gradient(180deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.02)),
-    rgba(var(--surface-base-rgb), 0.36);
-  -webkit-backdrop-filter: blur(92px) saturate(185%);
-  backdrop-filter: blur(92px) saturate(185%);
+    rgba(var(--surface-base-rgb), 0.52);
+  -webkit-backdrop-filter: blur(104px) saturate(185%);
+  backdrop-filter: blur(104px) saturate(185%);
+  padding-left: 18px !important;
+  box-shadow: inset 0 1px 0 rgba(var(--on-surface-rgb), 0.2);
+}
+
+.sc-glassy .sc-launcher-footer {
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  border-radius: 0;
+  border: none;
 }
 
 .sc-glassy .cursor-prompt-surface {
@@ -609,7 +634,8 @@ select {
 
 /* Custom scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -617,9 +643,16 @@ select {
   border-radius: 3px;
 }
 
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 3px;
+  border-radius: 999px;
+  border: 2px solid rgba(var(--backdrop-rgb), 0);
+  background-clip: padding-box;
+  min-height: 20px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
@@ -964,15 +997,6 @@ body.sc-detached-window .whisper-shortcut-hint {
   background:
     linear-gradient(180deg, rgba(var(--on-surface-rgb), 0.12), rgba(var(--on-surface-rgb), 0.04)),
     rgba(var(--surface-base-rgb), 0.36);
-}
-
-.sc-glassy .whisper-coachmark-inline {
-  border-color: rgba(var(--on-surface-rgb), 0.28);
-  background:
-    linear-gradient(180deg, rgba(var(--on-surface-rgb), 0.1), rgba(var(--on-surface-rgb), 0.03)),
-    rgba(var(--surface-base-rgb), 0.24);
-  backdrop-filter: blur(82px) saturate(185%);
-  -webkit-backdrop-filter: blur(82px) saturate(185%);
 }
 
 @keyframes whisper-spin {
