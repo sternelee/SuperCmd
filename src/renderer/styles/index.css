@@ -85,6 +85,9 @@
   --soft-pill-hover-bg: rgba(118, 130, 149, 0.12);
   --overlay-item-active-bg: rgba(118, 130, 149, 0.14);
   --overlay-item-hover-bg: rgba(118, 130, 149, 0.09);
+  --action-menu-selected-bg: rgba(255, 255, 255, 0.13);
+  --action-menu-selected-border: transparent;
+  --action-menu-selected-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
   --footer-border: rgba(156, 164, 178, 0.22);
   --scrollbar-track: rgba(118, 130, 149, 0.12);
   --scrollbar-thumb: rgba(118, 130, 149, 0.26);
@@ -199,6 +202,9 @@
   --soft-pill-hover-bg: rgba(255, 255, 255, 0.1);
   --overlay-item-active-bg: rgba(255, 255, 255, 0.1);
   --overlay-item-hover-bg: rgba(255, 255, 255, 0.06);
+  --action-menu-selected-bg: rgba(255, 255, 255, 0.13);
+  --action-menu-selected-border: transparent;
+  --action-menu-selected-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
   --footer-border: rgba(255, 255, 255, 0.05);
   --scrollbar-track: rgba(255, 255, 255, 0.06);
   --scrollbar-thumb: rgba(255, 255, 255, 0.22);
@@ -241,11 +247,24 @@
   --ui-panel-border: rgba(156, 164, 178, 0.38);
   --ui-segment-border: rgba(156, 164, 178, 0.4);
   --ui-segment-bg: rgba(255, 255, 255, 0.22);
-  --ui-segment-active-bg: rgba(118, 130, 149, 0.3);
-  --ui-segment-hover-bg: rgba(118, 130, 149, 0.2);
-  --launcher-card-bg: rgba(118, 130, 149, 0.14);
-  --launcher-card-hover-bg: rgba(118, 130, 149, 0.2);
-  --launcher-card-selected-bg: rgba(118, 130, 149, 0.28);
+  --ui-segment-active-bg: rgba(86, 98, 118, 0.22);
+  --ui-segment-hover-bg: rgba(86, 98, 118, 0.14);
+  --command-item-hover-bg: rgba(86, 98, 118, 0.09);
+  --command-item-hover-border: rgba(86, 98, 118, 0.14);
+  --command-item-selected-bg: rgba(86, 98, 118, 0.14);
+  --command-item-selected-border: rgba(86, 98, 118, 0.22);
+  --launcher-card-bg: rgba(86, 98, 118, 0.09);
+  --launcher-card-border: rgba(86, 98, 118, 0.14);
+  --launcher-card-hover-bg: rgba(86, 98, 118, 0.13);
+  --launcher-card-selected-bg: rgba(86, 98, 118, 0.17);
+  --launcher-card-selected-border: rgba(86, 98, 118, 0.24);
+  --text-primary: rgba(32, 39, 52, 0.98);
+  --text-secondary: rgba(37, 44, 58, 0.94);
+  --text-muted: rgba(44, 52, 67, 0.84);
+  --text-subtle: rgba(55, 64, 82, 0.76);
+  --action-menu-selected-bg: rgba(var(--on-surface-rgb), 0.12);
+  --action-menu-selected-border: rgba(var(--on-surface-rgb), 0.10);
+  --action-menu-selected-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
 }
 
 .dark.sc-glassy {
@@ -259,11 +278,24 @@
   --ui-panel-border: rgba(255, 255, 255, 0.2);
   --ui-segment-border: rgba(255, 255, 255, 0.22);
   --ui-segment-bg: rgba(255, 255, 255, 0.12);
-  --ui-segment-active-bg: rgba(255, 255, 255, 0.2);
-  --ui-segment-hover-bg: rgba(255, 255, 255, 0.16);
+  --ui-segment-active-bg: rgba(255, 255, 255, 0.22);
+  --ui-segment-hover-bg: rgba(255, 255, 255, 0.17);
+  --command-item-hover-bg: rgba(255, 255, 255, 0.08);
+  --command-item-hover-border: rgba(255, 255, 255, 0.11);
+  --command-item-selected-bg: rgba(255, 255, 255, 0.11);
+  --command-item-selected-border: rgba(255, 255, 255, 0.16);
   --launcher-card-bg: rgba(255, 255, 255, 0.12);
-  --launcher-card-hover-bg: rgba(255, 255, 255, 0.18);
-  --launcher-card-selected-bg: rgba(255, 255, 255, 0.24);
+  --launcher-card-border: rgba(255, 255, 255, 0.16);
+  --launcher-card-hover-bg: rgba(255, 255, 255, 0.2);
+  --launcher-card-selected-bg: rgba(255, 255, 255, 0.26);
+  --launcher-card-selected-border: rgba(255, 255, 255, 0.22);
+  --text-primary: rgba(var(--on-surface-rgb), 0.98);
+  --text-secondary: rgba(var(--on-surface-rgb), 0.92);
+  --text-muted: rgba(var(--on-surface-rgb), 0.84);
+  --text-subtle: rgba(var(--on-surface-rgb), 0.72);
+  --action-menu-selected-bg: rgba(255, 255, 255, 0.11);
+  --action-menu-selected-border: rgba(255, 255, 255, 0.08);
+  --action-menu-selected-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
 }
 
 html.sc-theme-animating *,
@@ -370,12 +402,18 @@ html {
 .sc-glassy .glass-effect {
   --glass-radius: 12px;
   background:
-    linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)),
-    rgba(var(--surface-base-rgb), 0.5);
+    linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.05), rgba(var(--on-surface-rgb), 0.01)),
+    rgba(var(--surface-base-rgb), 0.7);
   -webkit-backdrop-filter: blur(96px) saturate(190%);
   backdrop-filter: blur(96px) saturate(190%);
   border-radius: var(--glass-radius);
   border: none;
+}
+
+.dark.sc-glassy .glass-effect {
+  background:
+    linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)),
+    rgba(var(--surface-base-rgb), 0.5);
 }
 
 .sc-glassy .glass-effect::after {

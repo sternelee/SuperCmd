@@ -194,10 +194,9 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
                       style={
                         idx === selectedIdx
                           ? {
-                              background: 'rgba(255, 255, 255, 0.13)',
-                              borderColor: 'transparent',
-                              boxShadow:
-                                'inset 0 1px 0 rgba(255,255,255,0.10)',
+                              background: 'var(--action-menu-selected-bg)',
+                              borderColor: 'var(--action-menu-selected-border)',
+                              boxShadow: 'var(--action-menu-selected-shadow)',
                             }
                           : undefined
                       }
