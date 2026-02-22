@@ -368,7 +368,7 @@ html {
 }
 
 .sc-glassy .glass-effect {
-  --glass-radius: 22px;
+  --glass-radius: 12px;
   background:
     linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)),
     rgba(var(--surface-base-rgb), 0.5);
