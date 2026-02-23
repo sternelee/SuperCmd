@@ -24,11 +24,10 @@ type PresetId =
   | 'right'
   | 'top'
   | 'bottom'
+  | 'center'
+  | 'center-80'
   | 'fill'
-  | 'fill-80'
-  | 'auto-organize'
-  | 'auto-fill-3'
-  | 'auto-fill-4';
+  | 'auto-organize';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type ScreenArea = { left: number; top: number; width: number; height: number };
@@ -42,22 +41,21 @@ interface WindowManagerPanelProps {
 }
 
 const PRESETS: Array<{ id: PresetId; label: string; subtitle: string }> = [
-  { id: 'top-left', label: 'Top Left', subtitle: 'Current window' },
-  { id: 'top-right', label: 'Top Right', subtitle: 'Current window' },
-  { id: 'bottom-left', label: 'Bottom Left', subtitle: 'Current window' },
-  { id: 'bottom-right', label: 'Bottom Right', subtitle: 'Current window' },
   { id: 'left', label: 'Left', subtitle: 'Current window' },
   { id: 'right', label: 'Right', subtitle: 'Current window' },
   { id: 'top', label: 'Top', subtitle: 'Current window' },
   { id: 'bottom', label: 'Bottom', subtitle: 'Current window' },
+  { id: 'center', label: 'Center', subtitle: 'Current window' },
+  { id: 'center-80', label: 'Center 80%', subtitle: 'Current window' },
   { id: 'fill', label: 'Fill', subtitle: 'Current window' },
-  { id: 'fill-80', label: 'Fill 80%', subtitle: 'Current window' },
+  { id: 'top-left', label: 'Top Left', subtitle: 'Current window' },
+  { id: 'top-right', label: 'Top Right', subtitle: 'Current window' },
+  { id: 'bottom-right', label: 'Bottom Right', subtitle: 'Current window' },
+  { id: 'bottom-left', label: 'Bottom Left', subtitle: 'Current window' },
   { id: 'auto-organize', label: 'Auto organise', subtitle: 'All windows on this screen' },
-  { id: 'auto-fill-3', label: 'Auto fill 3', subtitle: 'All windows on this screen' },
-  { id: 'auto-fill-4', label: 'Auto fill 4', subtitle: 'All windows on this screen' },
 ];
 
-const MULTI_WINDOW_PRESETS = new Set<PresetId>(['auto-organize', 'auto-fill-3', 'auto-fill-4']);
+const MULTI_WINDOW_PRESETS = new Set<PresetId>(['auto-organize']);
 
 function renderPresetIcon(id: PresetId): JSX.Element {
   const cells: Array<{ x: number; y: number; w: number; h: number }> = [];
@@ -89,7 +87,10 @@ function renderPresetIcon(id: PresetId): JSX.Element {
     case 'fill':
       cells.push({ x: 1, y: 1, w: 18, h: 12 });
       break;
-    case 'fill-80':
+    case 'center':
+      cells.push({ x: 4, y: 3, w: 12, h: 8 });
+      break;
+    case 'center-80':
       cells.push({ x: 3, y: 2, w: 14, h: 10 });
       break;
     case 'auto-organize':
@@ -98,21 +99,6 @@ function renderPresetIcon(id: PresetId): JSX.Element {
         { x: 11, y: 1, w: 8, h: 5 },
         { x: 1, y: 8, w: 8, h: 5 },
         { x: 11, y: 8, w: 8, h: 5 }
-      );
-      break;
-    case 'auto-fill-3':
-      cells.push(
-        { x: 2, y: 1, w: 4, h: 12 },
-        { x: 8, y: 1, w: 4, h: 12 },
-        { x: 14, y: 1, w: 4, h: 12 }
-      );
-      break;
-    case 'auto-fill-4':
-      cells.push(
-        { x: 2, y: 1, w: 3, h: 12 },
-        { x: 6, y: 1, w: 3, h: 12 },
-        { x: 10, y: 1, w: 3, h: 12 },
-        { x: 14, y: 1, w: 3, h: 12 }
       );
       break;
     default:
@@ -327,6 +313,84 @@ function splitHorizontal(area: ScreenArea): { top: Rect; bottom: Rect } {
   };
 }
 
+function getWindowWidthHint(window?: ManagedWindow): number {
+  return Math.max(1, Math.round(window?.bounds?.size?.width || 0));
+}
+
+function getWindowHeightHint(window?: ManagedWindow): number {
+  return Math.max(1, Math.round(window?.bounds?.size?.height || 0));
+}
+
+function getGroupWidthHint(windows: ManagedWindow[]): number {
+  if (windows.length === 0) return 1;
+  return Math.max(...windows.map((win) => getWindowWidthHint(win)));
+}
+
+function getGroupHeightHint(windows: ManagedWindow[]): number {
+  if (windows.length === 0) return 1;
+  return Math.max(...windows.map((win) => getWindowHeightHint(win)));
+}
+
+function splitVerticalSmart(
+  area: ScreenArea,
+  leftWindows: ManagedWindow[],
+  rightWindows: ManagedWindow[]
+): { left: Rect; right: Rect } {
+  const desiredLeft = getGroupWidthHint(leftWindows);
+  const desiredRight = getGroupWidthHint(rightWindows);
+  const maxLeft = Math.max(1, area.width - desiredRight);
+  let leftW = Math.max(1, Math.min(Math.max(Math.floor(area.width / 2), desiredLeft), maxLeft));
+  let rightW = Math.max(1, area.width - leftW);
+  if (rightW < desiredRight) {
+    rightW = desiredRight;
+    leftW = Math.max(1, area.width - rightW);
+  }
+
+  return {
+    left: { x: area.left, y: area.top, width: leftW, height: area.height },
+    right: { x: area.left + leftW, y: area.top, width: Math.max(1, area.width - leftW), height: area.height },
+  };
+}
+
+function splitHorizontalSmart(
+  area: ScreenArea,
+  topWindows: ManagedWindow[],
+  bottomWindows: ManagedWindow[]
+): { top: Rect; bottom: Rect } {
+  const desiredTop = getGroupHeightHint(topWindows);
+  const desiredBottom = getGroupHeightHint(bottomWindows);
+  const maxTop = Math.max(1, area.height - desiredBottom);
+  let topH = Math.max(1, Math.min(Math.max(Math.floor(area.height / 2), desiredTop), maxTop));
+  let bottomH = Math.max(1, area.height - topH);
+  if (bottomH < desiredBottom) {
+    bottomH = desiredBottom;
+    topH = Math.max(1, area.height - bottomH);
+  }
+
+  return {
+    top: { x: area.left, y: area.top, width: area.width, height: topH },
+    bottom: { x: area.left, y: area.top + topH, width: area.width, height: Math.max(1, area.height - topH) },
+  };
+}
+
+function pushLeftIfOverflow(rect: Rect, area: ScreenArea, window?: ManagedWindow): Rect {
+  const currentWidth = Math.max(0, Math.round(window?.bounds?.size?.width || 0));
+  const effectiveWidth = Math.max(Math.round(rect.width), currentWidth);
+  const maxX = area.left + area.width - effectiveWidth;
+  let x = Math.round(rect.x);
+  if (x > maxX) {
+    x = maxX;
+  }
+  if (x < area.left) {
+    x = area.left;
+  }
+  return { ...rect, x };
+}
+
+function fitRectWithinArea(rect: Rect, area: ScreenArea, window?: ManagedWindow): Rect {
+  return pushLeftIfOverflow(pushUpIfOverflow(rect, area, window), area, window);
+}
+
 function pushUpIfOverflow(rect: Rect, area: ScreenArea, window?: ManagedWindow): Rect {
   const currentHeight = Math.max(0, Math.round(window?.bounds?.size?.height || 0));
   const effectiveHeight = Math.max(Math.round(rect.height), currentHeight);
@@ -357,7 +421,14 @@ function getPresetRegion(presetId: PresetId, area: ScreenArea): Rect | null {
   if (presetId === 'fill') {
     return { x: area.left, y: area.top, width: area.width, height: area.height };
   }
-  if (presetId === 'fill-80') {
+  if (presetId === 'center') {
+    const width = Math.max(1, Math.round(area.width * 0.6));
+    const height = Math.max(1, Math.round(area.height * 0.6));
+    const x = area.left + Math.round((area.width - width) / 2);
+    const y = area.top + Math.round((area.height - height) / 2);
+    return { x, y, width, height };
+  }
+  if (presetId === 'center-80') {
     const width = Math.max(1, Math.round(area.width * 0.8));
     const height = Math.max(1, Math.round(area.height * 0.8));
     const x = area.left + Math.round((area.width - width) / 2);
@@ -390,9 +461,6 @@ function buildAutoLayout(windows: ManagedWindow[], area: { left: number; top: nu
   if (windows.length === 3) {
     return buildAutoFill3Layout(windows, area);
   }
-  if (windows.length === 4) {
-    return buildAutoFill4Layout(windows, area);
-  }
   const rects = computeGridRects(
     windows.length,
     { x: area.left, y: area.top, width: area.width, height: area.height },
@@ -402,6 +470,44 @@ function buildAutoLayout(windows: ManagedWindow[], area: { left: number; top: nu
     id: win.id,
     bounds: rectToBounds(pushUpIfOverflow(rects[index], area, win)),
   }));
+}
+
+function buildAutoOrganizeLayout(windows: ManagedWindow[], area: ScreenArea): LayoutMove[] {
+  const targets = windows.slice(0, 4);
+  if (targets.length === 0) return [];
+  if (targets.length === 1) {
+    return [{ id: targets[0].id, bounds: rectToBounds({ x: area.left, y: area.top, width: area.width, height: area.height }) }];
+  }
+  if (targets.length === 2) {
+    const split = splitVertical(area);
+    return [
+      { id: targets[0].id, bounds: rectToBounds(split.left) },
+      { id: targets[1].id, bounds: rectToBounds(split.right) },
+    ];
+  }
+  if (targets.length === 3) {
+    const split = splitVertical(area);
+    const rightArea: ScreenArea = {
+      left: split.right.x,
+      top: split.right.y,
+      width: split.right.width,
+      height: split.right.height,
+    };
+    const rightSplit = splitHorizontal(rightArea);
+    return [
+      { id: targets[0].id, bounds: rectToBounds(split.left) },
+      { id: targets[1].id, bounds: rectToBounds(rightSplit.top) },
+      { id: targets[2].id, bounds: rectToBounds(rightSplit.bottom) },
+    ];
+  }
+
+  const quadrants = splitQuadrants(area, { padding: 0, gap: 0 });
+  return [
+    { id: targets[0].id, bounds: rectToBounds(quadrants['top-left']) },
+    { id: targets[1].id, bounds: rectToBounds(quadrants['bottom-left']) },
+    { id: targets[2].id, bounds: rectToBounds(quadrants['top-right']) },
+    { id: targets[3].id, bounds: rectToBounds(quadrants['bottom-right']) },
+  ];
 }
 
 function buildAutoFill3Layout(windows: ManagedWindow[], area: ScreenArea): LayoutMove[] {
@@ -526,7 +632,7 @@ function buildAutoFill4Layout(windows: ManagedWindow[], area: ScreenArea): Layou
 const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTarget, onClose }) => {
   const [windowsOnScreen, setWindowsOnScreen] = useState<ManagedWindow[]>([]);
   const [statusText, setStatusText] = useState('Select a preset to arrange windows.');
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [appliedPreset, setAppliedPreset] = useState<PresetId | null>(null);
 
   const windowsOnScreenRef = useRef<ManagedWindow[]>([]);
@@ -617,11 +723,10 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
       const screenWindows = all
         .filter(isManageableWindow)
         .filter((win) => isWindowOnScreenArea(win, area));
-      const sorted = sortWindowsForLayout(screenWindows);
-      windowsOnScreenRef.current = sorted;
-      setWindowsOnScreen(sorted);
+      windowsOnScreenRef.current = screenWindows;
+      setWindowsOnScreen(screenWindows);
       lastInventoryAtRef.current = Date.now();
-      return sorted;
+      return screenWindows;
     })();
 
     inventoryInFlightRef.current = promise;
@@ -633,7 +738,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
   useEffect(() => {
     if (!show || !portalTarget) return;
     setAppliedPreset(null);
-    setSelectedIndex(0);
+    setSelectedIndex(-1);
     lastPreviewKeyRef.current = '';
     pendingPreviewRef.current = null;
     previewSeqRef.current += 1;
@@ -657,33 +762,20 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
       return;
     }
 
-    const sortedAll = sortWindowsForLayout(layoutWindows);
-    const isAutoFill3 = presetId === 'auto-fill-3';
-    const isAutoFill4 = presetId === 'auto-fill-4';
-    const sorted = isAutoFill3
-      ? sortedAll.slice(0, 3)
-      : isAutoFill4
-        ? sortedAll.slice(0, 4)
-        : presetId === 'auto-organize' && sortedAll.length >= 4
-          ? sortedAll.slice(0, 4)
-          : sortedAll;
-    const previewIds = sorted.map((w) => w.id);
+    const orderedAll = presetId === 'auto-organize' ? layoutWindows : sortWindowsForLayout(layoutWindows);
+    const layoutTargets = presetId === 'auto-organize' ? orderedAll.slice(0, 4) : orderedAll;
+    const previewIds = layoutTargets.map((w) => w.id);
     const previewKey = `${presetId}:${previewIds.join(',')}`;
     if (!options?.force && lastPreviewKeyRef.current === previewKey) return;
     lastPreviewKeyRef.current = previewKey;
     let moves: LayoutMove[] = [];
-    let movedCount = sorted.length;
+    let movedCount = layoutTargets.length;
     if (isMultiWindow) {
-      if (isAutoFill3) {
-        moves = buildAutoFill3Layout(sorted, layoutArea);
-        movedCount = Math.min(sorted.length, 3);
-      } else if (isAutoFill4) {
-        moves = buildAutoFill4Layout(sorted, layoutArea);
-        movedCount = Math.min(sorted.length, 4);
-      } else if (presetId === 'auto-organize' && sorted.length >= 4) {
-        moves = buildAutoFill4Layout(sorted, layoutArea);
+      if (presetId === 'auto-organize') {
+        moves = buildAutoOrganizeLayout(layoutTargets, layoutArea);
+        movedCount = Math.min(layoutTargets.length, 4);
       } else {
-        moves = buildAutoLayout(sorted, layoutArea);
+        moves = buildAutoLayout(layoutTargets, layoutArea);
       }
     } else {
       const region = getPresetRegion(presetId, layoutArea);
@@ -707,23 +799,19 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
       if (seq !== previewSeqRef.current) return;
       setAppliedPreset(presetId);
       if (isMultiWindow) {
-        if (isAutoFill3) {
-          setStatusText(`Previewing Auto fill 3 for ${movedCount} of ${sortedAll.length} windows.`);
-        } else if (isAutoFill4) {
-          setStatusText(`Previewing Auto fill 4 for ${movedCount} of ${sortedAll.length} windows.`);
-        } else if (presetId === 'auto-organize' && sortedAll.length >= 4) {
-          setStatusText(`Previewing Auto organise for ${movedCount} of ${sortedAll.length} windows.`);
+        if (presetId === 'auto-organize') {
+          setStatusText(`Previewing Auto organise for ${movedCount} of ${orderedAll.length} windows.`);
         } else {
-          const cols = computeGridDimensions(sortedAll.length, {
+          const cols = computeGridDimensions(orderedAll.length, {
             x: layoutArea.left,
             y: layoutArea.top,
             width: layoutArea.width,
             height: layoutArea.height,
           }).cols;
-          setStatusText(`Previewing grid (${cols} col${cols > 1 ? 's' : ''}) for ${sortedAll.length} windows.`);
+          setStatusText(`Previewing grid (${cols} col${cols > 1 ? 's' : ''}) for ${orderedAll.length} windows.`);
         }
       } else {
-        setStatusText(`Previewing ${PRESETS.find((p) => p.id === presetId)?.label} layout for ${sorted.length} windows.`);
+        setStatusText(`Previewing ${PRESETS.find((p) => p.id === presetId)?.label} layout for ${layoutTargets.length} windows.`);
       }
     } catch (error) {
       console.error('Window preset failed:', error);
@@ -754,7 +842,9 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
 
   useEffect(() => {
     if (!show) return;
-    optionRefs.current[selectedIndex]?.scrollIntoView({ block: 'nearest' });
+    if (selectedIndex >= 0) {
+      optionRefs.current[selectedIndex]?.scrollIntoView({ block: 'nearest' });
+    }
   }, [show, selectedIndex]);
 
   useEffect(() => {
@@ -768,7 +858,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
       }
       if (event.key === 'ArrowDown') {
         event.preventDefault();
-        const nextIndex = (selectedIndex + 1) % PRESETS.length;
+        const nextIndex = selectedIndex < 0 ? 0 : (selectedIndex + 1) % PRESETS.length;
         setSelectedIndex(nextIndex);
         const preset = PRESETS[nextIndex];
         if (preset) queuePreview(preset.id);
@@ -776,7 +866,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault();
-        const nextIndex = (selectedIndex - 1 + PRESETS.length) % PRESETS.length;
+        const nextIndex = selectedIndex < 0 ? PRESETS.length - 1 : (selectedIndex - 1 + PRESETS.length) % PRESETS.length;
         setSelectedIndex(nextIndex);
         const preset = PRESETS[nextIndex];
         if (preset) queuePreview(preset.id);
@@ -784,6 +874,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
       }
       if (event.key === 'Enter') {
         event.preventDefault();
+        if (selectedIndex < 0) return;
         const preset = PRESETS[selectedIndex];
         if (!preset) return;
         void (async () => {
@@ -911,7 +1002,9 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
             event.preventDefault();
             const delta = event.deltaY || 0;
             if (!delta) return;
-            const nextIndex = (selectedIndex + (delta > 0 ? 1 : -1) + PRESETS.length) % PRESETS.length;
+            const nextIndex = selectedIndex < 0
+              ? (delta > 0 ? 0 : PRESETS.length - 1)
+              : (selectedIndex + (delta > 0 ? 1 : -1) + PRESETS.length) % PRESETS.length;
             setSelectedIndex(nextIndex);
             const preset = PRESETS[nextIndex];
             if (preset) queuePreview(preset.id);
@@ -935,12 +1028,10 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
                 aria-selected={isSelected}
                 onMouseEnter={() => {
                   setSelectedIndex(index);
-                  queuePreview(preset.id);
                 }}
                 onMouseMove={() => {
                   if (selectedIndex !== index) {
                     setSelectedIndex(index);
-                    queuePreview(preset.id);
                   }
                 }}
                 onMouseDown={(e) => e.preventDefault()}
