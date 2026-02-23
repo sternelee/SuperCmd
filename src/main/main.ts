@@ -4054,11 +4054,9 @@ async function showWindow(options?: { systemCommandId?: string }): Promise<void>
   // Skip during onboarding to avoid any focus-stealing side effects during setup.
   if (launcherMode !== 'onboarding') {
     captureFrontmostAppContext();
-    captureWindowManagementTargetWindow();
-    // Snapshot selected text before launcher focus changes the active app.
-    // Clipboard fallback is enabled so selection works in apps that do not
-    // expose AXSelectedText.
-    selectionSnapshotPromise = captureSelectionSnapshotBeforeShow({ allowClipboardFallback: true });
+    // Keep launcher open path fast: avoid clipboard fallback (synthetic Cmd+C)
+    // on window open because it can interfere with immediate typing.
+    selectionSnapshotPromise = captureSelectionSnapshotBeforeShow({ allowClipboardFallback: false });
   }
 
   applyLauncherBounds(launcherMode);
