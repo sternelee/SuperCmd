@@ -2702,6 +2702,64 @@ app.on('open-url', (event: any, url: string) => {
 // ─── Menu Bar (Tray) Management ─────────────────────────────────────
 
 const menuBarTrays = new Map<string, InstanceType<typeof Tray>>();
+let appTray: InstanceType<typeof Tray> | null = null;
+
+function loadAppTrayIcon(): any {
+  const fs = require('fs');
+  const candidates = [
+    path.join(process.cwd(), 'supercmd.png'),
+    path.join(app.getAppPath(), 'supercmd.png'),
+    path.join(process.resourcesPath || '', 'supercmd.png'),
+    path.join(process.resourcesPath || '', 'supercmd.icns'),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      if (!candidate || !fs.existsSync(candidate)) continue;
+      const icon = nativeImage.createFromPath(candidate);
+      if (!icon || icon.isEmpty()) continue;
+      const resized = icon.resize({ width: 18, height: 18 });
+      // Use template rendering on macOS so the icon adapts to light/dark menu bar.
+      if (process.platform === 'darwin') {
+        try { resized.setTemplateImage(true); } catch {}
+      }
+      return resized;
+    } catch {}
+  }
+
+  return nativeImage.createEmpty();
+}
+
+function ensureAppTray(): void {
+  if (appTray) return;
+
+  try {
+    const icon = loadAppTrayIcon();
+    appTray = new Tray(icon);
+    appTray.setToolTip('SuperCmd');
+    appTray.setContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: 'Open SuperCmd',
+          click: () => {
+            void openLauncherFromUserEntry();
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Quit SuperCmd',
+          click: () => {
+            app.quit();
+          },
+        },
+      ])
+    );
+
+  } catch (error) {
+    console.warn('[Tray] Failed to create app tray:', error);
+    appTray = null;
+  }
+}
 
 // ─── URL Helpers ────────────────────────────────────────────────────
 
@@ -6049,6 +6107,7 @@ app.whenReady().then(async () => {
       },
     ])
   );
+  ensureAppTray();
 
   const settings = loadSettings();
   applyOpenAtLogin(Boolean((settings as any).openAtLogin));
@@ -9201,6 +9260,10 @@ app.on('will-quit', () => {
   stopSpeakSession({ resetStatus: false });
   stopClipboardMonitor();
   stopSnippetExpander();
+  if (appTray) {
+    try { appTray.destroy(); } catch {}
+    appTray = null;
+  }
   // Clean up trays
   for (const [, tray] of menuBarTrays) {
     tray.destroy();
