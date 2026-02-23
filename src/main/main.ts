@@ -255,6 +255,8 @@ let promptWindow: InstanceType<typeof BrowserWindow> | null = null;
 let promptWindowPrewarmScheduled = false;
 let memoryStatusWindow: InstanceType<typeof BrowserWindow> | null = null;
 let memoryStatusHideTimer: NodeJS.Timeout | null = null;
+let memoryStatusRenderSeq = 0;
+let memoryStatusHideTimerSeq = 0;
 let settingsWindow: InstanceType<typeof BrowserWindow> | null = null;
 let extensionStoreWindow: InstanceType<typeof BrowserWindow> | null = null;
 let isVisible = false;
@@ -277,7 +279,16 @@ const OPENING_SHORTCUT_SUPPRESSION_MS = 220;
 let openingShortcutSuppressionUntil = 0;
 let openingShortcutToSuppress = '';
 
-function getMemoryStatusWindowHtml(): string {
+function getMemoryStatusWindowHtml(
+  variant: 'processing' | 'success' | 'error' = 'processing',
+  text: string = ''
+): string {
+  const safeVariant =
+    variant === 'success' || variant === 'error' ? variant : 'processing';
+  const safeText = String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
   return `<!doctype html>
 <html>
 <head>
@@ -361,21 +372,11 @@ function getMemoryStatusWindowHtml(): string {
 </head>
 <body>
   <div class="wrap">
-    <div id="card" class="card processing">
+    <div id="card" class="card ${safeVariant}">
       <div class="dot"></div>
-      <div id="text" class="text">Adding to memory...</div>
+      <div id="text" class="text">${safeText}</div>
     </div>
   </div>
-  <script>
-    window.__setMemoryStatus = function(payload) {
-      var card = document.getElementById('card');
-      var text = document.getElementById('text');
-      if (!card || !text) return;
-      var variant = (payload && payload.variant) || 'processing';
-      card.className = 'card ' + variant;
-      text.textContent = String((payload && payload.text) || '');
-    };
-  </script>
 </body>
 </html>`;
 }
@@ -384,10 +385,12 @@ function clearMemoryStatusHideTimer(): void {
   if (!memoryStatusHideTimer) return;
   clearTimeout(memoryStatusHideTimer);
   memoryStatusHideTimer = null;
+  memoryStatusHideTimerSeq = 0;
 }
 
 function hideMemoryStatusBar(): void {
   clearMemoryStatusHideTimer();
+  memoryStatusRenderSeq += 1;
   if (!memoryStatusWindow || memoryStatusWindow.isDestroyed()) return;
   try {
     memoryStatusWindow.hide();
@@ -425,6 +428,7 @@ async function ensureMemoryStatusWindow(): Promise<InstanceType<typeof BrowserWi
     try { memoryStatusWindow.setWindowButtonVisibility(false); } catch {}
   }
   memoryStatusWindow.on('closed', () => {
+    memoryStatusRenderSeq += 1;
     memoryStatusWindow = null;
     clearMemoryStatusHideTimer();
   });
@@ -439,10 +443,32 @@ async function ensureMemoryStatusWindow(): Promise<InstanceType<typeof BrowserWi
   return memoryStatusWindow;
 }
 
+async function renderMemoryStatusBarContent(
+  win: InstanceType<typeof BrowserWindow>,
+  payload: { variant: 'processing' | 'success' | 'error'; text: string },
+  renderSeq: number,
+): Promise<void> {
+  if (!memoryStatusWindow || memoryStatusWindow.isDestroyed()) return;
+  if (renderSeq !== memoryStatusRenderSeq) return;
+  if (!win.webContents || win.webContents.isDestroyed()) return;
+  try {
+    await win.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(
+        getMemoryStatusWindowHtml(payload.variant, payload.text)
+      )}`
+    );
+  } catch (error) {
+    if (renderSeq === memoryStatusRenderSeq) {
+      console.warn('[MemoryStatus] Failed to render status content:', error);
+    }
+  }
+}
+
 async function showMemoryStatusBar(
   variant: 'processing' | 'success' | 'error',
   text: string
 ): Promise<void> {
+  const renderSeq = ++memoryStatusRenderSeq;
   const win = await ensureMemoryStatusWindow();
   if (!win) return;
   clearMemoryStatusHideTimer();
@@ -461,17 +487,10 @@ async function showMemoryStatusBar(
   } catch {}
   try {
     if (win.webContents && !win.webContents.isDestroyed()) {
-      const payload = JSON.stringify({ variant, text: String(text || '') });
-      if (win.webContents.isLoadingMainFrame()) {
-        win.webContents.once('did-finish-load', () => {
-          if (!memoryStatusWindow || memoryStatusWindow.isDestroyed()) return;
-          void memoryStatusWindow.webContents.executeJavaScript(`window.__setMemoryStatus(${payload});`, true);
-        });
-      } else {
-        void win.webContents.executeJavaScript(`window.__setMemoryStatus(${payload});`, true);
-      }
+      await renderMemoryStatusBarContent(win, { variant, text: String(text || '') }, renderSeq);
     }
   } catch {}
+  if (renderSeq !== memoryStatusRenderSeq) return;
   try {
     if (!win.isVisible()) {
       if (typeof (win as any).showInactive === 'function') (win as any).showInactive();
@@ -483,7 +502,10 @@ async function showMemoryStatusBar(
   } catch {}
 
   if (variant !== 'processing') {
+    if (renderSeq !== memoryStatusRenderSeq) return;
+    memoryStatusHideTimerSeq = renderSeq;
     memoryStatusHideTimer = setTimeout(() => {
+      if (memoryStatusHideTimerSeq !== renderSeq) return;
       hideMemoryStatusBar();
     }, MEMORY_STATUS_AUTOHIDE_MS);
   }
@@ -4513,29 +4535,44 @@ async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' =
       ensureAppUpdaterConfigured();
       if (!appUpdater) {
         console.warn('[Updater] Not available in development mode');
+        void showMemoryStatusBar('error', 'Updater not available.');
         return false;
       }
+      void showMemoryStatusBar('processing', 'Checking for updates...');
       const checkStatus = await checkForAppUpdates();
       if (checkStatus.state === 'not-available') {
         console.log('[Updater] Already on latest version');
+        void showMemoryStatusBar('success', 'Already on latest version.');
         return true;
       }
+      if (checkStatus.state === 'error') {
+        void showMemoryStatusBar('error', checkStatus.message || 'Failed to check for updates.');
+        return false;
+      }
       if (checkStatus.state === 'available') {
+        void showMemoryStatusBar('processing', 'Downloading update...');
         const downloadStatus = await downloadAppUpdate();
         if (downloadStatus.state === 'error') {
           console.error('[Updater] Download failed:', downloadStatus.message);
+          void showMemoryStatusBar('error', downloadStatus.message || 'Failed to download update.');
           return false;
         }
       }
       if (appUpdaterStatusSnapshot.state === 'downloaded') {
+        void showMemoryStatusBar('processing', 'Restarting to install update...');
         const installed = restartAndInstallAppUpdate();
         if (installed) {
           return true;
         }
+        void showMemoryStatusBar('error', 'Failed to restart for update installation.');
+      }
+      if (appUpdaterStatusSnapshot.state !== 'downloaded') {
+        void showMemoryStatusBar('success', checkStatus.message || 'Update check complete.');
       }
       return true;
     } catch (error) {
       console.error('[Updater] Update flow failed:', error);
+      void showMemoryStatusBar('error', 'Update flow failed.');
       return false;
     }
   }
@@ -6295,38 +6332,48 @@ app.whenReady().then(async () => {
   ipcMain.handle('app-updater-check-and-install', async () => {
     ensureAppUpdaterConfigured();
     if (!appUpdater) {
+      void showMemoryStatusBar('error', 'Updater not available.');
       return { success: false, error: 'Updater not available' };
     }
 
     try {
       // Step 1: Check for updates
+      void showMemoryStatusBar('processing', 'Checking for updates...');
       const checkStatus = await checkForAppUpdates();
       if (checkStatus.state === 'not-available') {
+        void showMemoryStatusBar('success', 'Already on latest version.');
         return { success: true, message: 'Already on latest version', state: checkStatus.state };
       }
       if (checkStatus.state === 'error') {
+        void showMemoryStatusBar('error', checkStatus.message || 'Failed to check for updates');
         return { success: false, error: checkStatus.message || 'Failed to check for updates' };
       }
 
       // Step 2: Download if available
       if (checkStatus.state === 'available') {
+        void showMemoryStatusBar('processing', 'Downloading update...');
         const downloadStatus = await downloadAppUpdate();
         if (downloadStatus.state === 'error') {
+          void showMemoryStatusBar('error', downloadStatus.message || 'Failed to download update');
           return { success: false, error: downloadStatus.message || 'Failed to download update' };
         }
       }
 
       // Step 3: Restart if downloaded
       if (appUpdaterStatusSnapshot.state === 'downloaded') {
+        void showMemoryStatusBar('processing', 'Restarting to install update...');
         const installed = restartAndInstallAppUpdate();
         if (installed) {
           return { success: true, message: 'Restarting to install update...', state: 'restarting' };
         }
+        void showMemoryStatusBar('error', 'Failed to restart for update installation');
         return { success: false, error: 'Failed to restart for update installation' };
       }
 
+      void showMemoryStatusBar('success', checkStatus.message || 'Update check complete');
       return { success: true, message: checkStatus.message || 'Update check complete', state: checkStatus.state };
     } catch (error: any) {
+      void showMemoryStatusBar('error', String(error?.message || error || 'Update flow failed'));
       return { success: false, error: String(error?.message || error || 'Update flow failed') };
     }
   });
