@@ -179,9 +179,12 @@ function buildCornerLayout(
   windows: ManagedWindow[],
   area: { left: number; top: number; width: number; height: number }
 ): LayoutMove[] {
-  const quadrants = splitQuadrants(area, { padding: 8, gap: 8 });
+  const quadrants = splitQuadrants(area, { padding: 0, gap: 0 });
   const region = quadrants[presetId];
-  const rects = computeGridRects(windows.length, region, { padding: 4, gap: 6 });
+  if (windows.length === 1) {
+    return [{ id: windows[0].id, bounds: rectToBounds(region) }];
+  }
+  const rects = computeGridRects(windows.length, region, { padding: 0, gap: 0 });
   return windows.map((win, index) => ({ id: win.id, bounds: rectToBounds(rects[index]) }));
 }
 
