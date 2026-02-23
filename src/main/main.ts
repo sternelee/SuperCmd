@@ -101,9 +101,29 @@ type NodeWindowInfo = {
 
 let cachedWindowManagerApi: any | null = null;
 let cachedElectronLiquidGlassApi: any | null | undefined = undefined;
+let hasLoggedLiquidGlassRuntimeIncompatibility = false;
 let windowManagerAccessRequested = false;
 let windowManagementTargetWindowId: string | null = null;
 let windowManagementTargetWorkArea: { x: number; y: number; width: number; height: number } | null = null;
+
+function parseMajorVersion(value: string | undefined): number | null {
+  if (!value) return null;
+  const major = Number.parseInt(String(value).split('.')[0], 10);
+  return Number.isFinite(major) ? major : null;
+}
+
+function warnIfElectronLiquidGlassRuntimeLooksIncompatible(): void {
+  const electronMajor = parseMajorVersion(process.versions?.electron);
+  const nodeMajor = parseMajorVersion(process.versions?.node);
+  const likelyIncompatible = (electronMajor !== null && electronMajor < 30) || (nodeMajor !== null && nodeMajor < 22);
+  if (likelyIncompatible && !hasLoggedLiquidGlassRuntimeIncompatibility) {
+    hasLoggedLiquidGlassRuntimeIncompatibility = true;
+    console.warn(
+      `[LiquidGlass] Runtime not supported (electron=${process.versions?.electron || 'unknown'}, node=${process.versions?.node || 'unknown'}). ` +
+      'electron-liquid-glass is documented for Electron 30+ and Node 22+; falling back only if runtime calls fail.'
+    );
+  }
+}
 
 function getWindowManagerApi(): any | null {
   if (cachedWindowManagerApi) return cachedWindowManagerApi;
@@ -125,6 +145,7 @@ function getElectronLiquidGlassApi(): any | null {
     cachedElectronLiquidGlassApi = null;
     return cachedElectronLiquidGlassApi;
   }
+  warnIfElectronLiquidGlassRuntimeLooksIncompatible();
   try {
     cachedElectronLiquidGlassApi = require('electron-liquid-glass');
     return cachedElectronLiquidGlassApi;
@@ -135,10 +156,27 @@ function getElectronLiquidGlassApi(): any | null {
   }
 }
 
+function applyNativeWindowManagerGlassFallback(win: any): void {
+  if (process.platform !== 'darwin') return;
+  try {
+    if (typeof win?.setVibrancy === 'function') {
+      win.setVibrancy('under-window');
+    }
+  } catch {}
+  try {
+    if (typeof win?.setVisualEffectState === 'function') {
+      win.setVisualEffectState('active');
+    }
+  } catch {}
+}
+
 function applyLiquidGlassToWindowManagerPopup(win: any): void {
   if (process.platform !== 'darwin') return;
   const liquidGlass = getElectronLiquidGlassApi();
-  if (!liquidGlass || typeof liquidGlass.addView !== 'function') return;
+  if (!liquidGlass || typeof liquidGlass.addView !== 'function') {
+    applyNativeWindowManagerGlassFallback(win);
+    return;
+  }
 
   const applyEffect = () => {
     try {
@@ -152,6 +190,7 @@ function applyLiquidGlassToWindowManagerPopup(win: any): void {
       }
     } catch (error) {
       console.warn('[LiquidGlass] Failed to apply liquid glass to window manager popup:', error);
+      applyNativeWindowManagerGlassFallback(win);
     }
   };
 
@@ -3242,6 +3281,9 @@ function createWindow(): void {
       return { action: 'allow' };
     }
 
+    const useNativeVibrancyForWindowManager =
+      detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME && !getElectronLiquidGlassApi();
+
     const popupBounds = parsePopupFeatures(details?.features || '');
     const defaultWidth = detachedPopupName === DETACHED_WHISPER_WINDOW_NAME
       ? 272
@@ -3294,8 +3336,15 @@ function createWindow(): void {
         titleBarOverlay: false,
         transparent: true,
         backgroundColor: '#00000000',
-        vibrancy: detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME ? 'fullscreen-ui' : undefined,
-        visualEffectState: detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME ? 'active' : undefined,
+        vibrancy: detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME
+          ? 'fullscreen-ui'
+          : useNativeVibrancyForWindowManager
+            ? 'under-window'
+            : undefined,
+        visualEffectState:
+          detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME || useNativeVibrancyForWindowManager
+            ? 'active'
+            : undefined,
         hasShadow: false,
         resizable: false,
         minimizable: false,

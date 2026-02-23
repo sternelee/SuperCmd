@@ -70,7 +70,8 @@
       "node_modules/esbuild/**",
       "node_modules/@esbuild/**",
       "node_modules/node-edge-tts/**",
-      "node_modules/node-window-manager/**"
+      "node_modules/node-window-manager/**",
+      "node_modules/electron-liquid-glass/**"
     ],
     "directories": {
       "output": "out"
