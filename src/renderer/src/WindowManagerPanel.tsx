@@ -193,12 +193,29 @@ function getWindowCenter(win: ManagedWindow): { x: number; y: number } {
 }
 
 function isWindowOnScreenArea(win: ManagedWindow, area: { left: number; top: number; width: number; height: number }): boolean {
-  const c = getWindowCenter(win);
-  const minX = area.left - 4;
-  const minY = area.top - 4;
-  const maxX = area.left + area.width + 4;
-  const maxY = area.top + area.height + 4;
-  return c.x >= minX && c.x <= maxX && c.y >= minY && c.y <= maxY;
+  const x = Number(win.bounds?.position?.x);
+  const y = Number(win.bounds?.position?.y);
+  const width = Number(win.bounds?.size?.width);
+  const height = Number(win.bounds?.size?.height);
+  if (![x, y, width, height].every((value) => Number.isFinite(value))) return false;
+  if (width <= 0 || height <= 0) return false;
+
+  const winLeft = x;
+  const winTop = y;
+  const winRight = x + width;
+  const winBottom = y + height;
+  const areaLeft = area.left;
+  const areaTop = area.top;
+  const areaRight = area.left + area.width;
+  const areaBottom = area.top + area.height;
+
+  const overlapWidth = Math.max(0, Math.min(winRight, areaRight) - Math.max(winLeft, areaLeft));
+  const overlapHeight = Math.max(0, Math.min(winBottom, areaBottom) - Math.max(winTop, areaTop));
+  if (overlapWidth <= 0 || overlapHeight <= 0) return false;
+
+  const overlapArea = overlapWidth * overlapHeight;
+  const windowArea = Math.max(1, width * height);
+  return overlapArea >= Math.max(64, windowArea * 0.2);
 }
 
 function rectToBounds(rect: Rect): BoundsRect {
@@ -763,7 +780,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
       return;
     }
 
-    const orderedAll = presetId === 'auto-organize' ? layoutWindows : sortWindowsForLayout(layoutWindows);
+    const orderedAll = sortWindowsForLayout(layoutWindows);
     const layoutTargets = presetId === 'auto-organize' ? orderedAll.slice(0, 4) : orderedAll;
     const previewIds = layoutTargets.map((w) => w.id);
     const previewKey = `${presetId}:${previewIds.join(',')}`;
@@ -781,7 +798,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
     } else {
       const region = getPresetRegion(presetId, layoutArea);
       if (region && target) {
-        const adjusted = (presetId === 'bottom-left' || presetId === 'bottom-right' || presetId === 'bottom')
+        const adjusted = (presetId === 'bottom-left' || presetId === 'bottom-right')
           ? pushUpIfOverflow(region, layoutArea, target)
           : region;
         moves = [{ id: target.id, bounds: rectToBounds(adjusted) }];
