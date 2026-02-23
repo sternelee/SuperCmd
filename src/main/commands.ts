@@ -923,6 +923,12 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
       category: 'system',
     },
     {
+      id: 'system-window-management',
+      title: 'Window Management',
+      keywords: ['window', 'manage', 'tile', 'snap', 'top left', 'top right', 'bottom left', 'bottom right', 'grid', 'auto organize'],
+      category: 'system',
+    },
+    {
       id: 'system-open-extensions-settings',
       title: 'SuperCmd Extensions',
       keywords: ['extensions', 'store', 'community', 'hotkey', 'supercmd'],

@@ -16,6 +16,7 @@ import OnboardingExtension from './OnboardingExtension';
 import FileSearchExtension from './FileSearchExtension';
 import SuperCmdWhisper from './SuperCmdWhisper';
 import SuperCmdRead from './SuperCmdRead';
+import WindowManagerPanel from './WindowManagerPanel';
 import { tryCalculate, tryCalculateAsync } from './smart-calculator';
 import { useDetachedPortalWindow } from './useDetachedPortalWindow';
 import { useAppViewManager } from './hooks/useAppViewManager';
@@ -64,12 +65,12 @@ const App: React.FC = () => {
   const {
     extensionView, extensionPreferenceSetup, scriptCommandSetup, scriptCommandOutput,
     showClipboardManager, showSnippetManager, showFileSearch, showCursorPrompt,
-    showWhisper, showSpeak, showWhisperOnboarding, showWhisperHint, showOnboarding, aiMode,
+    showWhisper, showSpeak, showWindowManager, showWhisperOnboarding, showWhisperHint, showOnboarding, aiMode,
     openOnboarding, openWhisper, openClipboardManager,
-    openSnippetManager, openFileSearch, openCursorPrompt, openSpeak,
+    openSnippetManager, openFileSearch, openCursorPrompt, openSpeak, openWindowManager,
     setExtensionView, setExtensionPreferenceSetup, setScriptCommandSetup, setScriptCommandOutput,
     setShowClipboardManager, setShowSnippetManager, setShowFileSearch, setShowCursorPrompt,
-    setShowWhisper, setShowSpeak, setShowWhisperOnboarding, setShowWhisperHint,
+    setShowWhisper, setShowSpeak, setShowWindowManager, setShowWhisperOnboarding, setShowWhisperHint,
     setShowOnboarding, setAiMode,
   } = useAppViewManager();
   const {
@@ -171,6 +172,17 @@ const App: React.FC = () => {
     anchor: 'caret',
     onClosed: () => {
       setShowCursorPrompt(false);
+    },
+  });
+
+  const windowManagerPortalTarget = useDetachedPortalWindow(showWindowManager, {
+    name: 'supercmd-window-manager-window',
+    title: 'SuperCmd Window Manager',
+    width: 320,
+    height: 276,
+    anchor: 'top-right',
+    onClosed: () => {
+      setShowWindowManager(false);
     },
   });
 
@@ -340,6 +352,7 @@ const App: React.FC = () => {
         whisperSessionRef.current = false;
         setShowCursorPrompt(false);
         setShowWhisperHint(false);
+        setShowWindowManager(false);
         setMemoryFeedback(null);
         setMemoryActionLoading(false);
         setScriptCommandSetup(null);
@@ -386,6 +399,7 @@ const App: React.FC = () => {
       whisperSessionRef.current = false;
       setShowCursorPrompt(false);
       setShowWhisperHint(false);
+      setShowWindowManager(false);
       setMemoryFeedback(null);
       setMemoryActionLoading(false);
       setScriptCommandSetup(null);
@@ -406,6 +420,7 @@ const App: React.FC = () => {
         setShowCursorPrompt(false);
         setShowWhisper(false);
         setShowSpeak(false);
+        setShowWindowManager(false);
         setShowWhisperOnboarding(false);
       }
 
@@ -425,7 +440,7 @@ const App: React.FC = () => {
       inputRef.current?.focus();
     });
     return cleanupWindowShown;
-  }, [fetchCommands, loadLauncherPreferences, refreshSelectedTextSnapshot, openWhisper, openSpeak, openCursorPrompt, resetCursorPromptState, exitAiMode, setShowCursorPrompt, setShowWhisperHint, setMemoryFeedback, setMemoryActionLoading, setScriptCommandSetup, setScriptCommandOutput, setExtensionView, setSearchQuery, setSelectedIndex, setShowSnippetManager, setShowFileSearch, openClipboardManager, setShowClipboardManager, openSnippetManager, openFileSearch, openOnboarding]);
+  }, [fetchCommands, loadLauncherPreferences, refreshSelectedTextSnapshot, openWhisper, openSpeak, openCursorPrompt, resetCursorPromptState, exitAiMode, setShowCursorPrompt, setShowWhisperHint, setMemoryFeedback, setMemoryActionLoading, setScriptCommandSetup, setScriptCommandOutput, setExtensionView, setSearchQuery, setSelectedIndex, setShowSnippetManager, setShowFileSearch, openClipboardManager, setShowClipboardManager, openSnippetManager, openFileSearch, openOnboarding, setShowWindowManager]);
 
   useEffect(() => {
     const cleanupSelectionSnapshotUpdated = window.electron.onSelectionSnapshotUpdated((payload) => {
@@ -698,10 +713,10 @@ const App: React.FC = () => {
   }, [contextMenu]);
 
   useEffect(() => {
-    if (!showActions && !contextMenu && !aiMode && !extensionView && !showClipboardManager && !showSnippetManager && !showFileSearch && !showCursorPrompt && !showWhisper && !showSpeak && !showOnboarding) {
+    if (!showActions && !contextMenu && !aiMode && !extensionView && !showClipboardManager && !showSnippetManager && !showFileSearch && !showCursorPrompt && !showWhisper && !showSpeak && !showWindowManager && !showOnboarding) {
       restoreLauncherFocus();
     }
-  }, [showActions, contextMenu, aiMode, extensionView, showClipboardManager, showSnippetManager, showFileSearch, showCursorPrompt, showWhisper, showSpeak, showOnboarding, showWhisperOnboarding, restoreLauncherFocus]);
+  }, [showActions, contextMenu, aiMode, extensionView, showClipboardManager, showSnippetManager, showFileSearch, showCursorPrompt, showWhisper, showSpeak, showWindowManager, showOnboarding, showWhisperOnboarding, restoreLauncherFocus]);
 
   const isLauncherModeActive =
     !showActions &&
@@ -714,6 +729,7 @@ const App: React.FC = () => {
     !showCursorPrompt &&
     !showWhisper &&
     !showSpeak &&
+    !showWindowManager &&
     !showOnboarding &&
     !showWhisperOnboarding;
 
@@ -1079,6 +1095,20 @@ const App: React.FC = () => {
       openFileSearch();
       return true;
     }
+    if (commandId === 'system-window-management') {
+      whisperSessionRef.current = false;
+      if (showWindowManager) {
+        setShowWindowManager(false);
+        return true;
+      }
+      openWindowManager();
+      setSearchQuery('');
+      setSelectedIndex(0);
+      try {
+        await window.electron.hideWindow();
+      } catch {}
+      return true;
+    }
     if (commandId === 'system-add-to-memory') {
       if (memoryActionLoading) return true;
       setMemoryActionLoading(true);
@@ -1149,7 +1179,7 @@ const App: React.FC = () => {
       return true;
     }
     return false;
-  }, [memoryActionLoading, selectedTextSnapshot, showMemoryFeedback, showOnboarding, openOnboarding, openWhisper, setShowWhisper, setShowWhisperOnboarding, setShowWhisperHint, openClipboardManager, openSnippetManager, openFileSearch, openSpeak, setShowSpeak]);
+  }, [memoryActionLoading, selectedTextSnapshot, showMemoryFeedback, showOnboarding, showWindowManager, openOnboarding, openWhisper, setShowWhisper, setShowWhisperOnboarding, setShowWhisperHint, openClipboardManager, openSnippetManager, openFileSearch, openSpeak, openWindowManager, setShowSpeak, setShowWindowManager]);
 
   useEffect(() => {
     const cleanup = window.electron.onRunSystemCommand(async (commandId: string) => {
@@ -1548,6 +1578,15 @@ const App: React.FC = () => {
           onClose={() => {
             setShowSpeak(false);
             void window.electron.speakStop();
+          }}
+        />
+      ) : null}
+      {showWindowManager && windowManagerPortalTarget ? (
+        <WindowManagerPanel
+          show={showWindowManager}
+          portalTarget={windowManagerPortalTarget}
+          onClose={() => {
+            setShowWindowManager(false);
           }}
         />
       ) : null}

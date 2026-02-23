@@ -83,6 +83,203 @@ function getNativeBinaryPath(name: string): string {
   return base;
 }
 
+type WindowManagementLayoutItem = {
+  id: string;
+  bounds?: {
+    position?: { x?: number; y?: number };
+    size?: { width?: number; height?: number };
+  };
+};
+type NodeWindowBounds = { x: number; y: number; width: number; height: number };
+type NodeWindowInfo = {
+  id?: number;
+  title?: string;
+  path?: string;
+  processId?: number;
+  bounds?: NodeWindowBounds;
+};
+
+let cachedWindowManagerApi: any | null = null;
+let windowManagerAccessRequested = false;
+let windowManagementTargetWindowId: string | null = null;
+
+function getWindowManagerApi(): any | null {
+  if (cachedWindowManagerApi) return cachedWindowManagerApi;
+  try {
+    const mod = require('node-window-manager');
+    cachedWindowManagerApi = mod?.windowManager || mod;
+    return cachedWindowManagerApi;
+  } catch (error) {
+    console.error('[WindowManager] Failed to load node-window-manager:', error);
+    return null;
+  }
+}
+
+function ensureWindowManagerAccess(): void {
+  const api = getWindowManagerApi();
+  if (!api) return;
+  if (process.platform !== 'darwin') return;
+  if (windowManagerAccessRequested) return;
+  windowManagerAccessRequested = true;
+  try {
+    if (typeof api.requestAccessibility === 'function') {
+      api.requestAccessibility();
+    }
+  } catch (error) {
+    console.warn('[WindowManager] Accessibility request failed:', error);
+  }
+}
+
+function getNodeWindowInfo(win: any): NodeWindowInfo {
+  const info = typeof win?.getInfo === 'function' ? win.getInfo() : {};
+  const bounds = typeof win?.getBounds === 'function' ? win.getBounds() : info?.bounds;
+  const title = info?.title || (typeof win?.getTitle === 'function' ? win.getTitle() : '');
+  const id = info?.id ?? win?.id;
+  const pathValue = info?.path ?? win?.path;
+  const processId = info?.processId ?? win?.processId;
+  return {
+    id: typeof id === 'number' ? id : Number(id),
+    title: String(title || ''),
+    path: String(pathValue || ''),
+    processId: typeof processId === 'number' ? processId : Number(processId),
+    bounds: bounds && typeof bounds === 'object' ? bounds : undefined,
+  };
+}
+
+function toWindowManagementWindowFromNode(win: any, active: boolean): any | null {
+  if (!win) return null;
+  const info = getNodeWindowInfo(win);
+  if (!info.id || !info.bounds) return null;
+  const x = Number(info.bounds.x);
+  const y = Number(info.bounds.y);
+  const width = Number(info.bounds.width);
+  const height = Number(info.bounds.height);
+  if (![x, y, width, height].every((value) => Number.isFinite(value))) return null;
+  const appPath = String(info.path || '');
+  const appName = appPath ? path.basename(appPath).replace(/\\.app$/i, '') : '';
+
+  return {
+    id: String(info.id),
+    title: String(info.title || ''),
+    active,
+    bounds: {
+      position: { x: Math.round(x), y: Math.round(y) },
+      size: { width: Math.round(width), height: Math.round(height) },
+    },
+    desktopId: '1',
+    positionable: true,
+    resizable: true,
+    fullScreenSettable: true,
+    application: {
+      name: appName,
+      path: appPath,
+      bundleId: '',
+    },
+  };
+}
+
+function getNodeWindows(): any[] {
+  const api = getWindowManagerApi();
+  if (!api || typeof api.getWindows !== 'function') return [];
+  try {
+    const windows = api.getWindows();
+    if (!Array.isArray(windows)) return [];
+    return windows.filter((win) => !isSelfManagedWindow(win));
+  } catch {
+    return [];
+  }
+}
+
+function isSelfManagedWindow(win: any): boolean {
+  if (!win) return false;
+  const processId = typeof win.processId === 'number' ? win.processId : Number(win.processId);
+  if (processId && processId === process.pid) return true;
+  const appPath = String(win.path || '');
+  const appName = String(app.getName() || '');
+  if (appPath) {
+    const exePath = app.getPath('exe');
+    if (appPath === exePath) return true;
+    if (appName && appPath.includes(`${appName}.app`)) return true;
+    if (appPath.includes('SuperCmd.app')) return true;
+  }
+  let title = '';
+  try {
+    if (typeof win.getTitle === 'function') {
+      title = String(win.getTitle() || '');
+    }
+  } catch {}
+  if (title.toLowerCase().includes('supercmd')) return true;
+  return false;
+}
+
+function captureWindowManagementTargetWindow(): void {
+  const api = getWindowManagerApi();
+  if (!api || typeof api.getActiveWindow !== 'function') return;
+  try {
+    const win = api.getActiveWindow();
+    if (!win || isSelfManagedWindow(win)) return;
+    const info = getNodeWindowInfo(win);
+    if (info?.id) {
+      windowManagementTargetWindowId = String(info.id);
+    }
+  } catch (error) {
+    console.warn('[WindowManager] Failed to capture target window:', error);
+  }
+}
+
+function findNodeWindowById(id: string, windows?: any[]): any | null {
+  const numericId = Number(id);
+  const list = windows || getNodeWindows();
+  return list.find((win) => {
+    const winId = typeof win?.id === 'number' ? win.id : Number(win?.id);
+    if (Number.isFinite(winId)) return winId === numericId;
+    const info = getNodeWindowInfo(win);
+    return Number(info.id) === numericId;
+  }) || null;
+}
+
+function matchNodeWindowForFrontmost(windows: any[]): any | null {
+  const appPath = String(lastFrontmostApp?.path || '').trim();
+  if (appPath) {
+    const match = windows.find((win) => {
+      const info = getNodeWindowInfo(win);
+      return String(info.path || '') === appPath;
+    });
+    if (match) return match;
+  }
+  const appName = String(lastFrontmostApp?.name || '').trim().toLowerCase();
+  if (appName) {
+    const match = windows.find((win) => {
+      const info = getNodeWindowInfo(win);
+      const title = String(info.title || '').toLowerCase();
+      const pathValue = String(info.path || '').toLowerCase();
+      return title.includes(appName) || pathValue.includes(appName);
+    });
+    if (match) return match;
+  }
+  return null;
+}
+
+function getNodeSnapshot(): { target: any | null; windows: any[] } {
+  const api = getWindowManagerApi();
+  if (!api) return { target: null, windows: [] };
+  const windows = getNodeWindows();
+  let target: any | null = null;
+  if (windowManagementTargetWindowId) {
+    target = findNodeWindowById(windowManagementTargetWindowId, windows);
+  }
+  if (!target) {
+    target = matchNodeWindowForFrontmost(windows);
+  }
+  if (!target && typeof api.getActiveWindow === 'function') {
+    const active = api.getActiveWindow();
+    if (active && !isSelfManagedWindow(active)) {
+      target = active;
+    }
+  }
+  return { target, windows };
+}
+
 // ─── Window Configuration ───────────────────────────────────────────
 
 const DEFAULT_WINDOW_WIDTH = 800;
@@ -98,6 +295,7 @@ const WHISPER_WINDOW_HEIGHT = 84;
 const DETACHED_WHISPER_WINDOW_NAME = 'supercmd-whisper-window';
 const DETACHED_WHISPER_ONBOARDING_WINDOW_NAME = 'supercmd-whisper-onboarding-window';
 const DETACHED_SPEAK_WINDOW_NAME = 'supercmd-speak-window';
+const DETACHED_WINDOW_MANAGER_WINDOW_NAME = 'supercmd-window-manager-window';
 const DETACHED_PROMPT_WINDOW_NAME = 'supercmd-prompt-window';
 const DETACHED_MEMORY_STATUS_WINDOW_NAME = 'supercmd-memory-status-window';
 const DETACHED_WINDOW_QUERY_KEY = 'sc_detached';
@@ -134,17 +332,20 @@ function resolveDetachedPopupName(details: any): string | null {
     byFrameName === DETACHED_WHISPER_WINDOW_NAME ||
     byFrameName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME ||
     byFrameName === DETACHED_SPEAK_WINDOW_NAME ||
+    byFrameName === DETACHED_WINDOW_MANAGER_WINDOW_NAME ||
     byFrameName === DETACHED_PROMPT_WINDOW_NAME ||
     byFrameName === DETACHED_MEMORY_STATUS_WINDOW_NAME ||
     byFrameName.startsWith(`${DETACHED_WHISPER_WINDOW_NAME}-`) ||
     byFrameName.startsWith(`${DETACHED_WHISPER_ONBOARDING_WINDOW_NAME}-`) ||
     byFrameName.startsWith(`${DETACHED_SPEAK_WINDOW_NAME}-`) ||
+    byFrameName.startsWith(`${DETACHED_WINDOW_MANAGER_WINDOW_NAME}-`) ||
     byFrameName.startsWith(`${DETACHED_PROMPT_WINDOW_NAME}-`) ||
     byFrameName.startsWith(`${DETACHED_MEMORY_STATUS_WINDOW_NAME}-`)
   ) {
     if (byFrameName.startsWith(DETACHED_WHISPER_WINDOW_NAME)) return DETACHED_WHISPER_WINDOW_NAME;
     if (byFrameName.startsWith(DETACHED_WHISPER_ONBOARDING_WINDOW_NAME)) return DETACHED_WHISPER_ONBOARDING_WINDOW_NAME;
     if (byFrameName.startsWith(DETACHED_SPEAK_WINDOW_NAME)) return DETACHED_SPEAK_WINDOW_NAME;
+    if (byFrameName.startsWith(DETACHED_WINDOW_MANAGER_WINDOW_NAME)) return DETACHED_WINDOW_MANAGER_WINDOW_NAME;
     if (byFrameName.startsWith(DETACHED_PROMPT_WINDOW_NAME)) return DETACHED_PROMPT_WINDOW_NAME;
     if (byFrameName.startsWith(DETACHED_MEMORY_STATUS_WINDOW_NAME)) return DETACHED_MEMORY_STATUS_WINDOW_NAME;
     return byFrameName;
@@ -158,6 +359,7 @@ function resolveDetachedPopupName(details: any): string | null {
       byQuery === DETACHED_WHISPER_WINDOW_NAME ||
       byQuery === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME ||
       byQuery === DETACHED_SPEAK_WINDOW_NAME ||
+      byQuery === DETACHED_WINDOW_MANAGER_WINDOW_NAME ||
       byQuery === DETACHED_PROMPT_WINDOW_NAME ||
       byQuery === DETACHED_MEMORY_STATUS_WINDOW_NAME
     ) {
@@ -177,6 +379,13 @@ function computeDetachedPopupPosition(
   const workArea = display?.workArea || screen.getPrimaryDisplay().workArea;
 
   if (popupName === DETACHED_SPEAK_WINDOW_NAME) {
+    return {
+      x: workArea.x + workArea.width - width - 20,
+      y: workArea.y + 16,
+    };
+  }
+
+  if (popupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME) {
     return {
       x: workArea.x + workArea.width - width - 20,
       y: workArea.y + 16,
@@ -2977,6 +3186,8 @@ function createWindow(): void {
       ? 272
       : detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME
         ? 920
+      : detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME
+        ? 320
       : detachedPopupName === DETACHED_PROMPT_WINDOW_NAME
         ? CURSOR_PROMPT_WINDOW_WIDTH
       : detachedPopupName === DETACHED_MEMORY_STATUS_WINDOW_NAME
@@ -2986,6 +3197,8 @@ function createWindow(): void {
       ? 52
       : detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME
         ? 640
+      : detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME
+        ? 276
       : detachedPopupName === DETACHED_PROMPT_WINDOW_NAME
         ? CURSOR_PROMPT_WINDOW_HEIGHT
       : detachedPopupName === DETACHED_MEMORY_STATUS_WINDOW_NAME
@@ -3007,9 +3220,11 @@ function createWindow(): void {
           detachedPopupName === DETACHED_WHISPER_WINDOW_NAME
             ? 'SuperCmd Whisper'
             : detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME
-              ? 'SuperCmd Whisper Onboarding'
+            ? 'SuperCmd Whisper Onboarding'
             : detachedPopupName === DETACHED_PROMPT_WINDOW_NAME
               ? 'SuperCmd Prompt'
+              : detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME
+                ? 'SuperCmd Window Manager'
               : detachedPopupName === DETACHED_MEMORY_STATUS_WINDOW_NAME
                 ? 'SuperCmd Status'
               : 'SuperCmd Read',
@@ -3706,6 +3921,7 @@ async function showWindow(options?: { systemCommandId?: string }): Promise<void>
   // Skip during onboarding to avoid any focus-stealing side effects during setup.
   if (launcherMode !== 'onboarding') {
     captureFrontmostAppContext();
+    captureWindowManagementTargetWindow();
     // Snapshot selected text before launcher focus changes the active app.
     // Clipboard fallback is enabled so selection works in apps that do not
     // expose AXSelectedText.
@@ -4209,6 +4425,9 @@ async function openLauncherAndRunSystemCommand(
   const showLauncher = options?.showWindow !== false;
   const preserveFocusWhenHidden = options?.preserveFocusWhenHidden ?? !showLauncher;
 
+  if (commandId === 'system-window-management') {
+    captureWindowManagementTargetWindow();
+  }
   if (preserveFocusWhenHidden) {
     captureFrontmostAppContext();
   }
@@ -4504,6 +4723,13 @@ async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' =
     return await openLauncherAndRunSystemCommand('system-supercmd-whisper', {
       showWindow: source === 'launcher',
       mode: launcherMode === 'onboarding' ? 'onboarding' : 'default',
+    });
+  }
+  if (commandId === 'system-window-management') {
+    return await openLauncherAndRunSystemCommand(commandId, {
+      showWindow: false,
+      mode: launcherMode === 'onboarding' ? 'onboarding' : 'default',
+      preserveFocusWhenHidden: launcherMode !== 'onboarding',
     });
   }
   if (commandId === 'system-import-snippets') {
@@ -8641,105 +8867,48 @@ return appURL's |path|() as text`,
 
   ipcMain.handle('window-management-get-active-window', async () => {
     try {
-      const { execSync } = require('child_process');
-      const script = `
-        tell application "System Events"
-          set frontApp to first application process whose frontmost is true
-          set frontAppName to name of frontApp
-          set frontWindow to window 1 of frontApp
-
-          set windowBounds to bounds of frontWindow
-          set windowId to id of frontWindow as text
-          set windowTitle to name of frontWindow
-          set windowPosition to {item 1 of windowBounds, item 2 of windowBounds}
-          set windowSize to {(item 3 of windowBounds) - (item 1 of windowBounds), (item 4 of windowBounds) - (item 2 of windowBounds)}
-
-          return windowId & "|" & windowTitle & "|" & (item 1 of windowPosition) & "|" & (item 2 of windowPosition) & "|" & (item 1 of windowSize) & "|" & (item 2 of windowSize) & "|" & frontAppName
-        end tell
-      `;
-
-      const result = execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { encoding: 'utf-8' }).trim();
-      const [id, title, x, y, width, height, appName] = result.split('|');
-
-      return {
-        id,
-        active: true,
-        bounds: {
-          position: { x: parseInt(x), y: parseInt(y) },
-          size: { width: parseInt(width), height: parseInt(height) }
-        },
-        desktopId: '1',
-        positionable: true,
-        resizable: true,
-        fullScreenSettable: true,
-        application: {
-          name: appName,
-          path: '',
-          bundleId: ''
-        }
-      };
+      const api = getWindowManagerApi();
+      if (!api || typeof api.getActiveWindow !== 'function') return null;
+      const win = api.getActiveWindow();
+      return toWindowManagementWindowFromNode(win, true);
     } catch (error) {
       console.error('Failed to get active window:', error);
       return null;
     }
   });
 
+  ipcMain.handle('window-management-get-target-window', async () => {
+    try {
+      const snapshot = getNodeSnapshot();
+      if (snapshot.target) {
+        return toWindowManagementWindowFromNode(snapshot.target, true);
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to get target window:', error);
+      return null;
+    }
+  });
+
   ipcMain.handle('window-management-get-windows-on-active-desktop', async () => {
     try {
-      const { execSync } = require('child_process');
-      const script = `
-        tell application "System Events"
-          set windowList to {}
-          repeat with proc in (every application process where background only is false)
-            try
-              set procName to name of proc
-              repeat with win in (every window of proc)
-                set windowBounds to bounds of win
-                set windowId to id of win as text
-                set windowTitle to name of win
-                set windowPosition to {item 1 of windowBounds, item 2 of windowBounds}
-                set windowSize to {(item 3 of windowBounds) - (item 1 of windowBounds), (item 4 of windowBounds) - (item 2 of windowBounds)}
-
-                set end of windowList to windowId & "|" & windowTitle & "|" & (item 1 of windowPosition) & "|" & (item 2 of windowPosition) & "|" & (item 1 of windowSize) & "|" & (item 2 of windowSize) & "|" & procName
-              end repeat
-            end try
-          end repeat
-
-          set text item delimiters to "\\n"
-          return windowList as text
-        end tell
-      `;
-
-      const result = execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { encoding: 'utf-8' }).trim();
-      if (!result || result.trim() === '') {
-        return [];
-      }
-
-      const windows = result.split('\n').map((line: string) => {
-        const [id, title, x, y, width, height, appName] = line.split('|');
-        return {
-          id,
-          active: false,
-          bounds: {
-            position: { x: parseInt(x), y: parseInt(y) },
-            size: { width: parseInt(width), height: parseInt(height) }
-          },
-          desktopId: '1',
-          positionable: true,
-          resizable: true,
-          fullScreenSettable: true,
-          application: {
-            name: appName,
-            path: '',
-            bundleId: ''
-          }
-        };
-      });
-
-      return windows;
+      const windows = getNodeWindows();
+      return windows.map((win) => toWindowManagementWindowFromNode(win, false)).filter(Boolean);
     } catch (error) {
       console.error('Failed to get windows:', error);
       return [];
+    }
+  });
+
+  ipcMain.handle('window-management-snapshot', async () => {
+    try {
+      const snapshot = getNodeSnapshot();
+      const target = snapshot.target ? toWindowManagementWindowFromNode(snapshot.target, true) : null;
+      const windows = snapshot.windows.map((win) => toWindowManagementWindowFromNode(win, false)).filter(Boolean);
+      return { target, windows };
+    } catch (error) {
+      console.error('Failed to get window snapshot:', error);
+      return { target: null, windows: [] };
     }
   });
 
@@ -8768,18 +8937,17 @@ return appURL's |path|() as text`,
 
   ipcMain.handle('window-management-set-window-bounds', async (_event: any, options: any) => {
     try {
-      const { execSync } = require('child_process');
       const { id, bounds, desktopId } = options;
+      if (!id) throw new Error('Missing window id');
+      ensureWindowManagerAccess();
 
       if (bounds === 'fullscreen') {
-        // Set window to fullscreen
-        const script = `
-          tell application "System Events"
-            set targetWindow to (first window of (first application process whose (id of window 1) as text is "${id}"))
-            set value of attribute "AXFullScreen" of targetWindow to true
-          end tell
-        `;
-        execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { encoding: 'utf-8' });
+        const { screen: electronScreen } = require('electron');
+        const display = electronScreen.getDisplayNearestPoint(electronScreen.getCursorScreenPoint());
+        const area = display?.workArea || electronScreen.getPrimaryDisplay().workArea;
+        const win = findNodeWindowById(String(id));
+        if (!win || typeof win.setBounds !== 'function') throw new Error('Window not found');
+        win.setBounds({ x: area.x, y: area.y, width: area.width, height: area.height });
       } else {
         // Set window position/size
         const { position, size } = bounds;
@@ -8797,24 +8965,74 @@ return appURL's |path|() as text`,
           }
         }
 
-        let script = 'tell application "System Events"\n';
-        script += `  set targetWindow to (first window of (first application process whose (id of window 1) as text is "${id}"))\n`;
+        const win = findNodeWindowById(String(id));
+        if (!win || typeof win.setBounds !== 'function') throw new Error('Window not found');
+        const currentBounds = typeof win.getBounds === 'function' ? win.getBounds() : null;
+        const baseX = Number(currentBounds?.x ?? 0);
+        const baseY = Number(currentBounds?.y ?? 0);
+        const baseWidth = Number(currentBounds?.width ?? 400);
+        const baseHeight = Number(currentBounds?.height ?? 300);
 
-        if (position && size) {
-          const x = (position.x ?? 0) + offsetX;
-          const y = (position.y ?? 0) + offsetY;
-          script += `  set bounds of targetWindow to {${x}, ${y}, ${x + (size.width ?? 0)}, ${y + (size.height ?? 0)}}\n`;
-        } else if (position) {
-          script += `  set position of targetWindow to {${(position.x ?? 0) + offsetX}, ${(position.y ?? 0) + offsetY}}\n`;
-        } else if (size) {
-          script += `  set size of targetWindow to {${size.width}, ${size.height}}\n`;
-        }
+        const x = (position?.x ?? baseX) + offsetX;
+        const y = (position?.y ?? baseY) + offsetY;
+        const width = size?.width ?? baseWidth;
+        const height = size?.height ?? baseHeight;
 
-        script += 'end tell';
-        execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { encoding: 'utf-8' });
+        win.setBounds({
+          x: Math.round(x),
+          y: Math.round(y),
+          width: Math.max(1, Math.round(width)),
+          height: Math.max(1, Math.round(height)),
+        });
       }
     } catch (error) {
       console.error('Failed to set window bounds:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('window-management-set-window-layout', async (_event: any, items: WindowManagementLayoutItem[]) => {
+    try {
+      ensureWindowManagerAccess();
+      const normalized = (Array.isArray(items) ? items : [])
+        .map((entry) => {
+          const id = String(entry?.id || '').trim();
+          const x = Number(entry?.bounds?.position?.x);
+          const y = Number(entry?.bounds?.position?.y);
+          const width = Number(entry?.bounds?.size?.width);
+          const height = Number(entry?.bounds?.size?.height);
+          if (!id) return null;
+          if (![x, y, width, height].every((v) => Number.isFinite(v))) return null;
+          return {
+            id,
+            x: Math.round(x),
+            y: Math.round(y),
+            width: Math.max(1, Math.round(width)),
+            height: Math.max(1, Math.round(height)),
+          };
+        })
+        .filter(Boolean) as Array<{ id: string; x: number; y: number; width: number; height: number }>;
+      if (normalized.length === 0) return;
+      const windows = getNodeWindows();
+      const windowMap = new Map<string, any>();
+      windows.forEach((win) => {
+        const info = getNodeWindowInfo(win);
+        if (info?.id !== undefined) {
+          windowMap.set(String(info.id), win);
+        }
+      });
+      for (const entry of normalized) {
+        const win = windowMap.get(entry.id);
+        if (!win || typeof win.setBounds !== 'function') continue;
+        win.setBounds({
+          x: entry.x,
+          y: entry.y,
+          width: entry.width,
+          height: entry.height,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to set window layout:', error);
       throw error;
     }
   });

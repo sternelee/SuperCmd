@@ -304,6 +304,15 @@ export interface ElectronAPI {
   edgeTtsListVoices: () => Promise<EdgeTtsVoice[]>;
   elevenLabsListVoices: () => Promise<{ voices: ElevenLabsVoice[]; error?: string }>;
 
+  // Window Management
+  getActiveWindow: () => Promise<any>;
+  getWindowManagementTargetWindow: () => Promise<any>;
+  getWindowsOnActiveDesktop: () => Promise<any[]>;
+  getDesktops: () => Promise<any[]>;
+  setWindowBounds: (options: any) => Promise<void>;
+  setWindowLayout: (items: any[]) => Promise<void>;
+  getWindowManagementSnapshot: () => Promise<any>;
+
   // Settings
   getSettings: () => Promise<AppSettings>;
   getGlobalShortcutStatus: () => Promise<{

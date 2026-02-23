@@ -44,6 +44,7 @@
     "esbuild": "^0.19.12",
     "lucide-react": "^0.312.0",
     "node-edge-tts": "^1.2.10",
+    "node-window-manager": "^2.2.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
@@ -67,7 +68,8 @@
       "dist/native/**",
       "node_modules/esbuild/**",
       "node_modules/@esbuild/**",
-      "node_modules/node-edge-tts/**"
+      "node_modules/node-edge-tts/**",
+      "node_modules/node-window-manager/**"
     ],
     "directories": {
       "output": "out"
