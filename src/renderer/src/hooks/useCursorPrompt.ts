@@ -171,7 +171,7 @@ export function useCursorPrompt({
     cursorPromptResultRef.current = '';
     cursorPromptSourceTextRef.current = '';
 
-    const selectedText = String(await window.electron.getSelectedText()).trim();
+    const selectedText = String(await window.electron.getSelectedTextStrict()).trim();
     const hasSelection = selectedText.length > 0;
     if (hasSelection) {
       setCursorPromptSourceText(selectedText);

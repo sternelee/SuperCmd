@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, ArrowRight, Loader2 } from 'lucide-react';
+import { X, Sparkles, ArrowRight } from 'lucide-react';
 import type { CommandInfo, ExtensionBundle, AppSettings } from '../types/electron';
 import ExtensionView from './ExtensionView';
 import ClipboardManager from './ClipboardManager';
@@ -27,7 +27,7 @@ import { useSpeakManager } from './hooks/useSpeakManager';
 import { useWhisperManager } from './hooks/useWhisperManager';
 import { LAST_EXT_KEY, MAX_RECENT_COMMANDS } from './utils/constants';
 import { applyBaseColor } from './utils/base-color';
-import { resetAccessToken, showToast } from './raycast-api';
+import { resetAccessToken } from './raycast-api';
 import {
   type LauncherAction, type MemoryFeedback,
   filterCommands, formatShortcutLabel, getCategoryLabel,
@@ -790,9 +790,17 @@ const App: React.FC = () => {
   // When calculator is showing but no commands match, show unfiltered list below
   const sourceCommands =
     calcResult && filteredCommands.length === 0 ? contextualCommands : filteredCommands;
+  const hiddenListOnlyCommandIds = useMemo(
+    () => new Set(['system-add-to-memory', 'system-cursor-prompt']),
+    []
+  );
+  const visibleSourceCommands = useMemo(
+    () => sourceCommands.filter((cmd) => !hiddenListOnlyCommandIds.has(cmd.id)),
+    [sourceCommands, hiddenListOnlyCommandIds]
+  );
 
   const groupedCommands = useMemo(() => {
-    const sourceMap = new Map(sourceCommands.map((cmd) => [cmd.id, cmd]));
+    const sourceMap = new Map(visibleSourceCommands.map((cmd) => [cmd.id, cmd]));
     const hasSelection = selectedTextSnapshot.trim().length > 0;
     const contextual = hasSelection
       ? (sourceMap.get('system-add-to-memory') ? [sourceMap.get('system-add-to-memory') as CommandInfo] : [])
@@ -814,12 +822,12 @@ const App: React.FC = () => {
       );
     const recentSet = new Set(recent.map((c) => c.id));
 
-    const other = sourceCommands.filter(
+    const other = visibleSourceCommands.filter(
       (c) => !pinnedSet.has(c.id) && !recentSet.has(c.id) && !contextualIds.has(c.id)
     );
 
     return { contextual, pinned, recent, other };
-  }, [sourceCommands, pinnedCommands, recentCommands, selectedTextSnapshot]);
+  }, [visibleSourceCommands, pinnedCommands, recentCommands, selectedTextSnapshot]);
 
   const displayCommands = useMemo(
     () => [
@@ -1075,11 +1083,12 @@ const App: React.FC = () => {
       if (memoryActionLoading) return true;
       setMemoryActionLoading(true);
       setMemoryFeedback(null);
-      const selectedText = String(await window.electron.getSelectedTextStrict() || '').trim();
+      const selectedText = String(
+        await window.electron.getSelectedTextStrict() || selectedTextSnapshot || ''
+      ).trim();
       if (!selectedText) {
         setSelectedTextSnapshot('');
         setMemoryActionLoading(false);
-        showMemoryFeedback('error', 'No selected text found.');
         return true;
       }
       try {
@@ -1089,13 +1098,11 @@ const App: React.FC = () => {
         });
         if (!result.success) {
           console.error('[Supermemory] Failed to add memory:', result.error || 'Unknown error');
-          showMemoryFeedback('error', result.error || 'Failed to add to memory.');
           return true;
         }
         setSelectedTextSnapshot('');
         setSearchQuery('');
         setSelectedIndex(0);
-        showMemoryFeedback('success', 'Added selected text to memory.');
       } finally {
         setMemoryActionLoading(false);
       }
@@ -1138,22 +1145,11 @@ const App: React.FC = () => {
       return true;
     }
     if (commandId === 'system-check-for-updates') {
-      const result = await window.electron.appUpdaterCheckAndInstall();
-      if (result.success) {
-        if (result.state === 'restarting') {
-          await showToast({ title: 'Restarting to install update...', style: 'success' });
-        } else if (result.message) {
-          await showToast({ title: result.message, style: 'success' });
-        } else {
-          await showToast({ title: 'Already up to date!', style: 'success' });
-        }
-      } else {
-        await showToast({ title: result.error || 'Update check failed', style: 'failure' });
-      }
+      await window.electron.appUpdaterCheckAndInstall();
       return true;
     }
     return false;
-  }, [memoryActionLoading, showMemoryFeedback, showOnboarding, openOnboarding, openWhisper, setShowWhisper, setShowWhisperOnboarding, setShowWhisperHint, openClipboardManager, openSnippetManager, openFileSearch, openSpeak, setShowSpeak]);
+  }, [memoryActionLoading, selectedTextSnapshot, showMemoryFeedback, showOnboarding, openOnboarding, openWhisper, setShowWhisper, setShowWhisperOnboarding, setShowWhisperHint, openClipboardManager, openSnippetManager, openFileSearch, openSpeak, setShowSpeak]);
 
   useEffect(() => {
     const cleanup = window.electron.onRunSystemCommand(async (commandId: string) => {
@@ -2008,33 +2004,18 @@ const App: React.FC = () => {
             className="sc-glass-footer sc-launcher-footer absolute bottom-0 left-0 right-0 z-10 flex items-center px-4 py-2.5"
           >
             <div
-              className={`flex items-center gap-2 text-xs flex-1 min-w-0 font-normal truncate ${
-                memoryActionLoading
-                  ? 'text-[var(--text-muted)]'
-                  : memoryFeedback
-                  ? memoryFeedback.type === 'success'
-                    ? 'text-emerald-300'
-                    : 'text-red-300'
-                  : 'text-[var(--text-subtle)]'
-              }`}
+              className="flex items-center gap-2 text-xs flex-1 min-w-0 font-normal truncate text-[var(--text-subtle)]"
             >
-              {memoryActionLoading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
-                  <span>Adding to memory...</span>
-                </>
-              ) : memoryFeedback
-                ? memoryFeedback.text
-                : selectedCommand
-                  ? (
-                    <>
-                      <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        {renderCommandIcon(selectedCommand)}
-                      </span>
-                      <span className="truncate">{getCommandDisplayTitle(selectedCommand)}</span>
-                    </>
-                  )
-                  : `${displayCommands.length} results`}
+              {selectedCommand
+                ? (
+                  <>
+                    <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {renderCommandIcon(selectedCommand)}
+                    </span>
+                    <span className="truncate">{getCommandDisplayTitle(selectedCommand)}</span>
+                  </>
+                )
+                : `${displayCommands.length} results`}
             </div>
             {selectedActions[0] && (
               <div className="flex items-center gap-2 mr-3">
