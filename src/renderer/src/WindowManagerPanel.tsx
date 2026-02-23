@@ -641,6 +641,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
   const previewLoopRunningRef = useRef(false);
   const pendingPreviewRef = useRef<{ presetId: PresetId; force?: boolean } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const liquidHighlightRef = useRef<HTMLDivElement | null>(null);
   const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const inventoryInFlightRef = useRef<Promise<ManagedWindow[]> | null>(null);
   const lastInventoryAtRef = useRef(0);
@@ -894,226 +895,297 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
     return () => hostWindow.removeEventListener('blur', onBlur);
   }, [show, hostWindow, onClose]);
 
+  const handleGlassMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const highlight = liquidHighlightRef.current;
+    if (!highlight) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    highlight.style.opacity = '0.58';
+    highlight.style.transform = `translate3d(${Math.round(x - 130)}px, ${Math.round(y - 130)}px, 0)`;
+  }, []);
+
+  const handleGlassMouseLeave = useCallback(() => {
+    const highlight = liquidHighlightRef.current;
+    if (!highlight) return;
+    highlight.style.opacity = '0';
+  }, []);
+
   if (!show || !portalTarget) return null;
 
   return createPortal(
     <div
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
-      style={{
-        width: '100%',
-        height: '100%',
-        padding: 8,
-        boxSizing: 'border-box',
-        fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif',
-        color: 'rgba(255,255,255,0.96)',
-        background: 'transparent',
-      }}
-    >
-      <div
-        onMouseDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            onClose();
+          }
+        }}
         style={{
+          width: '100%',
           height: '100%',
-          borderRadius: 16,
-          border: '1px solid rgba(255,255,255,0.16)',
-          background:
-            'linear-gradient(160deg, rgba(255,255,255,0.08), rgba(255,255,255,0.01)), rgba(46,46,46,0.34)',
-          boxShadow: '0 18px 44px rgba(0,0,0,0.20)',
-          backdropFilter: 'blur(64px) saturate(185%)',
-          WebkitBackdropFilter: 'blur(64px) saturate(185%)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
+          padding: 0,
+          boxSizing: 'border-box',
+          fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif',
+          color: 'rgba(255,255,255,0.96)',
+          background: 'transparent',
         }}
       >
         <div
+          onMouseDown={(event) => event.stopPropagation()}
+          onMouseMove={handleGlassMouseMove}
+          onMouseLeave={handleGlassMouseLeave}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-            padding: '8px 12px',
-            borderBottom: '1px solid rgba(255,255,255,0.14)',
-            background: 'rgba(255,255,255,0.04)',
+            width: '100%',
+            height: '100%',
+            borderRadius: 20,
+            border: '1px solid rgba(255,255,255,0.20)',
+            background: 'rgba(34,34,38,0.34)',
+            boxShadow: [
+              '0 22px 44px -14px rgba(0,0,0,0.34)',
+              'inset 0 3px 20px rgba(255,255,255,0.17)',
+              'inset 0 -3px 18px rgba(0,0,0,0.20)',
+            ].join(', '),
+            backdropFilter: 'blur(34px) saturate(185%)',
+            WebkitBackdropFilter: 'blur(34px) saturate(185%)',
+            position: 'relative',
+            overflow: 'hidden',
+            isolation: 'isolate',
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: 0.3,
-                textTransform: 'uppercase',
-                color: 'rgba(255,255,255,0.92)',
-              }}
-            >
-              Window Management
-            </div>
-            <div
-              style={{
-                marginTop: 4,
-                fontSize: 10.5,
-                color: 'rgba(255,255,255,0.66)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: 210,
-              }}
-            >
-              {statusText}
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { void loadWindowsForLayout(true); }}
-              title="Refresh windows"
-              style={{
-                fontSize: 10.5,
-                color: 'rgba(255,255,255,0.88)',
-                cursor: 'pointer',
-                padding: '3px 6px',
-                borderRadius: 6,
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.14)',
-                userSelect: 'none',
-              }}
-            >
-              Refresh
-            </div>
-            <div
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={onClose}
-              aria-label="Close"
-              title="Close"
-              style={{
-                width: 22,
-                height: 22,
-                display: 'grid',
-                placeItems: 'center',
-                fontSize: 14,
-                lineHeight: 1,
-                borderRadius: 6,
-                color: 'rgba(255,255,255,0.9)',
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.14)',
-                cursor: 'pointer',
-                userSelect: 'none',
-              }}
-            >
-              ×
-            </div>
-          </div>
-        </div>
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: 1,
+              borderRadius: 19,
+              background: 'rgba(255,255,255,0.01)',
+              boxShadow: [
+                'inset 0 1px 0 rgba(255,255,255,0.12)',
+                'inset 0 0 0 1px rgba(255,255,255,0.03)',
+              ].join(', '),
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          />
+          <div
+            ref={liquidHighlightRef}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: 260,
+              height: 260,
+              borderRadius: '50%',
+              background:
+                'radial-gradient(circle, rgba(255,255,255,0.34) 8%, rgba(255,255,255,0.16) 30%, transparent 70%)',
+              filter: 'blur(34px)',
+              opacity: 0,
+              transform: 'translate3d(-400px, -400px, 0)',
+              transition: 'opacity 140ms ease-out',
+              mixBlendMode: 'screen',
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          />
 
-        <div
-          ref={listRef}
-          role="listbox"
-          tabIndex={0}
-          aria-label="Window management presets"
-          onWheel={(event) => {
-            event.preventDefault();
-            const delta = event.deltaY || 0;
-            if (!delta) return;
-            const nextIndex = selectedIndex < 0
-              ? (delta > 0 ? 0 : PRESETS.length - 1)
-              : (selectedIndex + (delta > 0 ? 1 : -1) + PRESETS.length) % PRESETS.length;
-            setSelectedIndex(nextIndex);
-            const preset = PRESETS[nextIndex];
-            if (preset) queuePreview(preset.id);
-          }}
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            outline: 'none',
-            padding: '4px 0',
-          }}
-        >
-          {PRESETS.map((preset, index) => {
-            const isSelected = index === selectedIndex;
-            const isApplied = appliedPreset === preset.id;
-            const iconColor = isSelected ? 'rgba(255,255,255,0.96)' : 'rgba(255,255,255,0.62)';
-            return (
-              <div
-                key={preset.id}
-                ref={(node) => { optionRefs.current[index] = node; }}
-                role="option"
-                aria-selected={isSelected}
-                onMouseEnter={() => {
-                  setSelectedIndex(index);
-                }}
-                onMouseMove={() => {
-                  if (selectedIndex !== index) {
-                    setSelectedIndex(index);
-                  }
-                }}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setSelectedIndex(index);
-                  void (async () => {
-                    await applyPresetNow(preset.id, { force: true });
-                    onClose();
-                  })();
-                }}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '28px 1fr auto',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '9px 12px',
-                  minHeight: 38,
-                  borderRadius: 0,
-                  background: isSelected ? 'rgba(255,255,255,0.18)' : 'transparent',
-                  borderLeft: isSelected ? '2px solid rgba(255,255,255,0.85)' : '2px solid transparent',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
-                  cursor: 'default',
-                  userSelect: 'none',
-                }}
-                title={preset.label}
-              >
-                <div style={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', color: iconColor }}>
-                  {renderPresetIcon(preset.id)}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.96)' }}>{preset.label}</div>
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 2,
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                padding: '8px 12px',
+                borderBottom: '1px solid rgba(255,255,255,0.12)',
+                background: 'rgba(255,255,255,0.03)',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 0.3,
+                    textTransform: 'uppercase',
+                    color: 'rgba(255,255,255,0.92)',
+                  }}
+                >
+                  Window Management
                 </div>
                 <div
                   style={{
-                    fontSize: 9.5,
-                    color: isApplied ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.42)',
-                    letterSpacing: 0.25,
-                    textTransform: 'uppercase',
+                    marginTop: 4,
+                    fontSize: 10.5,
+                    color: 'rgba(255,255,255,0.66)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: 210,
                   }}
                 >
-                  {isApplied ? 'live' : ''}
+                  {statusText}
                 </div>
               </div>
-            );
-          })}
-        </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { void loadWindowsForLayout(true); }}
+                  title="Refresh windows"
+                  style={{
+                    fontSize: 10.5,
+                    color: 'rgba(255,255,255,0.88)',
+                    cursor: 'pointer',
+                    padding: '3px 6px',
+                    borderRadius: 10,
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.16)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
+                    userSelect: 'none',
+                  }}
+                >
+                  Refresh
+                </div>
+                <div
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={onClose}
+                  aria-label="Close"
+                  title="Close"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontSize: 14,
+                    lineHeight: 1,
+                    borderRadius: 10,
+                    color: 'rgba(255,255,255,0.9)',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.16)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                  }}
+                >
+                  ×
+                </div>
+              </div>
+            </div>
 
-        <div
-          style={{
-            minHeight: 42,
-            padding: '8px 12px 10px',
-            borderTop: '1px solid rgba(255,255,255,0.14)',
-            background: 'rgba(255,255,255,0.035)',
-            color: 'rgba(255,255,255,0.76)',
-            fontSize: 10.5,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}
-        >
-          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{windowsOnScreen.length} windows</span>
-          <span style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}>Scroll · ↑↓ · Enter</span>
+            <div
+              ref={listRef}
+              role="listbox"
+              tabIndex={0}
+              aria-label="Window management presets"
+              onWheel={(event) => {
+                event.preventDefault();
+                const delta = event.deltaY || 0;
+                if (!delta) return;
+                const nextIndex = selectedIndex < 0
+                  ? (delta > 0 ? 0 : PRESETS.length - 1)
+                  : (selectedIndex + (delta > 0 ? 1 : -1) + PRESETS.length) % PRESETS.length;
+                setSelectedIndex(nextIndex);
+                const preset = PRESETS[nextIndex];
+                if (preset) queuePreview(preset.id);
+              }}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                outline: 'none',
+                padding: '4px 0',
+              }}
+            >
+              {PRESETS.map((preset, index) => {
+                const isSelected = index === selectedIndex;
+                const isApplied = appliedPreset === preset.id;
+                const iconColor = isSelected ? 'rgba(255,255,255,0.96)' : 'rgba(255,255,255,0.62)';
+                return (
+                  <div
+                    key={preset.id}
+                    ref={(node) => { optionRefs.current[index] = node; }}
+                    role="option"
+                    aria-selected={isSelected}
+                    onMouseEnter={() => {
+                      setSelectedIndex(index);
+                    }}
+                    onMouseMove={() => {
+                      if (selectedIndex !== index) {
+                        setSelectedIndex(index);
+                      }
+                    }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setSelectedIndex(index);
+                      void (async () => {
+                        await applyPresetNow(preset.id, { force: true });
+                        onClose();
+                      })();
+                    }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '28px 1fr auto',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '9px 12px',
+                      minHeight: 38,
+                      borderRadius: 0,
+                      background: isSelected ? 'rgba(255,255,255,0.16)' : 'transparent',
+                      borderLeft: isSelected ? '2px solid rgba(255,255,255,0.82)' : '2px solid transparent',
+                      borderBottom: '1px solid rgba(255,255,255,0.055)',
+                      cursor: 'default',
+                      userSelect: 'none',
+                    }}
+                    title={preset.label}
+                  >
+                    <div style={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', color: iconColor }}>
+                      {renderPresetIcon(preset.id)}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.96)' }}>{preset.label}</div>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 9.5,
+                        color: isApplied ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.42)',
+                        letterSpacing: 0.25,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {isApplied ? 'live' : ''}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div
+              style={{
+                minHeight: 42,
+                padding: '8px 12px 10px',
+                borderTop: '1px solid rgba(255,255,255,0.12)',
+                background: 'rgba(255,255,255,0.025)',
+                color: 'rgba(255,255,255,0.76)',
+                fontSize: 10.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+              }}
+            >
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{windowsOnScreen.length} windows</span>
+              <span style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}>Scroll · ↑↓ · Enter</span>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>,
+      </div>,
     portalTarget
   );
 };

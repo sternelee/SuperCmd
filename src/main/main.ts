@@ -100,6 +100,7 @@ type NodeWindowInfo = {
 };
 
 let cachedWindowManagerApi: any | null = null;
+let cachedElectronLiquidGlassApi: any | null | undefined = undefined;
 let windowManagerAccessRequested = false;
 let windowManagementTargetWindowId: string | null = null;
 let windowManagementTargetWorkArea: { x: number; y: number; width: number; height: number } | null = null;
@@ -114,6 +115,58 @@ function getWindowManagerApi(): any | null {
     console.error('[WindowManager] Failed to load node-window-manager:', error);
     return null;
   }
+}
+
+function getElectronLiquidGlassApi(): any | null {
+  if (cachedElectronLiquidGlassApi !== undefined) {
+    return cachedElectronLiquidGlassApi;
+  }
+  if (process.platform !== 'darwin') {
+    cachedElectronLiquidGlassApi = null;
+    return cachedElectronLiquidGlassApi;
+  }
+  try {
+    cachedElectronLiquidGlassApi = require('electron-liquid-glass');
+    return cachedElectronLiquidGlassApi;
+  } catch (error) {
+    cachedElectronLiquidGlassApi = null;
+    console.warn('[LiquidGlass] Failed to load electron-liquid-glass, using CSS fallback only:', error);
+    return cachedElectronLiquidGlassApi;
+  }
+}
+
+function applyLiquidGlassToWindowManagerPopup(win: any): void {
+  if (process.platform !== 'darwin') return;
+  const liquidGlass = getElectronLiquidGlassApi();
+  if (!liquidGlass || typeof liquidGlass.addView !== 'function') return;
+
+  const applyEffect = () => {
+    try {
+      const glassId = liquidGlass.addView(win.getNativeWindowHandle(), {
+        cornerRadius: 20,
+        opaque: false,
+        tintColor: '#1e1e2208',
+      });
+      if (typeof glassId === 'number' && glassId >= 0 && typeof liquidGlass.unstable_setSubdued === 'function') {
+        try { liquidGlass.unstable_setSubdued(glassId, 0); } catch {}
+      }
+    } catch (error) {
+      console.warn('[LiquidGlass] Failed to apply liquid glass to window manager popup:', error);
+    }
+  };
+
+  try {
+    if (win?.webContents && !win.webContents.isDestroyed()) {
+      if (typeof win.webContents.isLoadingMainFrame === 'function' && !win.webContents.isLoadingMainFrame()) {
+        applyEffect();
+      } else {
+        win.webContents.once('did-finish-load', applyEffect);
+      }
+      return;
+    }
+  } catch {}
+
+  applyEffect();
 }
 
 function ensureWindowManagerAccess(): void {
@@ -3293,6 +3346,10 @@ function createWindow(): void {
         if (whisperChildWindow === childWindow) whisperChildWindow = null;
       });
       return;
+    }
+
+    if (detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME) {
+      applyLiquidGlassToWindowManagerPopup(childWindow);
     }
 
     if (detachedPopupName === DETACHED_MEMORY_STATUS_WINDOW_NAME) {
