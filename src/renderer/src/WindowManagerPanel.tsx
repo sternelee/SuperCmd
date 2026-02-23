@@ -887,10 +887,22 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
     return () => doc.removeEventListener('keydown', onKeyDown, true);
   }, [show, portalTarget, onClose, selectedIndex, applyPresetNow, queuePreview]);
 
+  useEffect(() => {
+    if (!show || !hostWindow) return;
+    const onBlur = () => onClose();
+    hostWindow.addEventListener('blur', onBlur);
+    return () => hostWindow.removeEventListener('blur', onBlur);
+  }, [show, hostWindow, onClose]);
+
   if (!show || !portalTarget) return null;
 
   return createPortal(
     <div
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
       style={{
         width: '100%',
         height: '100%',
@@ -902,13 +914,16 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
       }}
     >
       <div
+        onMouseDown={(event) => event.stopPropagation()}
         style={{
           height: '100%',
-          borderRadius: 14,
-          border: '1px solid rgba(255,255,255,0.12)',
-          background: 'linear-gradient(180deg, rgba(14,16,18,0.96), rgba(9,10,12,0.98))',
-          boxShadow: '0 18px 46px rgba(0,0,0,0.38)',
-          backdropFilter: 'blur(12px)',
+          borderRadius: 16,
+          border: '1px solid rgba(255,255,255,0.16)',
+          background:
+            'linear-gradient(160deg, rgba(255,255,255,0.08), rgba(255,255,255,0.01)), rgba(46,46,46,0.34)',
+          boxShadow: '0 18px 44px rgba(0,0,0,0.20)',
+          backdropFilter: 'blur(64px) saturate(185%)',
+          WebkitBackdropFilter: 'blur(64px) saturate(185%)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -921,7 +936,8 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
             justifyContent: 'space-between',
             gap: 8,
             padding: '8px 12px',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            borderBottom: '1px solid rgba(255,255,255,0.14)',
+            background: 'rgba(255,255,255,0.04)',
           }}
         >
           <div style={{ minWidth: 0 }}>
@@ -931,7 +947,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
                 fontWeight: 700,
                 letterSpacing: 0.3,
                 textTransform: 'uppercase',
-                color: 'rgba(180,239,255,0.9)',
+                color: 'rgba(255,255,255,0.92)',
               }}
             >
               Window Management
@@ -940,7 +956,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
               style={{
                 marginTop: 4,
                 fontSize: 10.5,
-                color: 'rgba(255,255,255,0.62)',
+                color: 'rgba(255,255,255,0.66)',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -957,12 +973,12 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
               title="Refresh windows"
               style={{
                 fontSize: 10.5,
-                color: 'rgba(255,255,255,0.78)',
+                color: 'rgba(255,255,255,0.88)',
                 cursor: 'pointer',
                 padding: '3px 6px',
                 borderRadius: 6,
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.14)',
                 userSelect: 'none',
               }}
             >
@@ -981,9 +997,9 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
                 fontSize: 14,
                 lineHeight: 1,
                 borderRadius: 6,
-                color: 'rgba(255,255,255,0.82)',
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                color: 'rgba(255,255,255,0.9)',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.14)',
                 cursor: 'pointer',
                 userSelect: 'none',
               }}
@@ -1019,7 +1035,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
           {PRESETS.map((preset, index) => {
             const isSelected = index === selectedIndex;
             const isApplied = appliedPreset === preset.id;
-            const iconColor = isSelected ? 'rgba(120, 225, 255, 0.9)' : 'rgba(255,255,255,0.55)';
+            const iconColor = isSelected ? 'rgba(255,255,255,0.96)' : 'rgba(255,255,255,0.62)';
             return (
               <div
                 key={preset.id}
@@ -1047,28 +1063,27 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
                   gridTemplateColumns: '28px 1fr auto',
                   alignItems: 'center',
                   gap: 8,
-                  padding: '8px 12px',
-                  minHeight: 40,
+                  padding: '9px 12px',
+                  minHeight: 38,
                   borderRadius: 0,
-                  background: isSelected ? 'rgba(54, 198, 243, 0.12)' : 'transparent',
-                  borderLeft: isSelected ? '2px solid rgba(120, 225, 255, 0.8)' : '2px solid transparent',
-                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  background: isSelected ? 'rgba(255,255,255,0.18)' : 'transparent',
+                  borderLeft: isSelected ? '2px solid rgba(255,255,255,0.85)' : '2px solid transparent',
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
                   cursor: 'default',
                   userSelect: 'none',
                 }}
-                title={`${preset.label} (${preset.subtitle})`}
+                title={preset.label}
               >
                 <div style={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', color: iconColor }}>
                   {renderPresetIcon(preset.id)}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.96)' }}>{preset.label}</div>
-                  <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.56)' }}>{preset.subtitle}</div>
                 </div>
                 <div
                   style={{
                     fontSize: 9.5,
-                    color: isApplied ? 'rgba(155,239,255,0.94)' : 'rgba(255,255,255,0.38)',
+                    color: isApplied ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.42)',
                     letterSpacing: 0.25,
                     textTransform: 'uppercase',
                   }}
@@ -1084,8 +1099,9 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
           style={{
             minHeight: 42,
             padding: '8px 12px 10px',
-            borderTop: '1px solid rgba(255,255,255,0.08)',
-            color: 'rgba(255,255,255,0.68)',
+            borderTop: '1px solid rgba(255,255,255,0.14)',
+            background: 'rgba(255,255,255,0.035)',
+            color: 'rgba(255,255,255,0.76)',
             fontSize: 10.5,
             display: 'flex',
             alignItems: 'center',
@@ -1094,7 +1110,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
           }}
         >
           <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{windowsOnScreen.length} windows</span>
-          <span style={{ color: 'rgba(255,255,255,0.42)', flexShrink: 0 }}>Scroll · ↑↓ · Enter</span>
+          <span style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}>Scroll · ↑↓ · Enter</span>
         </div>
       </div>
     </div>,
