@@ -368,6 +368,27 @@ const FileCompat: any =
 // ── fs stub (localStorage-backed for persistence) ────────────────
 // Extensions like todo-list use fs.readFileSync/writeFileSync for data.
 // We back basic file operations with localStorage so data persists.
+// Binary data (Buffer, Uint8Array, ArrayBuffer) is written to the real
+// filesystem via IPC so extensions like gif-search can download files.
+
+function isBinaryData(data: any): boolean {
+  if (!data || typeof data === 'string') return false;
+  if (data instanceof Uint8Array || data instanceof ArrayBuffer) return true;
+  if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(data)) return true;
+  // BufferPolyfill instances (our shim) have a _bytes property
+  if (data._bytes instanceof Uint8Array) return true;
+  // Node Buffer duck-type: has .buffer and .byteOffset
+  if (data.buffer instanceof ArrayBuffer && typeof data.byteOffset === 'number') return true;
+  return false;
+}
+
+function toBinaryUint8Array(data: any): Uint8Array {
+  if (data instanceof Uint8Array) return data;
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (data._bytes instanceof Uint8Array) return data._bytes;
+  if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  return new Uint8Array(0);
+}
 
 const FS_PREFIX = 'sc-fs:';
 const fsMemoryStore = new Map<string, string>();
@@ -564,10 +585,27 @@ const fsStub: Record<string, any> = {
   },
   writeFileSync: (p: string, data: any) => {
     const path = resolveFsLookupPath(p);
+    if (isBinaryData(data)) {
+      // Fire-and-forget write to real filesystem for binary data (images, downloads, etc.)
+      const bytes = toBinaryUint8Array(data);
+      const writeBinary = (window as any).electron?.fsWriteBinaryFile;
+      if (typeof writeBinary === 'function') {
+        writeBinary(path, bytes).catch(() => {});
+      }
+      return;
+    }
     const str = typeof data === 'string' ? data : (data?.toString?.() ?? String(data));
     setStoredText(path, str);
   },
-  mkdirSync: noop, // Directories are implicit with localStorage
+  mkdirSync: (p: string, opts?: any) => {
+    const dirPath = resolveFsLookupPath(p);
+    // Create real directory via IPC (fire-and-forget for sync compat)
+    const exec = (window as any).electron?.execCommand;
+    if (typeof exec === 'function') {
+      const args = opts?.recursive ? ['-p', dirPath] : [dirPath];
+      exec('/bin/mkdir', args, {}).catch(() => {});
+    }
+  },
   readdirSync: (p: string) => {
     const path = resolveFsLookupPath(p);
     const prefix = FS_PREFIX + (path.endsWith('/') ? path : path + '/');
@@ -732,6 +770,16 @@ const fsStub: Record<string, any> = {
   writeFile: (p: string, data: any, ...args: any[]) => {
     const path = resolveFsLookupPath(p);
     const cb = args[args.length - 1];
+    if (isBinaryData(data)) {
+      const bytes = toBinaryUint8Array(data);
+      const writeBinary = (window as any).electron?.fsWriteBinaryFile;
+      if (typeof writeBinary === 'function') {
+        writeBinary(path, bytes)
+          .then(() => { if (typeof cb === 'function') cb(null); })
+          .catch((err: any) => { if (typeof cb === 'function') cb(err); });
+        return;
+      }
+    }
     const str = typeof data === 'string' ? data : (data?.toString?.() ?? String(data));
     setStoredText(path, str);
     if (typeof cb === 'function') cb(null);
@@ -841,6 +889,14 @@ const fsStub: Record<string, any> = {
     },
     writeFile: async (p: string, data: any) => {
       const path = resolveFsLookupPath(p);
+      if (isBinaryData(data)) {
+        const bytes = toBinaryUint8Array(data);
+        const writeBinary = (window as any).electron?.fsWriteBinaryFile;
+        if (typeof writeBinary === 'function') {
+          await writeBinary(path, bytes);
+          return;
+        }
+      }
       const str = typeof data === 'string' ? data : (data?.toString?.() ?? String(data));
       setStoredText(path, str);
     },
@@ -2512,12 +2568,18 @@ function ensureGlobals() {
       };
       const body = await normalizeBody(requestBody);
 
-      const ipcRes = await (window as any).electron.httpRequest({
-        url,
-        method,
-        headers,
-        body,
-      });
+      // For GET/HEAD requests, also download binary data so arrayBuffer()/blob() work.
+      // The text-based httpRequest corrupts binary responses (GIFs, images, etc.) because
+      // it converts Buffer to UTF-8 string, losing binary fidelity.
+      const binaryDownloader = (window as any).electron?.httpDownloadBinary;
+      const canDownloadBinary = method === 'GET' && typeof binaryDownloader === 'function';
+
+      const [ipcRes, rawBytes] = await Promise.all([
+        (window as any).electron.httpRequest({ url, method, headers, body }),
+        canDownloadBinary
+          ? binaryDownloader(url).catch(() => null as Uint8Array | null)
+          : Promise.resolve(null as Uint8Array | null),
+      ]);
 
       if (!ipcRes || ipcRes.status === 0) {
         if (typeof nativeFetch === 'function') {
@@ -2532,7 +2594,9 @@ function ensureGlobals() {
         throw new TypeError(ipcRes?.statusText || `Failed to fetch ${url}`);
       }
 
-      const response = new Response(ipcRes.bodyText ?? '', {
+      // Build Response with binary body when available, text otherwise.
+      const responseBody = rawBytes && rawBytes.length > 0 ? rawBytes : (ipcRes.bodyText ?? '');
+      const response = new Response(responseBody, {
         status: ipcRes.status,
         statusText: ipcRes.statusText || '',
         headers: ipcRes.headers || {},

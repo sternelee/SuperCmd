@@ -5,6 +5,7 @@ type NodeWindowInfo = {
   path?: string;
   processId?: number;
   bounds?: NodeWindowBounds;
+  workArea?: NodeWindowBounds;
 };
 
 type WorkerRequest =
@@ -32,10 +33,36 @@ function getWindowManagerApi(): any | null {
   }
 }
 
+function normalizeRect(raw: any): NodeWindowBounds | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const x = Number(raw.x);
+  const y = Number(raw.y);
+  const width = Number(raw.width);
+  const height = Number(raw.height);
+  if (![x, y, width, height].every((value) => Number.isFinite(value))) {
+    return undefined;
+  }
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+  };
+}
+
 function normalizeWindowInfo(win: any): NodeWindowInfo | null {
   if (!win) return null;
   const info = typeof win.getInfo === 'function' ? win.getInfo() : {};
   const bounds = typeof win.getBounds === 'function' ? win.getBounds() : info?.bounds;
+  let monitorWorkArea = info?.workArea;
+  if (!monitorWorkArea && typeof win.getMonitor === 'function') {
+    try {
+      const monitor = win.getMonitor();
+      if (monitor && typeof monitor.getWorkArea === 'function') {
+        monitorWorkArea = monitor.getWorkArea();
+      }
+    } catch {}
+  }
   const idRaw = info?.id ?? win?.id;
   const id = typeof idRaw === 'number' ? idRaw : Number(idRaw);
   if (!Number.isFinite(id)) return null;
@@ -43,22 +70,8 @@ function normalizeWindowInfo(win: any): NodeWindowInfo | null {
   const pathRaw = info?.path ?? win?.path;
   const processIdRaw = info?.processId ?? win?.processId;
   const processId = typeof processIdRaw === 'number' ? processIdRaw : Number(processIdRaw);
-
-  let normalizedBounds: NodeWindowBounds | undefined;
-  if (bounds && typeof bounds === 'object') {
-    const x = Number(bounds.x);
-    const y = Number(bounds.y);
-    const width = Number(bounds.width);
-    const height = Number(bounds.height);
-    if ([x, y, width, height].every((value) => Number.isFinite(value))) {
-      normalizedBounds = {
-        x: Math.round(x),
-        y: Math.round(y),
-        width: Math.max(1, Math.round(width)),
-        height: Math.max(1, Math.round(height)),
-      };
-    }
-  }
+  const normalizedBounds = normalizeRect(bounds);
+  const normalizedWorkArea = normalizeRect(monitorWorkArea);
 
   return {
     id,
@@ -66,6 +79,7 @@ function normalizeWindowInfo(win: any): NodeWindowInfo | null {
     path: String(pathRaw || ''),
     processId: Number.isFinite(processId) ? processId : undefined,
     bounds: normalizedBounds,
+    workArea: normalizedWorkArea,
   };
 }
 
@@ -93,6 +107,23 @@ function getWindowsRaw(): any[] {
 function getWindowByIdRaw(windowId: string): any | null {
   const numericId = Number(windowId);
   if (!Number.isFinite(numericId)) return null;
+  const api = getWindowManagerApi();
+  if (api && typeof api.getWindow === 'function') {
+    try {
+      const direct = api.getWindow(numericId);
+      if (direct) {
+        const info = normalizeWindowInfo(direct);
+        if (info?.id === numericId) return direct;
+      }
+    } catch {}
+    try {
+      const direct = api.getWindow(String(Math.trunc(numericId)));
+      if (direct) {
+        const info = normalizeWindowInfo(direct);
+        if (info?.id === numericId) return direct;
+      }
+    } catch {}
+  }
   const windows = getWindowsRaw();
   for (const win of windows) {
     const info = normalizeWindowInfo(win);
@@ -173,12 +204,20 @@ async function handleRequest(request: WorkerRequest): Promise<WorkerResponse> {
         if (![x, y, width, height].every((value) => Number.isFinite(value))) {
           return { id: request.id, ok: false, error: 'invalid bounds' };
         }
-        win.setBounds({
-          x: Math.round(x),
-          y: Math.round(y),
-          width: Math.max(1, Math.round(width)),
-          height: Math.max(1, Math.round(height)),
-        });
+        try {
+          win.setBounds({
+            x: Math.round(x),
+            y: Math.round(y),
+            width: Math.max(1, Math.round(width)),
+            height: Math.max(1, Math.round(height)),
+          });
+        } catch (error) {
+          return {
+            id: request.id,
+            ok: false,
+            error: String((error as any)?.message || error || 'setBounds failed'),
+          };
+        }
         return { id: request.id, ok: true, result: true };
       }
     }

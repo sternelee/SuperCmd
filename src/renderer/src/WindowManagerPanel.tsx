@@ -1073,6 +1073,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
   const lastInventoryAtRef = useRef(0);
   const targetWindowRef = useRef<ManagedWindow | null>(null);
   const layoutAreaRef = useRef<ScreenArea | null>(null);
+  const suppressBlurCloseUntilRef = useRef(0);
   const contextInFlightRef = useRef<Promise<{ target: ManagedWindow | null; area: ScreenArea } | null> | null>(null);
   const lastContextAtRef = useRef(0);
   const focusSearchInput = useCallback((): boolean => {
@@ -1091,6 +1092,21 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
     } catch {}
     return true;
   }, []);
+
+  const refocusPanelWindow = useCallback(() => {
+    if (!show || !portalTarget) return;
+    const host = portalTarget.ownerDocument?.defaultView;
+    if (!host) return;
+    const tryFocus = () => {
+      try {
+        host.focus();
+      } catch {}
+      focusSearchInput();
+    };
+    tryFocus();
+    window.setTimeout(tryFocus, 60);
+    window.setTimeout(tryFocus, 140);
+  }, [focusSearchInput, portalTarget, show]);
 
   useEffect(() => {
     windowsOnScreenRef.current = windowsOnScreen;
@@ -1282,6 +1298,38 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
   const applyPresetNow = useCallback(async (presetId: PresetId, options?: { force?: boolean }) => {
     const isMultiWindow = MULTI_WINDOW_PRESETS.has(presetId);
     const requiresShiftEnter = isShiftEnterOnlyPreset(presetId);
+
+    if (options?.force) {
+      const commandId = WINDOW_MANAGEMENT_COMMAND_ID_BY_PRESET.get(presetId);
+      if (!commandId) {
+        setStatusText('Unknown window management command.');
+        return;
+      }
+      try {
+        suppressBlurCloseUntilRef.current = Date.now() + (presetId === 'auto-organize' ? 1400 : 800);
+        const applied = await window.electron.executeCommandFromWidget(commandId);
+        if (applied === false) {
+          setStatusText('Window action failed. Try again.');
+          return;
+        }
+        setAppliedPreset(presetId);
+        const label = PRESETS.find((entry) => entry.id === presetId)?.label || 'preset';
+        setStatusText(`Applied ${label}.`);
+        if (presetId === 'auto-organize') {
+          refocusPanelWindow();
+        }
+        if (isMultiWindow) {
+          void loadWindowsForLayout(true);
+        } else {
+          void loadContext(true);
+        }
+      } catch (error) {
+        console.error('Window preset command failed:', error);
+        setStatusText('Failed to move windows. Check Accessibility permission.');
+      }
+      return;
+    }
+
     const context = await loadContext(options?.force);
     const layoutArea = context?.area ?? hostArea;
     const windows = isMultiWindow ? await loadWindowsForLayout(options?.force) : [];
@@ -1366,7 +1414,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
         setStatusText('Failed to move windows. Check Accessibility permission.');
       }
     }
-  }, [hostArea, loadContext, loadWindowsForLayout]);
+  }, [hostArea, loadContext, loadWindowsForLayout, refocusPanelWindow]);
 
   const drainPreviewQueue = useCallback(async () => {
     if (previewLoopRunningRef.current) return;
@@ -1415,7 +1463,9 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
         const nextIndex = selectedIndex < 0 ? 0 : (selectedIndex + 1) % filteredPresets.length;
         setSelectedIndex(nextIndex);
         const preset = filteredPresets[nextIndex];
-        if (preset && !isShiftEnterOnlyPreset(preset.id)) queuePreview(preset.id);
+        if (preset && !isShiftEnterOnlyPreset(preset.id)) {
+          queuePreview(preset.id, { force: true });
+        }
         return;
       }
       if (event.key === 'ArrowUp') {
@@ -1424,7 +1474,9 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
         const nextIndex = selectedIndex < 0 ? filteredPresets.length - 1 : (selectedIndex - 1 + filteredPresets.length) % filteredPresets.length;
         setSelectedIndex(nextIndex);
         const preset = filteredPresets[nextIndex];
-        if (preset && !isShiftEnterOnlyPreset(preset.id)) queuePreview(preset.id);
+        if (preset && !isShiftEnterOnlyPreset(preset.id)) {
+          queuePreview(preset.id, { force: true });
+        }
         return;
       }
       if (event.key === 'Enter') {
@@ -1432,20 +1484,8 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
         if (selectedIndex < 0) return;
         const preset = filteredPresets[selectedIndex];
         if (!preset) return;
-        const requiresShiftEnter = isShiftEnterOnlyPreset(preset.id);
-        if (requiresShiftEnter && !event.shiftKey) {
-          // These commands mutate the current window incrementally. Require
-          // Shift+Enter so arrow-key selection/search never triggers them by accident.
-          setStatusText('Use Shift+Enter for this preset.');
-          return;
-        }
         void (async () => {
           await applyPresetNow(preset.id, { force: true });
-          // Keep the panel open for fine-tune presets so users can apply
-          // multiple incremental adjustments quickly.
-          if (!(requiresShiftEnter && event.shiftKey)) {
-            onClose();
-          }
         })();
       }
     };
@@ -1455,7 +1495,10 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
 
   useEffect(() => {
     if (!show || !hostWindow) return;
-    const onBlur = () => onClose();
+    const onBlur = () => {
+      if (Date.now() < suppressBlurCloseUntilRef.current) return;
+      onClose();
+    };
     hostWindow.addEventListener('blur', onBlur);
     return () => hostWindow.removeEventListener('blur', onBlur);
   }, [show, hostWindow, onClose]);
@@ -1734,11 +1777,10 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
                 </div>
               ) : filteredPresets.map((preset, index) => {
                 const isSelected = index === selectedIndex;
-                const requiresShiftEnter = isShiftEnterOnlyPreset(preset.id);
                 const iconColor = isSelected ? colors.iconSelected : colors.iconDefault;
                 const commandId = WINDOW_MANAGEMENT_COMMAND_ID_BY_PRESET.get(preset.id) || '';
                 const configuredHotkey = commandId ? String(commandHotkeyLabels[commandId] || '') : '';
-                const showShiftBadge = requiresShiftEnter;
+                const showShiftBadge = false;
                 const showHotkeyBadge = Boolean(configuredHotkey);
                 const showShortcutBadgeGroup = showShiftBadge || showHotkeyBadge;
                 return (
@@ -1758,13 +1800,8 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
                       setSelectedIndex(index);
-                      if (requiresShiftEnter) {
-                        setStatusText('Use Shift+Enter for this preset.');
-                        return;
-                      }
                       void (async () => {
                         await applyPresetNow(preset.id, { force: true });
-                        onClose();
                       })();
                     }}
                     style={{
@@ -1861,7 +1898,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
               }}
               >
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{windowsOnScreen.length} windows</span>
-                <span style={{ color: colors.footerMuted, flexShrink: 0 }}>Scroll · ↑↓ · Enter · Shift+Enter</span>
+                <span style={{ color: colors.footerMuted, flexShrink: 0 }}>Scroll · ↑↓ · Enter</span>
               </div>
           </div>
         </div>

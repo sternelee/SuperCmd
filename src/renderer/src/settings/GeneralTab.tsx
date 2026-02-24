@@ -20,9 +20,11 @@ import { applyUiStyle, normalizeUiStyle, type UiStylePreference } from '../utils
 type FontSizeOption = NonNullable<AppSettings['fontSize']>;
 
 const FONT_SIZE_OPTIONS: Array<{ id: FontSizeOption; label: string }> = [
+  { id: 'extra-small', label: 'Extra Small' },
   { id: 'small', label: 'Small' },
   { id: 'medium', label: 'Medium' },
   { id: 'large', label: 'Large' },
+  { id: 'extra-large', label: 'Extra Large' },
 ];
 
 function formatBytes(bytes?: number): string {

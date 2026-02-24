@@ -87,10 +87,15 @@ export function createListRenderers(deps: ListRendererDeps) {
         data-idx={dataIdx}
         className={`relative rounded-2xl border cursor-pointer transition-colors overflow-hidden flex items-center justify-center ${
           isSelected
-            ? 'border-transparent bg-[var(--launcher-card-selected-bg)]'
+            ? 'border-[var(--text-secondary)] bg-[var(--launcher-card-selected-bg)] ring-2 ring-[var(--launcher-card-border)]'
             : 'border-[var(--launcher-card-border)] bg-[var(--launcher-card-bg)] hover:bg-[var(--launcher-card-hover-bg)]'
         }`}
-        style={{ minHeight: '96px' }}
+        style={{
+          minHeight: '96px',
+          boxShadow: isSelected
+            ? '0 0 0 2px rgba(var(--on-surface-rgb), 0.24), inset 0 0 0 1px rgba(var(--on-surface-rgb), 0.16)'
+            : undefined,
+        }}
         onClick={onActivate}
         onMouseMove={onSelect}
         onContextMenu={onContextAction}

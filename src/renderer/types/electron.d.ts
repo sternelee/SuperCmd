@@ -167,7 +167,7 @@ export interface AppSettings {
   ai: AISettings;
   commandMetadata?: Record<string, { subtitle?: string }>;
   debugMode: boolean;
-  fontSize: 'small' | 'medium' | 'large';
+  fontSize: 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large';
   uiStyle: 'default' | 'glassy';
   baseColor: string;
   appUpdaterLastCheckedAt: number;
@@ -257,6 +257,8 @@ export interface ElectronAPI {
   // Launcher
   getCommands: () => Promise<CommandInfo[]>;
   executeCommand: (commandId: string) => Promise<boolean>;
+  executeCommandAsHotkey: (commandId: string) => Promise<boolean>;
+  executeCommandFromWidget: (commandId: string) => Promise<boolean>;
   hideWindow: () => Promise<void>;
   openDevTools: () => Promise<boolean>;
   closePromptWindow: () => Promise<void>;
@@ -480,6 +482,7 @@ export interface ElectronAPI {
   snippetImport: () => Promise<{ imported: number; skipped: number }>;
   snippetExport: () => Promise<boolean>;
   pasteText: (text: string) => Promise<boolean>;
+  pasteFile: (filePath: string) => Promise<boolean>;
   typeTextLive: (text: string) => Promise<boolean>;
   whisperTypeTextLive: (
     text: string

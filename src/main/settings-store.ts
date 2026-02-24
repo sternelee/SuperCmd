@@ -35,7 +35,7 @@ export interface AISettings {
   openaiCompatibleModel: string;
 }
 
-export type AppFontSize = 'small' | 'medium' | 'large';
+export type AppFontSize = 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large';
 export type AppUiStyle = 'default' | 'glassy';
 
 export interface AppSettings {
@@ -143,8 +143,18 @@ const DEFAULT_SETTINGS: AppSettings = {
 let settingsCache: AppSettings | null = null;
 
 function normalizeFontSize(value: any): AppFontSize {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'small' || normalized === 'large') return normalized;
+  const normalized = String(value || '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+  if (normalized === 'x-small') return 'extra-small';
+  if (normalized === 'x-large') return 'extra-large';
+  if (
+    normalized === 'extra-small' ||
+    normalized === 'small' ||
+    normalized === 'medium' ||
+    normalized === 'large' ||
+    normalized === 'extra-large'
+  ) {
+    return normalized;
+  }
   return 'medium';
 }
 

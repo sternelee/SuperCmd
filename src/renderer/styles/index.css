@@ -444,6 +444,24 @@ html {
   box-shadow: inset 0 1px 0 rgba(var(--on-surface-rgb), 0.2);
 }
 
+.snippet-view {
+  --snippet-divider: rgba(124, 136, 154, 0.24);
+  --snippet-divider-strong: rgba(124, 136, 154, 0.34);
+}
+
+.snippet-view .snippet-header {
+  border-bottom: 1px solid var(--snippet-divider);
+}
+
+.snippet-view .snippet-split {
+  border-right: 1px solid var(--snippet-divider);
+}
+
+.sc-glassy .snippet-view .sc-glass-footer {
+  border-top: 1px solid var(--snippet-divider) !important;
+  box-shadow: none !important;
+}
+
 .sc-glassy .sc-launcher-footer {
   left: 0 !important;
   right: 0 !important;
