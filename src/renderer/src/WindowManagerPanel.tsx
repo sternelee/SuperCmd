@@ -659,6 +659,7 @@ function buildAutoFill4Layout(windows: ManagedWindow[], area: ScreenArea): Layou
 const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTarget, onClose }) => {
   const [windowsOnScreen, setWindowsOnScreen] = useState<ManagedWindow[]>([]);
   const [statusText, setStatusText] = useState('Select a preset to arrange windows.');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [appliedPreset, setAppliedPreset] = useState<PresetId | null>(null);
   const [isDarkTheme, setIsDarkTheme] = useState<boolean>(() => resolveIsDarkTheme());
@@ -669,6 +670,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
   const previewLoopRunningRef = useRef(false);
   const pendingPreviewRef = useRef<{ presetId: PresetId; force?: boolean } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const liquidHighlightRef = useRef<HTMLDivElement | null>(null);
   const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const inventoryInFlightRef = useRef<Promise<ManagedWindow[]> | null>(null);
@@ -677,6 +679,22 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
   const layoutAreaRef = useRef<ScreenArea | null>(null);
   const contextInFlightRef = useRef<Promise<{ target: ManagedWindow | null; area: ScreenArea } | null> | null>(null);
   const lastContextAtRef = useRef(0);
+  const focusSearchInput = useCallback((): boolean => {
+    const input = searchInputRef.current;
+    if (!input) return false;
+    try {
+      input.ownerDocument?.defaultView?.focus();
+    } catch {}
+    try {
+      input.focus();
+    } catch {}
+    if (input.ownerDocument?.activeElement !== input) return false;
+    const end = input.value.length;
+    try {
+      input.setSelectionRange(end, end);
+    } catch {}
+    return true;
+  }, []);
 
   useEffect(() => {
     windowsOnScreenRef.current = windowsOnScreen;
@@ -697,6 +715,14 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
 
   const hostWindow = portalTarget?.ownerDocument?.defaultView || null;
   const hostArea = useMemo(() => getHostMetrics(hostWindow), [hostWindow]);
+  const filteredPresets = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return PRESETS;
+    return PRESETS.filter((preset) => {
+      const haystack = `${preset.label} ${preset.subtitle} ${preset.id.replace(/-/g, ' ')}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [searchQuery]);
 
   const loadContext = useCallback(async (force?: boolean) => {
     const now = Date.now();
@@ -780,6 +806,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
   useEffect(() => {
     if (!show || !portalTarget) return;
     setAppliedPreset(null);
+    setSearchQuery('');
     setSelectedIndex(-1);
     lastPreviewKeyRef.current = '';
     pendingPreviewRef.current = null;
@@ -789,8 +816,25 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
     layoutAreaRef.current = null;
     lastContextAtRef.current = 0;
     setStatusText('Select a preset to arrange windows.');
-    requestAnimationFrame(() => listRef.current?.focus());
-  }, [show, portalTarget, loadWindowsForLayout]);
+    // Detached popup focus can race on open, so retry a few times.
+    const rafId = requestAnimationFrame(() => { focusSearchInput(); });
+    const timers = [0, 40, 100, 180].map((delay) =>
+      window.setTimeout(() => { focusSearchInput(); }, delay)
+    );
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [show, portalTarget, loadWindowsForLayout, focusSearchInput]);
+
+  useEffect(() => {
+    optionRefs.current = optionRefs.current.slice(0, filteredPresets.length);
+    setSelectedIndex((prev) => {
+      if (filteredPresets.length === 0) return -1;
+      if (prev < 0) return -1;
+      return Math.min(prev, filteredPresets.length - 1);
+    });
+  }, [filteredPresets.length]);
 
   const applyPresetNow = useCallback(async (presetId: PresetId, options?: { force?: boolean }) => {
     const isMultiWindow = MULTI_WINDOW_PRESETS.has(presetId);
@@ -894,30 +938,38 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
     const doc = portalTarget.ownerDocument;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (searchQuery.trim()) {
+          event.preventDefault();
+          setSearchQuery('');
+          setSelectedIndex(-1);
+          return;
+        }
         event.preventDefault();
         onClose();
         return;
       }
       if (event.key === 'ArrowDown') {
+        if (filteredPresets.length === 0) return;
         event.preventDefault();
-        const nextIndex = selectedIndex < 0 ? 0 : (selectedIndex + 1) % PRESETS.length;
+        const nextIndex = selectedIndex < 0 ? 0 : (selectedIndex + 1) % filteredPresets.length;
         setSelectedIndex(nextIndex);
-        const preset = PRESETS[nextIndex];
+        const preset = filteredPresets[nextIndex];
         if (preset) queuePreview(preset.id);
         return;
       }
       if (event.key === 'ArrowUp') {
+        if (filteredPresets.length === 0) return;
         event.preventDefault();
-        const nextIndex = selectedIndex < 0 ? PRESETS.length - 1 : (selectedIndex - 1 + PRESETS.length) % PRESETS.length;
+        const nextIndex = selectedIndex < 0 ? filteredPresets.length - 1 : (selectedIndex - 1 + filteredPresets.length) % filteredPresets.length;
         setSelectedIndex(nextIndex);
-        const preset = PRESETS[nextIndex];
+        const preset = filteredPresets[nextIndex];
         if (preset) queuePreview(preset.id);
         return;
       }
       if (event.key === 'Enter') {
         event.preventDefault();
         if (selectedIndex < 0) return;
-        const preset = PRESETS[selectedIndex];
+        const preset = filteredPresets[selectedIndex];
         if (!preset) return;
         void (async () => {
           await applyPresetNow(preset.id, { force: true });
@@ -927,7 +979,7 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
     };
     doc.addEventListener('keydown', onKeyDown, true);
     return () => doc.removeEventListener('keydown', onKeyDown, true);
-  }, [show, portalTarget, onClose, selectedIndex, applyPresetNow, queuePreview]);
+  }, [show, portalTarget, onClose, selectedIndex, applyPresetNow, queuePreview, filteredPresets, searchQuery]);
 
   useEffect(() => {
     if (!show || !hostWindow) return;
@@ -1104,82 +1156,85 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
             <div
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
+                flexDirection: 'column',
+                alignItems: 'stretch',
                 gap: 8,
                 padding: '8px 12px',
                 borderBottom: colors.headerDivider,
                 background: colors.headerBg,
               }}
             >
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: 0.3,
-                    textTransform: 'uppercase',
-                    color: colors.title,
-                  }}
-                >
-                  Window Management
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 0.3,
+                      textTransform: 'uppercase',
+                      color: colors.title,
+                    }}
+                  >
+                    Window Management
+                  </div>
                 </div>
-                <div
-                  style={{
-                    marginTop: 4,
-                    fontSize: 10.5,
-                    color: colors.secondary,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: 210,
-                  }}
-                >
-                  {statusText}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={onClose}
+                    aria-label="Close"
+                    title="Close"
+                    style={{
+                      width: 22,
+                      height: 22,
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontSize: 14,
+                      lineHeight: 1,
+                      borderRadius: 10,
+                      color: colors.controlText,
+                      background: colors.controlBg,
+                      border: colors.controlBorder,
+                      boxShadow: colors.controlShadow,
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    }}
+                  >
+                    ×
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => { void loadWindowsForLayout(true); }}
-                  title="Refresh windows"
-                  style={{
-                    fontSize: 10.5,
-                    color: colors.controlText,
-                    cursor: 'pointer',
-                    padding: '3px 6px',
-                    borderRadius: 10,
-                    background: colors.controlBg,
-                    border: colors.controlBorder,
-                    boxShadow: colors.controlShadow,
-                    userSelect: 'none',
+              <div>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  placeholder="Search presets..."
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    setSelectedIndex(-1);
                   }}
-                >
-                  Refresh
-                </div>
-                <div
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={onClose}
-                  aria-label="Close"
-                  title="Close"
                   style={{
-                    width: 22,
+                    width: '100%',
                     height: 22,
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontSize: 14,
-                    lineHeight: 1,
-                    borderRadius: 10,
-                    color: colors.controlText,
-                    background: colors.controlBg,
-                    border: colors.controlBorder,
-                    boxShadow: colors.controlShadow,
-                    cursor: 'pointer',
-                    userSelect: 'none',
+                    border: 'none',
+                    background: 'transparent',
+                    boxShadow: 'none',
+                    color: colors.rowText,
+                    outline: 'none',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    padding: 0,
+                    boxSizing: 'border-box',
                   }}
-                >
-                  ×
-                </div>
+                />
               </div>
             </div>
 
@@ -1195,7 +1250,17 @@ const WindowManagerPanel: React.FC<WindowManagerPanelProps> = ({ show, portalTar
                 padding: '4px 0',
               }}
             >
-              {PRESETS.map((preset, index) => {
+              {filteredPresets.length === 0 ? (
+                <div
+                  style={{
+                    padding: '12px',
+                    fontSize: 11,
+                    color: colors.footerMuted,
+                  }}
+                >
+                  No presets found.
+                </div>
+              ) : filteredPresets.map((preset, index) => {
                 const isSelected = index === selectedIndex;
                 const isApplied = appliedPreset === preset.id;
                 const iconColor = isSelected ? colors.iconSelected : colors.iconDefault;
