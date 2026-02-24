@@ -48,6 +48,7 @@ export interface AppViewManager {
   showCursorPrompt: boolean;
   showWhisper: boolean;
   showSpeak: boolean;
+  showWindowManager: boolean;
   showWhisperOnboarding: boolean;
   showWhisperHint: boolean;
   showOnboarding: boolean;
@@ -67,6 +68,7 @@ export interface AppViewManager {
   openCursorPrompt: () => void;
   openWhisper: () => void;
   openSpeak: () => void;
+  openWindowManager: () => void;
   openWhisperOnboarding: () => void;
   openOnboarding: () => void;
   openAiMode: () => void;
@@ -83,6 +85,7 @@ export interface AppViewManager {
   setShowCursorPrompt: React.Dispatch<React.SetStateAction<boolean>>;
   setShowWhisper: React.Dispatch<React.SetStateAction<boolean>>;
   setShowSpeak: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowWindowManager: React.Dispatch<React.SetStateAction<boolean>>;
   setShowWhisperOnboarding: React.Dispatch<React.SetStateAction<boolean>>;
   setShowWhisperHint: React.Dispatch<React.SetStateAction<boolean>>;
   setShowOnboarding: React.Dispatch<React.SetStateAction<boolean>>;
@@ -100,6 +103,7 @@ export function useAppViewManager(): AppViewManager {
   const [showCursorPrompt, setShowCursorPrompt] = useState(false);
   const [showWhisper, setShowWhisper] = useState(false);
   const [showSpeak, setShowSpeak] = useState(false);
+  const [showWindowManager, setShowWindowManager] = useState(false);
   const [showWhisperOnboarding, setShowWhisperOnboarding] = useState(false);
   const [showWhisperHint, setShowWhisperHint] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -116,6 +120,7 @@ export function useAppViewManager(): AppViewManager {
     setShowCursorPrompt(false);
     setShowWhisper(false);
     setShowSpeak(false);
+    setShowWindowManager(false);
     setShowWhisperOnboarding(false);
     setShowWhisperHint(false);
     setShowOnboarding(false);
@@ -173,6 +178,11 @@ export function useAppViewManager(): AppViewManager {
     setShowSpeak(true);
   }, [resetAllViews]);
 
+  const openWindowManager = useCallback(() => {
+    resetAllViews();
+    setShowWindowManager(true);
+  }, [resetAllViews]);
+
   const openWhisperOnboarding = useCallback(() => {
     // Whisper onboarding co-exists with whisper
     setShowWhisperOnboarding(true);
@@ -203,6 +213,7 @@ export function useAppViewManager(): AppViewManager {
     showCursorPrompt,
     showWhisper,
     showSpeak,
+    showWindowManager,
     showWhisperOnboarding,
     showWhisperHint,
     showOnboarding,
@@ -220,6 +231,7 @@ export function useAppViewManager(): AppViewManager {
     openCursorPrompt,
     openWhisper,
     openSpeak,
+    openWindowManager,
     openWhisperOnboarding,
     openOnboarding,
     openAiMode,
@@ -235,6 +247,7 @@ export function useAppViewManager(): AppViewManager {
     setShowCursorPrompt,
     setShowWhisper,
     setShowSpeak,
+    setShowWindowManager,
     setShowWhisperOnboarding,
     setShowWhisperHint,
     setShowOnboarding,

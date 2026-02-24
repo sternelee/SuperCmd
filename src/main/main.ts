@@ -11,6 +11,7 @@
  */
 
 import * as path from 'path';
+import { fork, type ChildProcess } from 'child_process';
 import { getAvailableCommands, executeCommand, invalidateCache } from './commands';
 import { loadSettings, saveSettings, setOAuthToken, getOAuthToken, removeOAuthToken } from './settings-store';
 import type { AppSettings } from './settings-store';
@@ -83,6 +84,496 @@ function getNativeBinaryPath(name: string): string {
   return base;
 }
 
+type WindowManagementLayoutItem = {
+  id: string;
+  bounds?: {
+    position?: { x?: number; y?: number };
+    size?: { width?: number; height?: number };
+  };
+};
+type NodeWindowBounds = { x: number; y: number; width: number; height: number };
+type NodeWindowInfo = {
+  id?: number;
+  title?: string;
+  path?: string;
+  processId?: number;
+  bounds?: NodeWindowBounds;
+};
+
+let cachedElectronLiquidGlassApi: any | null | undefined = undefined;
+let hasLoggedLiquidGlassRuntimeIncompatibility = false;
+let windowManagerAccessRequested = false;
+let windowManagementTargetWindowId: string | null = null;
+let windowManagementTargetWorkArea: { x: number; y: number; width: number; height: number } | null = null;
+const WINDOW_MANAGEMENT_MUTATION_MIN_INTERVAL_MS = 6;
+let windowManagementMutationQueue: Promise<void> = Promise.resolve();
+let lastWindowManagementMutationAt = 0;
+const WINDOW_MANAGER_WORKER_REQUEST_TIMEOUT_MS = 1400;
+const WINDOW_MANAGER_WORKER_RECOVERY_BACKOFF_MS = 500;
+const WINDOW_MANAGER_WORKER_CRASH_WINDOW_MS = 10000;
+type WindowManagerWorkerMethod =
+  | 'request-accessibility'
+  | 'list-windows'
+  | 'get-active-window'
+  | 'get-window-by-id'
+  | 'set-window-bounds';
+type WindowManagerWorkerRequest = {
+  id: number;
+  method: WindowManagerWorkerMethod;
+  payload?: any;
+};
+type WindowManagerWorkerResponse = {
+  id: number;
+  ok: boolean;
+  result?: any;
+  error?: string;
+};
+let windowManagerWorker: ChildProcess | null = null;
+let windowManagerWorkerReqSeq = 0;
+let windowManagerWorkerRestartTimer: ReturnType<typeof setTimeout> | null = null;
+let windowManagerWorkerCrashTimestamps: number[] = [];
+const windowManagerWorkerPending = new Map<number, {
+  resolve: (value: any) => void;
+  reject: (reason?: any) => void;
+  timer: ReturnType<typeof setTimeout>;
+}>();
+
+function parseMajorVersion(value: string | undefined): number | null {
+  if (!value) return null;
+  const major = Number.parseInt(String(value).split('.')[0], 10);
+  return Number.isFinite(major) ? major : null;
+}
+
+function warnIfElectronLiquidGlassRuntimeLooksIncompatible(): void {
+  const electronMajor = parseMajorVersion(process.versions?.electron);
+  const nodeMajor = parseMajorVersion(process.versions?.node);
+  const likelyIncompatible = (electronMajor !== null && electronMajor < 30) || (nodeMajor !== null && nodeMajor < 22);
+  if (likelyIncompatible && !hasLoggedLiquidGlassRuntimeIncompatibility) {
+    hasLoggedLiquidGlassRuntimeIncompatibility = true;
+    console.warn(
+      `[LiquidGlass] Runtime not supported (electron=${process.versions?.electron || 'unknown'}, node=${process.versions?.node || 'unknown'}). ` +
+      'electron-liquid-glass is documented for Electron 30+ and Node 22+; falling back only if runtime calls fail.'
+    );
+  }
+}
+
+function getWindowManagerWorkerPath(): string {
+  return path.join(__dirname, 'window-manager-worker.js');
+}
+
+function isWindowManagerWorkerAlive(proc: ChildProcess | null): proc is ChildProcess {
+  return Boolean(proc && proc.exitCode === null && !proc.killed && proc.connected);
+}
+
+function rejectAllWindowManagerWorkerPending(errorMessage: string): void {
+  for (const [id, pending] of windowManagerWorkerPending.entries()) {
+    clearTimeout(pending.timer);
+    pending.reject(new Error(errorMessage));
+    windowManagerWorkerPending.delete(id);
+  }
+}
+
+function trackWindowManagerWorkerCrash(now: number): void {
+  windowManagerWorkerCrashTimestamps = windowManagerWorkerCrashTimestamps.filter(
+    (value) => now - value <= WINDOW_MANAGER_WORKER_CRASH_WINDOW_MS
+  );
+  windowManagerWorkerCrashTimestamps.push(now);
+  if (windowManagerWorkerCrashTimestamps.length >= 4) {
+    windowManagerWorkerCrashTimestamps = [];
+    console.warn('[WindowManager] Worker crashed repeatedly; continuing with restart/backoff.');
+  }
+}
+
+function scheduleWindowManagerWorkerRestart(): void {
+  if (windowManagerWorkerRestartTimer) return;
+  windowManagerWorkerRestartTimer = setTimeout(() => {
+    windowManagerWorkerRestartTimer = null;
+    ensureWindowManagerWorker();
+  }, WINDOW_MANAGER_WORKER_RECOVERY_BACKOFF_MS);
+}
+
+function attachWindowManagerWorkerListeners(proc: ChildProcess): void {
+  proc.on('message', (message: WindowManagerWorkerResponse) => {
+    if (!message || typeof message !== 'object') return;
+    const pending = windowManagerWorkerPending.get(Number(message.id));
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    windowManagerWorkerPending.delete(Number(message.id));
+    if (message.ok) {
+      pending.resolve(message.result);
+      return;
+    }
+    pending.reject(new Error(String(message.error || 'window manager worker request failed')));
+  });
+
+  proc.on('exit', (_code, signal) => {
+    if (windowManagerWorker !== proc) return;
+    windowManagerWorker = null;
+    const now = Date.now();
+    const reason = signal ? `signal ${signal}` : 'unknown exit';
+    rejectAllWindowManagerWorkerPending(`[WindowManager] Worker exited (${reason}).`);
+    trackWindowManagerWorkerCrash(now);
+    scheduleWindowManagerWorkerRestart();
+  });
+
+  proc.on('error', (error) => {
+    if (windowManagerWorker !== proc) return;
+    rejectAllWindowManagerWorkerPending('[WindowManager] Worker error.');
+    console.error('[WindowManager] Worker process error:', error);
+  });
+}
+
+function ensureWindowManagerWorker(): ChildProcess | null {
+  if (isWindowManagerWorkerAlive(windowManagerWorker)) return windowManagerWorker;
+  try {
+    const workerPath = getWindowManagerWorkerPath();
+    const proc = fork(workerPath, [], {
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      execArgv: [],
+    });
+    windowManagerWorker = proc;
+    attachWindowManagerWorkerListeners(proc);
+    return proc;
+  } catch (error) {
+    console.error('[WindowManager] Failed to spawn worker:', error);
+    return null;
+  }
+}
+
+async function callWindowManagerWorker<T>(
+  method: WindowManagerWorkerMethod,
+  payload?: any,
+  timeoutMs: number = WINDOW_MANAGER_WORKER_REQUEST_TIMEOUT_MS
+): Promise<T> {
+  const sendAttempt = async (): Promise<T> => {
+    const proc = ensureWindowManagerWorker();
+    if (!proc || !isWindowManagerWorkerAlive(proc)) {
+      throw new Error('window manager worker unavailable');
+    }
+    const id = ++windowManagerWorkerReqSeq;
+    return await new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        windowManagerWorkerPending.delete(id);
+        reject(new Error(`[WindowManager] Worker request timed out (${method}).`));
+      }, Math.max(250, timeoutMs));
+      windowManagerWorkerPending.set(id, { resolve, reject, timer });
+      const request: WindowManagerWorkerRequest = { id, method, payload };
+      try {
+        proc.send(request, (error?: Error | null) => {
+          if (!error) return;
+          const pending = windowManagerWorkerPending.get(id);
+          if (!pending) return;
+          clearTimeout(pending.timer);
+          windowManagerWorkerPending.delete(id);
+          pending.reject(error);
+        });
+      } catch (error) {
+        clearTimeout(timer);
+        windowManagerWorkerPending.delete(id);
+        reject(error);
+      }
+    });
+  };
+
+  try {
+    return await sendAttempt();
+  } catch (error) {
+    const message = String((error as any)?.message || error || '');
+    if (!message.includes('worker unavailable')) {
+      throw error;
+    }
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 90));
+  return await sendAttempt();
+}
+
+function normalizeNodeWindowInfo(raw: any): NodeWindowInfo | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const idRaw = (raw as any).id;
+  const id = typeof idRaw === 'number' ? idRaw : Number(idRaw);
+  if (!Number.isFinite(id)) return null;
+  const title = String((raw as any).title || '');
+  const pathValue = String((raw as any).path || '');
+  const processIdRaw = (raw as any).processId;
+  const processId = typeof processIdRaw === 'number' ? processIdRaw : Number(processIdRaw);
+  const boundsRaw = (raw as any).bounds;
+  let bounds: NodeWindowBounds | undefined;
+  if (boundsRaw && typeof boundsRaw === 'object') {
+    const x = Number((boundsRaw as any).x);
+    const y = Number((boundsRaw as any).y);
+    const width = Number((boundsRaw as any).width);
+    const height = Number((boundsRaw as any).height);
+    if ([x, y, width, height].every((value) => Number.isFinite(value))) {
+      bounds = {
+        x: Math.round(x),
+        y: Math.round(y),
+        width: Math.max(1, Math.round(width)),
+        height: Math.max(1, Math.round(height)),
+      };
+    }
+  }
+  return {
+    id,
+    title,
+    path: pathValue,
+    processId: Number.isFinite(processId) ? processId : undefined,
+    bounds,
+  };
+}
+
+function isTransientWindowManagerWorkerError(error: any): boolean {
+  const message = String(error?.message || error || '').toLowerCase();
+  return (
+    message.includes('worker unavailable') ||
+    message.includes('worker exited') ||
+    message.includes('worker request timed out')
+  );
+}
+
+function getElectronLiquidGlassApi(): any | null {
+  if (cachedElectronLiquidGlassApi !== undefined) {
+    return cachedElectronLiquidGlassApi;
+  }
+  if (process.platform !== 'darwin') {
+    cachedElectronLiquidGlassApi = null;
+    return cachedElectronLiquidGlassApi;
+  }
+  warnIfElectronLiquidGlassRuntimeLooksIncompatible();
+  try {
+    cachedElectronLiquidGlassApi = require('electron-liquid-glass');
+    return cachedElectronLiquidGlassApi;
+  } catch (error) {
+    cachedElectronLiquidGlassApi = null;
+    console.warn('[LiquidGlass] Failed to load electron-liquid-glass, using CSS fallback only:', error);
+    return cachedElectronLiquidGlassApi;
+  }
+}
+
+function applyNativeWindowManagerGlassFallback(win: any): void {
+  if (process.platform !== 'darwin') return;
+  try {
+    if (typeof win?.setVibrancy === 'function') {
+      win.setVibrancy('under-window');
+    }
+  } catch {}
+  try {
+    if (typeof win?.setVisualEffectState === 'function') {
+      win.setVisualEffectState('active');
+    }
+  } catch {}
+}
+
+function applyLiquidGlassToWindowManagerPopup(win: any): void {
+  if (process.platform !== 'darwin') return;
+  const liquidGlass = getElectronLiquidGlassApi();
+  if (!liquidGlass || typeof liquidGlass.addView !== 'function') {
+    applyNativeWindowManagerGlassFallback(win);
+    return;
+  }
+
+  const applyEffect = async () => {
+    try {
+      let isDarkTheme = true;
+      try {
+        if (win?.webContents && !win.webContents.isDestroyed() && typeof win.webContents.executeJavaScript === 'function') {
+          const result = await win.webContents.executeJavaScript(
+            `(() => {
+              try {
+                const pref = String(window.localStorage.getItem('sc-theme-preference') || '').trim().toLowerCase();
+                if (pref === 'dark') return true;
+                if (pref === 'light') return false;
+              } catch {}
+              return document.documentElement.classList.contains('dark') || document.body.classList.contains('dark');
+            })()`,
+            true
+          );
+          isDarkTheme = Boolean(result);
+        }
+      } catch {}
+
+      const glassId = liquidGlass.addView(win.getNativeWindowHandle(), {
+        cornerRadius: 20,
+        opaque: false,
+        // Keep native liquid glass in sync with the app theme (not just macOS appearance).
+        tintColor: isDarkTheme ? '#16181fd0' : '#f4f6f8b0',
+      });
+      if (typeof glassId === 'number' && glassId >= 0 && typeof liquidGlass.unstable_setSubdued === 'function') {
+        try { liquidGlass.unstable_setSubdued(glassId, 0); } catch {}
+      }
+    } catch (error) {
+      console.warn('[LiquidGlass] Failed to apply liquid glass to window manager popup:', error);
+      applyNativeWindowManagerGlassFallback(win);
+    }
+  };
+
+  try {
+    if (win?.webContents && !win.webContents.isDestroyed()) {
+      if (typeof win.webContents.isLoadingMainFrame === 'function' && !win.webContents.isLoadingMainFrame()) {
+        void applyEffect();
+      } else {
+        win.webContents.once('did-finish-load', () => { void applyEffect(); });
+      }
+      return;
+    }
+  } catch {}
+
+  void applyEffect();
+}
+
+async function ensureWindowManagerAccess(): Promise<void> {
+  if (process.platform !== 'darwin') return;
+  if (windowManagerAccessRequested) return;
+  try {
+    await callWindowManagerWorker('request-accessibility');
+    windowManagerAccessRequested = true;
+  } catch (error) {
+    console.warn('[WindowManager] Accessibility request failed:', error);
+  }
+}
+
+function toWindowManagementWindowFromNode(info: NodeWindowInfo | null, active: boolean): any | null {
+  if (!info) return null;
+  if (!info.id || !info.bounds) return null;
+  const x = Number(info.bounds.x);
+  const y = Number(info.bounds.y);
+  const width = Number(info.bounds.width);
+  const height = Number(info.bounds.height);
+  if (![x, y, width, height].every((value) => Number.isFinite(value))) return null;
+  const appPath = String(info.path || '');
+  const appName = appPath ? path.basename(appPath).replace(/\\.app$/i, '') : '';
+
+  return {
+    id: String(info.id),
+    title: String(info.title || ''),
+    active,
+    bounds: {
+      position: { x: Math.round(x), y: Math.round(y) },
+      size: { width: Math.round(width), height: Math.round(height) },
+    },
+    desktopId: '1',
+    positionable: true,
+    resizable: true,
+    fullScreenSettable: true,
+    application: {
+      name: appName,
+      path: appPath,
+      bundleId: '',
+    },
+  };
+}
+
+function isSelfManagedWindow(win: NodeWindowInfo | null | undefined): boolean {
+  if (!win) return false;
+  const processId = typeof win.processId === 'number' ? win.processId : Number(win.processId);
+  if (processId && processId === process.pid) return true;
+  const appPath = String(win.path || '');
+  const appName = String(app.getName() || '');
+  if (appPath) {
+    const exePath = app.getPath('exe');
+    if (appPath === exePath) return true;
+    if (appName && appPath.includes(`${appName}.app`)) return true;
+    if (appPath.includes('SuperCmd.app')) return true;
+  }
+  const title = String(win.title || '');
+  if (title.toLowerCase().includes('supercmd')) return true;
+  return false;
+}
+
+async function getNodeWindows(): Promise<NodeWindowInfo[]> {
+  try {
+    const rawWindows = await callWindowManagerWorker<any[]>('list-windows');
+    const windows = Array.isArray(rawWindows)
+      ? rawWindows
+        .map((entry) => normalizeNodeWindowInfo(entry))
+        .filter(Boolean) as NodeWindowInfo[]
+      : [];
+    return windows.filter((win) => !isSelfManagedWindow(win));
+  } catch {
+    return [];
+  }
+}
+
+async function getNodeWindowById(id: string): Promise<NodeWindowInfo | null> {
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) return null;
+  try {
+    const raw = await callWindowManagerWorker<any>('get-window-by-id', { id: normalizedId });
+    const info = normalizeNodeWindowInfo(raw);
+    if (!info || isSelfManagedWindow(info)) return null;
+    return info;
+  } catch {
+    return null;
+  }
+}
+
+async function captureWindowManagementTargetWindow(): Promise<void> {
+  try {
+    const raw = await callWindowManagerWorker<any>('get-active-window');
+    const info = normalizeNodeWindowInfo(raw);
+    if (!info || isSelfManagedWindow(info)) return;
+    if (info?.id) {
+      windowManagementTargetWindowId = String(info.id);
+    }
+    const { screen: electronScreen } = require('electron');
+    const bounds = info?.bounds;
+    const point = bounds
+      ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+      : electronScreen.getCursorScreenPoint();
+    const display = electronScreen.getDisplayNearestPoint(point);
+    windowManagementTargetWorkArea = display?.workArea || null;
+  } catch (error) {
+    console.warn('[WindowManager] Failed to capture target window:', error);
+  }
+}
+
+function findNodeWindowById(id: string, windows: NodeWindowInfo[]): NodeWindowInfo | null {
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId)) return null;
+  return windows.find((win) => Number(win?.id) === numericId) || null;
+}
+
+function matchNodeWindowForFrontmost(windows: NodeWindowInfo[]): NodeWindowInfo | null {
+  const appPath = String(lastFrontmostApp?.path || '').trim();
+  if (appPath) {
+    const match = windows.find((win) => {
+      return String(win.path || '') === appPath;
+    });
+    if (match) return match;
+  }
+  const appName = String(lastFrontmostApp?.name || '').trim().toLowerCase();
+  if (appName) {
+    const match = windows.find((win) => {
+      const title = String(win.title || '').toLowerCase();
+      const pathValue = String(win.path || '').toLowerCase();
+      return title.includes(appName) || pathValue.includes(appName);
+    });
+    if (match) return match;
+  }
+  return null;
+}
+
+async function getNodeSnapshot(): Promise<{ target: NodeWindowInfo | null; windows: NodeWindowInfo[] }> {
+  const windows = await getNodeWindows();
+  let target: NodeWindowInfo | null = null;
+  if (windowManagementTargetWindowId) {
+    target = findNodeWindowById(windowManagementTargetWindowId, windows);
+  }
+  if (!target) {
+    target = matchNodeWindowForFrontmost(windows);
+  }
+  if (!target) {
+    try {
+      const activeRaw = await callWindowManagerWorker<any>('get-active-window');
+      const activeInfo = normalizeNodeWindowInfo(activeRaw);
+      if (activeInfo && !isSelfManagedWindow(activeInfo)) {
+        target = findNodeWindowById(String(activeInfo.id || ''), windows) || activeInfo;
+      }
+    } catch {}
+  }
+  return { target, windows };
+}
+
 // ─── Window Configuration ───────────────────────────────────────────
 
 const DEFAULT_WINDOW_WIDTH = 800;
@@ -98,6 +589,7 @@ const WHISPER_WINDOW_HEIGHT = 84;
 const DETACHED_WHISPER_WINDOW_NAME = 'supercmd-whisper-window';
 const DETACHED_WHISPER_ONBOARDING_WINDOW_NAME = 'supercmd-whisper-onboarding-window';
 const DETACHED_SPEAK_WINDOW_NAME = 'supercmd-speak-window';
+const DETACHED_WINDOW_MANAGER_WINDOW_NAME = 'supercmd-window-manager-window';
 const DETACHED_PROMPT_WINDOW_NAME = 'supercmd-prompt-window';
 const DETACHED_MEMORY_STATUS_WINDOW_NAME = 'supercmd-memory-status-window';
 const DETACHED_WINDOW_QUERY_KEY = 'sc_detached';
@@ -134,17 +626,20 @@ function resolveDetachedPopupName(details: any): string | null {
     byFrameName === DETACHED_WHISPER_WINDOW_NAME ||
     byFrameName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME ||
     byFrameName === DETACHED_SPEAK_WINDOW_NAME ||
+    byFrameName === DETACHED_WINDOW_MANAGER_WINDOW_NAME ||
     byFrameName === DETACHED_PROMPT_WINDOW_NAME ||
     byFrameName === DETACHED_MEMORY_STATUS_WINDOW_NAME ||
     byFrameName.startsWith(`${DETACHED_WHISPER_WINDOW_NAME}-`) ||
     byFrameName.startsWith(`${DETACHED_WHISPER_ONBOARDING_WINDOW_NAME}-`) ||
     byFrameName.startsWith(`${DETACHED_SPEAK_WINDOW_NAME}-`) ||
+    byFrameName.startsWith(`${DETACHED_WINDOW_MANAGER_WINDOW_NAME}-`) ||
     byFrameName.startsWith(`${DETACHED_PROMPT_WINDOW_NAME}-`) ||
     byFrameName.startsWith(`${DETACHED_MEMORY_STATUS_WINDOW_NAME}-`)
   ) {
     if (byFrameName.startsWith(DETACHED_WHISPER_WINDOW_NAME)) return DETACHED_WHISPER_WINDOW_NAME;
     if (byFrameName.startsWith(DETACHED_WHISPER_ONBOARDING_WINDOW_NAME)) return DETACHED_WHISPER_ONBOARDING_WINDOW_NAME;
     if (byFrameName.startsWith(DETACHED_SPEAK_WINDOW_NAME)) return DETACHED_SPEAK_WINDOW_NAME;
+    if (byFrameName.startsWith(DETACHED_WINDOW_MANAGER_WINDOW_NAME)) return DETACHED_WINDOW_MANAGER_WINDOW_NAME;
     if (byFrameName.startsWith(DETACHED_PROMPT_WINDOW_NAME)) return DETACHED_PROMPT_WINDOW_NAME;
     if (byFrameName.startsWith(DETACHED_MEMORY_STATUS_WINDOW_NAME)) return DETACHED_MEMORY_STATUS_WINDOW_NAME;
     return byFrameName;
@@ -158,6 +653,7 @@ function resolveDetachedPopupName(details: any): string | null {
       byQuery === DETACHED_WHISPER_WINDOW_NAME ||
       byQuery === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME ||
       byQuery === DETACHED_SPEAK_WINDOW_NAME ||
+      byQuery === DETACHED_WINDOW_MANAGER_WINDOW_NAME ||
       byQuery === DETACHED_PROMPT_WINDOW_NAME ||
       byQuery === DETACHED_MEMORY_STATUS_WINDOW_NAME
     ) {
@@ -177,6 +673,13 @@ function computeDetachedPopupPosition(
   const workArea = display?.workArea || screen.getPrimaryDisplay().workArea;
 
   if (popupName === DETACHED_SPEAK_WINDOW_NAME) {
+    return {
+      x: workArea.x + workArea.width - width - 20,
+      y: workArea.y + 16,
+    };
+  }
+
+  if (popupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME) {
     return {
       x: workArea.x + workArea.width - width - 20,
       y: workArea.y + 16,
@@ -708,6 +1211,138 @@ let launcherMode: LauncherMode = 'default';
 let lastWhisperToggleAt = 0;
 let lastWhisperShownAt = 0;
 const INTERNAL_CLIPBOARD_PROBE_REGEX = /^__supercmd_[a-z0-9_]+_probe__\d+_[a-z0-9]+$/i;
+const WINDOW_MANAGEMENT_PRESET_COMMAND_IDS = new Set<string>([
+  'system-window-management-left',
+  'system-window-management-right',
+  'system-window-management-top',
+  'system-window-management-bottom',
+  'system-window-management-center',
+  'system-window-management-center-80',
+  'system-window-management-fill',
+  'system-window-management-top-left',
+  'system-window-management-top-right',
+  'system-window-management-bottom-left',
+  'system-window-management-bottom-right',
+  'system-window-management-auto-organize',
+  'system-window-management-increase-size-10',
+  'system-window-management-decrease-size-10',
+  'system-window-management-increase-left-10',
+  'system-window-management-increase-right-10',
+  'system-window-management-increase-top-10',
+  'system-window-management-increase-bottom-10',
+  'system-window-management-decrease-left-10',
+  'system-window-management-decrease-right-10',
+  'system-window-management-decrease-top-10',
+  'system-window-management-decrease-bottom-10',
+  'system-window-management-move-up-10',
+  'system-window-management-move-down-10',
+  'system-window-management-move-left-10',
+  'system-window-management-move-right-10',
+]);
+type QueuedWindowMutation = { id: string; x: number; y: number; width: number; height: number };
+const WINDOW_MANAGEMENT_MUTATION_BATCH_MS = 6;
+const WINDOW_MANAGEMENT_PRESET_HOTKEY_MIN_INTERVAL_MS = 18;
+let pendingWindowMutationsById = new Map<string, QueuedWindowMutation>();
+let windowMutationBatchTimer: ReturnType<typeof setTimeout> | null = null;
+let windowMutationBatchInFlight = false;
+let windowMutationFlushWaiters: Array<(value: boolean) => void> = [];
+let lastWindowManagementPresetHotkeyAt = 0;
+
+function isWindowManagementSystemCommand(commandId: string): boolean {
+  const normalized = String(commandId || '').trim();
+  return normalized === 'system-window-management' || WINDOW_MANAGEMENT_PRESET_COMMAND_IDS.has(normalized);
+}
+
+function enqueueWindowManagementMutation<T>(task: () => Promise<T> | T): Promise<T> {
+  const run = async (): Promise<T> => {
+    const elapsed = Date.now() - lastWindowManagementMutationAt;
+    if (elapsed < WINDOW_MANAGEMENT_MUTATION_MIN_INTERVAL_MS) {
+      await new Promise((resolve) => setTimeout(resolve, WINDOW_MANAGEMENT_MUTATION_MIN_INTERVAL_MS - elapsed));
+    }
+    try {
+      return await task();
+    } finally {
+      lastWindowManagementMutationAt = Date.now();
+    }
+  };
+  const queued = windowManagementMutationQueue.then(run, run);
+  windowManagementMutationQueue = queued.then(() => undefined, () => undefined);
+  return queued;
+}
+
+function queueWindowMutations(entries: QueuedWindowMutation[]): Promise<boolean> {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return Promise.resolve(false);
+  }
+  for (const entry of entries) {
+    pendingWindowMutationsById.set(entry.id, entry);
+  }
+  const completion = new Promise<boolean>((resolve) => {
+    windowMutationFlushWaiters.push(resolve);
+  });
+  if (windowMutationBatchTimer || windowMutationBatchInFlight) return completion;
+  windowMutationBatchTimer = setTimeout(() => {
+    windowMutationBatchTimer = null;
+    void flushQueuedWindowMutations();
+  }, WINDOW_MANAGEMENT_MUTATION_BATCH_MS);
+  return completion;
+}
+
+async function flushQueuedWindowMutations(): Promise<void> {
+  if (windowMutationBatchInFlight) return;
+  if (pendingWindowMutationsById.size === 0) return;
+  windowMutationBatchInFlight = true;
+  const batch = Array.from(pendingWindowMutationsById.values());
+  const waiters = windowMutationFlushWaiters;
+  windowMutationFlushWaiters = [];
+  pendingWindowMutationsById = new Map<string, QueuedWindowMutation>();
+  let success = true;
+  try {
+    await enqueueWindowManagementMutation(async () => {
+      await ensureWindowManagerAccess();
+      for (let index = 0; index < batch.length; index += 1) {
+        const entry = batch[index];
+        try {
+          await callWindowManagerWorker(
+            'set-window-bounds',
+            {
+              id: entry.id,
+              bounds: {
+                x: entry.x,
+                y: entry.y,
+                width: entry.width,
+                height: entry.height,
+              },
+            },
+            1800
+          );
+        } catch (error) {
+          success = false;
+          console.warn('[WindowManager] Failed setBounds for window:', entry.id, error);
+        }
+        if (index < batch.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1));
+        }
+      }
+    });
+  } catch (error) {
+    success = false;
+    console.error('Failed to flush queued window mutations:', error);
+  } finally {
+    for (const resolve of waiters) {
+      try {
+        resolve(success);
+      } catch {}
+    }
+    windowMutationBatchInFlight = false;
+    if (pendingWindowMutationsById.size > 0 && !windowMutationBatchTimer) {
+      windowMutationBatchTimer = setTimeout(() => {
+        windowMutationBatchTimer = null;
+        void flushQueuedWindowMutations();
+      }, WINDOW_MANAGEMENT_MUTATION_BATCH_MS);
+    }
+  }
+}
 
 function isWindowShownRoutedSystemCommand(commandId: string): boolean {
   return (
@@ -2972,11 +3607,16 @@ function createWindow(): void {
       return { action: 'allow' };
     }
 
+    const useNativeVibrancyForWindowManager =
+      detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME && !getElectronLiquidGlassApi();
+
     const popupBounds = parsePopupFeatures(details?.features || '');
     const defaultWidth = detachedPopupName === DETACHED_WHISPER_WINDOW_NAME
       ? 272
       : detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME
         ? 920
+      : detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME
+        ? 320
       : detachedPopupName === DETACHED_PROMPT_WINDOW_NAME
         ? CURSOR_PROMPT_WINDOW_WIDTH
       : detachedPopupName === DETACHED_MEMORY_STATUS_WINDOW_NAME
@@ -2986,6 +3626,8 @@ function createWindow(): void {
       ? 52
       : detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME
         ? 640
+      : detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME
+        ? 276
       : detachedPopupName === DETACHED_PROMPT_WINDOW_NAME
         ? CURSOR_PROMPT_WINDOW_HEIGHT
       : detachedPopupName === DETACHED_MEMORY_STATUS_WINDOW_NAME
@@ -3007,9 +3649,11 @@ function createWindow(): void {
           detachedPopupName === DETACHED_WHISPER_WINDOW_NAME
             ? 'SuperCmd Whisper'
             : detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME
-              ? 'SuperCmd Whisper Onboarding'
+            ? 'SuperCmd Whisper Onboarding'
             : detachedPopupName === DETACHED_PROMPT_WINDOW_NAME
               ? 'SuperCmd Prompt'
+              : detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME
+                ? 'SuperCmd Window Manager'
               : detachedPopupName === DETACHED_MEMORY_STATUS_WINDOW_NAME
                 ? 'SuperCmd Status'
               : 'SuperCmd Read',
@@ -3018,8 +3662,15 @@ function createWindow(): void {
         titleBarOverlay: false,
         transparent: true,
         backgroundColor: '#00000000',
-        vibrancy: detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME ? 'fullscreen-ui' : undefined,
-        visualEffectState: detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME ? 'active' : undefined,
+        vibrancy: detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME
+          ? 'fullscreen-ui'
+          : useNativeVibrancyForWindowManager
+            ? 'under-window'
+            : undefined,
+        visualEffectState:
+          detachedPopupName === DETACHED_WHISPER_ONBOARDING_WINDOW_NAME || useNativeVibrancyForWindowManager
+            ? 'active'
+            : undefined,
         hasShadow: false,
         resizable: false,
         minimizable: false,
@@ -3070,6 +3721,10 @@ function createWindow(): void {
         if (whisperChildWindow === childWindow) whisperChildWindow = null;
       });
       return;
+    }
+
+    if (detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME) {
+      applyLiquidGlassToWindowManagerPopup(childWindow);
     }
 
     if (detachedPopupName === DETACHED_MEMORY_STATUS_WINDOW_NAME) {
@@ -4208,6 +4863,9 @@ async function openLauncherAndRunSystemCommand(
   const showLauncher = options?.showWindow !== false;
   const preserveFocusWhenHidden = options?.preserveFocusWhenHidden ?? !showLauncher;
 
+  if (isWindowManagementSystemCommand(commandId)) {
+    await captureWindowManagementTargetWindow();
+  }
   if (preserveFocusWhenHidden) {
     captureFrontmostAppContext();
   }
@@ -4311,6 +4969,13 @@ async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' =
   }
   if (isAISectionDisabledForCommand(commandId)) {
     return false;
+  }
+  if (source === 'hotkey' && WINDOW_MANAGEMENT_PRESET_COMMAND_IDS.has(String(commandId || '').trim())) {
+    const now = Date.now();
+    if (now - lastWindowManagementPresetHotkeyAt < WINDOW_MANAGEMENT_PRESET_HOTKEY_MIN_INTERVAL_MS) {
+      return true;
+    }
+    lastWindowManagementPresetHotkeyAt = now;
   }
 
   const isWhisperOpenCommand =
@@ -4503,6 +5168,15 @@ async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' =
     return await openLauncherAndRunSystemCommand('system-supercmd-whisper', {
       showWindow: source === 'launcher',
       mode: launcherMode === 'onboarding' ? 'onboarding' : 'default',
+    });
+  }
+  if (isWindowManagementSystemCommand(commandId)) {
+    return await openLauncherAndRunSystemCommand(commandId, {
+      showWindow: false,
+      mode: launcherMode === 'onboarding' ? 'onboarding' : 'default',
+      // Keep focus in SuperCmd only for the panel command: detached window manager
+      // closes itself on blur. Preset commands should restore app focus normally.
+      preserveFocusWhenHidden: commandId !== 'system-window-management',
     });
   }
   if (commandId === 'system-import-snippets') {
@@ -6042,6 +6716,8 @@ protocol.registerSchemesAsPrivileged([
 app.whenReady().then(async () => {
   app.setAsDefaultProtocolClient('supercmd');
   scrubInternalClipboardProbe('app startup');
+  // Warm the worker so the first window-management action does not race spawn.
+  setTimeout(() => { ensureWindowManagerWorker(); }, 0);
 
   // Register the sc-asset:// protocol handler to serve extension asset files
   protocol.handle('sc-asset', (request: any) => {
@@ -8640,105 +9316,72 @@ return appURL's |path|() as text`,
 
   ipcMain.handle('window-management-get-active-window', async () => {
     try {
-      const { execSync } = require('child_process');
-      const script = `
-        tell application "System Events"
-          set frontApp to first application process whose frontmost is true
-          set frontAppName to name of frontApp
-          set frontWindow to window 1 of frontApp
-
-          set windowBounds to bounds of frontWindow
-          set windowId to id of frontWindow as text
-          set windowTitle to name of frontWindow
-          set windowPosition to {item 1 of windowBounds, item 2 of windowBounds}
-          set windowSize to {(item 3 of windowBounds) - (item 1 of windowBounds), (item 4 of windowBounds) - (item 2 of windowBounds)}
-
-          return windowId & "|" & windowTitle & "|" & (item 1 of windowPosition) & "|" & (item 2 of windowPosition) & "|" & (item 1 of windowSize) & "|" & (item 2 of windowSize) & "|" & frontAppName
-        end tell
-      `;
-
-      const result = execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { encoding: 'utf-8' }).trim();
-      const [id, title, x, y, width, height, appName] = result.split('|');
-
-      return {
-        id,
-        active: true,
-        bounds: {
-          position: { x: parseInt(x), y: parseInt(y) },
-          size: { width: parseInt(width), height: parseInt(height) }
-        },
-        desktopId: '1',
-        positionable: true,
-        resizable: true,
-        fullScreenSettable: true,
-        application: {
-          name: appName,
-          path: '',
-          bundleId: ''
-        }
-      };
+      const raw = await callWindowManagerWorker<any>('get-active-window');
+      const win = normalizeNodeWindowInfo(raw);
+      if (!win || isSelfManagedWindow(win)) return null;
+      return toWindowManagementWindowFromNode(win, true);
     } catch (error) {
-      console.error('Failed to get active window:', error);
+      if (!isTransientWindowManagerWorkerError(error)) {
+        console.error('Failed to get active window:', error);
+      }
       return null;
+    }
+  });
+
+  ipcMain.handle('window-management-get-target-window', async () => {
+    try {
+      const snapshot = await getNodeSnapshot();
+      if (snapshot.target) {
+        return toWindowManagementWindowFromNode(snapshot.target, true);
+      }
+      return null;
+    } catch (error) {
+      if (!isTransientWindowManagerWorkerError(error)) {
+        console.error('Failed to get target window:', error);
+      }
+      return null;
+    }
+  });
+
+  ipcMain.handle('window-management-get-context', async () => {
+    try {
+      const snapshot = await getNodeSnapshot();
+      const target = snapshot.target ? toWindowManagementWindowFromNode(snapshot.target, true) : null;
+      const { screen: electronScreen } = require('electron');
+      const fallbackDisplay = electronScreen.getDisplayNearestPoint(electronScreen.getCursorScreenPoint());
+      const workArea = windowManagementTargetWorkArea || fallbackDisplay?.workArea || null;
+      return { target, workArea };
+    } catch (error) {
+      if (!isTransientWindowManagerWorkerError(error)) {
+        console.error('Failed to get window management context:', error);
+      }
+      return { target: null, workArea: null };
     }
   });
 
   ipcMain.handle('window-management-get-windows-on-active-desktop', async () => {
     try {
-      const { execSync } = require('child_process');
-      const script = `
-        tell application "System Events"
-          set windowList to {}
-          repeat with proc in (every application process where background only is false)
-            try
-              set procName to name of proc
-              repeat with win in (every window of proc)
-                set windowBounds to bounds of win
-                set windowId to id of win as text
-                set windowTitle to name of win
-                set windowPosition to {item 1 of windowBounds, item 2 of windowBounds}
-                set windowSize to {(item 3 of windowBounds) - (item 1 of windowBounds), (item 4 of windowBounds) - (item 2 of windowBounds)}
-
-                set end of windowList to windowId & "|" & windowTitle & "|" & (item 1 of windowPosition) & "|" & (item 2 of windowPosition) & "|" & (item 1 of windowSize) & "|" & (item 2 of windowSize) & "|" & procName
-              end repeat
-            end try
-          end repeat
-
-          set text item delimiters to "\\n"
-          return windowList as text
-        end tell
-      `;
-
-      const result = execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { encoding: 'utf-8' }).trim();
-      if (!result || result.trim() === '') {
-        return [];
-      }
-
-      const windows = result.split('\n').map((line: string) => {
-        const [id, title, x, y, width, height, appName] = line.split('|');
-        return {
-          id,
-          active: false,
-          bounds: {
-            position: { x: parseInt(x), y: parseInt(y) },
-            size: { width: parseInt(width), height: parseInt(height) }
-          },
-          desktopId: '1',
-          positionable: true,
-          resizable: true,
-          fullScreenSettable: true,
-          application: {
-            name: appName,
-            path: '',
-            bundleId: ''
-          }
-        };
-      });
-
-      return windows;
+      const windows = await getNodeWindows();
+      return windows.map((win) => toWindowManagementWindowFromNode(win, false)).filter(Boolean);
     } catch (error) {
-      console.error('Failed to get windows:', error);
+      if (!isTransientWindowManagerWorkerError(error)) {
+        console.error('Failed to get windows:', error);
+      }
       return [];
+    }
+  });
+
+  ipcMain.handle('window-management-snapshot', async () => {
+    try {
+      const snapshot = await getNodeSnapshot();
+      const target = snapshot.target ? toWindowManagementWindowFromNode(snapshot.target, true) : null;
+      const windows = snapshot.windows.map((win) => toWindowManagementWindowFromNode(win, false)).filter(Boolean);
+      return { target, windows };
+    } catch (error) {
+      if (!isTransientWindowManagerWorkerError(error)) {
+        console.error('Failed to get window snapshot:', error);
+      }
+      return { target: null, windows: [] };
     }
   });
 
@@ -8748,11 +9391,25 @@ return appURL's |path|() as text`,
       // Return a minimal implementation
       const { screen } = require('electron');
       const displays = screen.getAllDisplays();
+      const cursorPoint = screen.getCursorScreenPoint();
+      const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
 
       return displays.map((display: any, index: number) => ({
         id: String(index + 1),
-        active: index === 0,
+        active: display.id === activeDisplay?.id,
         screenId: String(display.id),
+        bounds: {
+          x: Number(display.bounds?.x || 0),
+          y: Number(display.bounds?.y || 0),
+          width: Number(display.bounds?.width || 0),
+          height: Number(display.bounds?.height || 0),
+        },
+        workArea: {
+          x: Number(display.workArea?.x || display.bounds?.x || 0),
+          y: Number(display.workArea?.y || display.bounds?.y || 0),
+          width: Number(display.workArea?.width || display.bounds?.width || 0),
+          height: Number(display.workArea?.height || display.bounds?.height || 0),
+        },
         size: {
           width: display.bounds.width,
           height: display.bounds.height
@@ -8767,54 +9424,97 @@ return appURL's |path|() as text`,
 
   ipcMain.handle('window-management-set-window-bounds', async (_event: any, options: any) => {
     try {
-      const { execSync } = require('child_process');
-      const { id, bounds, desktopId } = options;
+      const { id, bounds, desktopId } = options || {};
+      const normalizedId = String(id || '').trim();
+      if (!normalizedId) return false;
+      await ensureWindowManagerAccess();
 
+      let nextEntry: QueuedWindowMutation | null = null;
       if (bounds === 'fullscreen') {
-        // Set window to fullscreen
-        const script = `
-          tell application "System Events"
-            set targetWindow to (first window of (first application process whose (id of window 1) as text is "${id}"))
-            set value of attribute "AXFullScreen" of targetWindow to true
-          end tell
-        `;
-        execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { encoding: 'utf-8' });
+        const { screen: electronScreen } = require('electron');
+        const display = electronScreen.getDisplayNearestPoint(electronScreen.getCursorScreenPoint());
+        const area = display?.workArea || electronScreen.getPrimaryDisplay().workArea;
+        nextEntry = {
+          id: normalizedId,
+          x: Math.round(Number(area?.x || 0)),
+          y: Math.round(Number(area?.y || 0)),
+          width: Math.max(1, Math.round(Number(area?.width || 1))),
+          height: Math.max(1, Math.round(Number(area?.height || 1))),
+        };
       } else {
-        // Set window position/size
-        const { position, size } = bounds;
+        const position = bounds?.position || {};
+        const size = bounds?.size || {};
 
-        // If desktopId specifies a different display, offset position to that display
+        // If desktopId specifies a different display, offset position to that display.
         let offsetX = 0;
         let offsetY = 0;
         if (desktopId) {
           const { screen: electronScreen } = require('electron');
           const displays = electronScreen.getAllDisplays();
-          const targetIndex = parseInt(desktopId) - 1;
+          const targetIndex = parseInt(desktopId, 10) - 1;
           if (targetIndex >= 0 && targetIndex < displays.length) {
             offsetX = displays[targetIndex].bounds.x;
             offsetY = displays[targetIndex].bounds.y;
           }
         }
 
-        let script = 'tell application "System Events"\n';
-        script += `  set targetWindow to (first window of (first application process whose (id of window 1) as text is "${id}"))\n`;
+        const win = await getNodeWindowById(normalizedId);
+        const currentBounds = win?.bounds || null;
+        const baseX = Number(currentBounds?.x ?? 0);
+        const baseY = Number(currentBounds?.y ?? 0);
+        const baseWidth = Number(currentBounds?.width ?? 400);
+        const baseHeight = Number(currentBounds?.height ?? 300);
 
-        if (position && size) {
-          const x = (position.x ?? 0) + offsetX;
-          const y = (position.y ?? 0) + offsetY;
-          script += `  set bounds of targetWindow to {${x}, ${y}, ${x + (size.width ?? 0)}, ${y + (size.height ?? 0)}}\n`;
-        } else if (position) {
-          script += `  set position of targetWindow to {${(position.x ?? 0) + offsetX}, ${(position.y ?? 0) + offsetY}}\n`;
-        } else if (size) {
-          script += `  set size of targetWindow to {${size.width}, ${size.height}}\n`;
-        }
+        const x = Number(position?.x ?? baseX) + offsetX;
+        const y = Number(position?.y ?? baseY) + offsetY;
+        const width = Number(size?.width ?? baseWidth);
+        const height = Number(size?.height ?? baseHeight);
 
-        script += 'end tell';
-        execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { encoding: 'utf-8' });
+        if (![x, y, width, height].every((v) => Number.isFinite(v))) return false;
+        nextEntry = {
+          id: normalizedId,
+          x: Math.round(x),
+          y: Math.round(y),
+          width: Math.max(1, Math.round(width)),
+          height: Math.max(1, Math.round(height)),
+        };
       }
+
+      if (!nextEntry) return false;
+      return await queueWindowMutations([nextEntry]);
     } catch (error) {
       console.error('Failed to set window bounds:', error);
-      throw error;
+      return false;
+    }
+  });
+
+  ipcMain.handle('window-management-set-window-layout', async (_event: any, items: WindowManagementLayoutItem[]) => {
+    try {
+      await ensureWindowManagerAccess();
+      const normalized = (Array.isArray(items) ? items : [])
+        .map((entry) => {
+          const id = String(entry?.id || '').trim();
+          const x = Number(entry?.bounds?.position?.x);
+          const y = Number(entry?.bounds?.position?.y);
+          const width = Number(entry?.bounds?.size?.width);
+          const height = Number(entry?.bounds?.size?.height);
+          if (!id) return null;
+          if (![x, y, width, height].every((v) => Number.isFinite(v))) return null;
+          return {
+            id,
+            x: Math.round(x),
+            y: Math.round(y),
+            width: Math.max(1, Math.round(width)),
+            height: Math.max(1, Math.round(height)),
+          };
+        })
+        .filter(Boolean) as QueuedWindowMutation[];
+
+      if (normalized.length === 0) return false;
+      return await queueWindowMutations(normalized);
+    } catch (error) {
+      console.error('Failed to set window layout:', error);
+      return false;
     }
   });
 
@@ -9252,6 +9952,15 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  if (windowManagerWorkerRestartTimer) {
+    clearTimeout(windowManagerWorkerRestartTimer);
+    windowManagerWorkerRestartTimer = null;
+  }
+  rejectAllWindowManagerWorkerPending('[WindowManager] App is quitting.');
+  if (windowManagerWorker) {
+    try { windowManagerWorker.kill('SIGKILL'); } catch {}
+    windowManagerWorker = null;
+  }
   clearAppUpdaterAutoCheckTimer();
   stopWhisperHoldWatcher();
   stopFnSpeakToggleWatcher();

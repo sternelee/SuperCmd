@@ -16,6 +16,10 @@ import OnboardingExtension from './OnboardingExtension';
 import FileSearchExtension from './FileSearchExtension';
 import SuperCmdWhisper from './SuperCmdWhisper';
 import SuperCmdRead from './SuperCmdRead';
+import WindowManagerPanel, {
+  executeWindowManagementPresetCommandById,
+  isWindowManagementPresetCommandId,
+} from './WindowManagerPanel';
 import { tryCalculate, tryCalculateAsync } from './smart-calculator';
 import { useDetachedPortalWindow } from './useDetachedPortalWindow';
 import { useAppViewManager } from './hooks/useAppViewManager';
@@ -64,12 +68,12 @@ const App: React.FC = () => {
   const {
     extensionView, extensionPreferenceSetup, scriptCommandSetup, scriptCommandOutput,
     showClipboardManager, showSnippetManager, showFileSearch, showCursorPrompt,
-    showWhisper, showSpeak, showWhisperOnboarding, showWhisperHint, showOnboarding, aiMode,
+    showWhisper, showSpeak, showWindowManager, showWhisperOnboarding, showWhisperHint, showOnboarding, aiMode,
     openOnboarding, openWhisper, openClipboardManager,
-    openSnippetManager, openFileSearch, openCursorPrompt, openSpeak,
+    openSnippetManager, openFileSearch, openCursorPrompt, openSpeak, openWindowManager,
     setExtensionView, setExtensionPreferenceSetup, setScriptCommandSetup, setScriptCommandOutput,
     setShowClipboardManager, setShowSnippetManager, setShowFileSearch, setShowCursorPrompt,
-    setShowWhisper, setShowSpeak, setShowWhisperOnboarding, setShowWhisperHint,
+    setShowWhisper, setShowSpeak, setShowWindowManager, setShowWhisperOnboarding, setShowWhisperHint,
     setShowOnboarding, setAiMode,
   } = useAppViewManager();
   const {
@@ -155,6 +159,7 @@ const App: React.FC = () => {
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const actionsOverlayRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const windowPresetCommandQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastWindowHiddenAtRef = useRef<number>(0);
   const calcRequestSeqRef = useRef(0);
   const pinnedCommandsRef = useRef<string[]>([]);
@@ -171,6 +176,17 @@ const App: React.FC = () => {
     anchor: 'caret',
     onClosed: () => {
       setShowCursorPrompt(false);
+    },
+  });
+
+  const windowManagerPortalTarget = useDetachedPortalWindow(showWindowManager, {
+    name: 'supercmd-window-manager-window',
+    title: 'SuperCmd Window Manager',
+    width: 380,
+    height: 276,
+    anchor: 'top-right',
+    onClosed: () => {
+      setShowWindowManager(false);
     },
   });
 
@@ -340,6 +356,7 @@ const App: React.FC = () => {
         whisperSessionRef.current = false;
         setShowCursorPrompt(false);
         setShowWhisperHint(false);
+        setShowWindowManager(false);
         setMemoryFeedback(null);
         setMemoryActionLoading(false);
         setScriptCommandSetup(null);
@@ -386,6 +403,7 @@ const App: React.FC = () => {
       whisperSessionRef.current = false;
       setShowCursorPrompt(false);
       setShowWhisperHint(false);
+      setShowWindowManager(false);
       setMemoryFeedback(null);
       setMemoryActionLoading(false);
       setScriptCommandSetup(null);
@@ -406,6 +424,7 @@ const App: React.FC = () => {
         setShowCursorPrompt(false);
         setShowWhisper(false);
         setShowSpeak(false);
+        setShowWindowManager(false);
         setShowWhisperOnboarding(false);
       }
 
@@ -425,7 +444,7 @@ const App: React.FC = () => {
       inputRef.current?.focus();
     });
     return cleanupWindowShown;
-  }, [fetchCommands, loadLauncherPreferences, refreshSelectedTextSnapshot, openWhisper, openSpeak, openCursorPrompt, resetCursorPromptState, exitAiMode, setShowCursorPrompt, setShowWhisperHint, setMemoryFeedback, setMemoryActionLoading, setScriptCommandSetup, setScriptCommandOutput, setExtensionView, setSearchQuery, setSelectedIndex, setShowSnippetManager, setShowFileSearch, openClipboardManager, setShowClipboardManager, openSnippetManager, openFileSearch, openOnboarding]);
+  }, [fetchCommands, loadLauncherPreferences, refreshSelectedTextSnapshot, openWhisper, openSpeak, openCursorPrompt, resetCursorPromptState, exitAiMode, setShowCursorPrompt, setShowWhisperHint, setMemoryFeedback, setMemoryActionLoading, setScriptCommandSetup, setScriptCommandOutput, setExtensionView, setSearchQuery, setSelectedIndex, setShowSnippetManager, setShowFileSearch, openClipboardManager, setShowClipboardManager, openSnippetManager, openFileSearch, openOnboarding, setShowWindowManager]);
 
   useEffect(() => {
     const cleanupSelectionSnapshotUpdated = window.electron.onSelectionSnapshotUpdated((payload) => {
@@ -698,10 +717,10 @@ const App: React.FC = () => {
   }, [contextMenu]);
 
   useEffect(() => {
-    if (!showActions && !contextMenu && !aiMode && !extensionView && !showClipboardManager && !showSnippetManager && !showFileSearch && !showCursorPrompt && !showWhisper && !showSpeak && !showOnboarding) {
+    if (!showActions && !contextMenu && !aiMode && !extensionView && !showClipboardManager && !showSnippetManager && !showFileSearch && !showCursorPrompt && !showWhisper && !showSpeak && !showWindowManager && !showOnboarding) {
       restoreLauncherFocus();
     }
-  }, [showActions, contextMenu, aiMode, extensionView, showClipboardManager, showSnippetManager, showFileSearch, showCursorPrompt, showWhisper, showSpeak, showOnboarding, showWhisperOnboarding, restoreLauncherFocus]);
+  }, [showActions, contextMenu, aiMode, extensionView, showClipboardManager, showSnippetManager, showFileSearch, showCursorPrompt, showWhisper, showSpeak, showWindowManager, showOnboarding, showWhisperOnboarding, restoreLauncherFocus]);
 
   const isLauncherModeActive =
     !showActions &&
@@ -714,6 +733,7 @@ const App: React.FC = () => {
     !showCursorPrompt &&
     !showWhisper &&
     !showSpeak &&
+    !showWindowManager &&
     !showOnboarding &&
     !showWhisperOnboarding;
 
@@ -1038,7 +1058,10 @@ const App: React.FC = () => {
     ]
   );
 
-  const runLocalSystemCommand = useCallback(async (commandId: string): Promise<boolean> => {
+  const runLocalSystemCommand = useCallback(async (
+    commandId: string,
+    options?: { fromMainEvent?: boolean }
+  ): Promise<boolean> => {
     if (commandId === 'system-supercmd-whisper' || commandId === 'system-supercmd-speak') {
       try {
         const settings = await window.electron.getSettings();
@@ -1077,6 +1100,45 @@ const App: React.FC = () => {
     if (commandId === 'system-search-files') {
       whisperSessionRef.current = false;
       openFileSearch();
+      return true;
+    }
+    if (isWindowManagementPresetCommandId(commandId)) {
+      whisperSessionRef.current = false;
+      // For launcher-initiated execution, route through main first so it can
+      // capture the real frontmost target window before running the preset.
+      if (!options?.fromMainEvent) {
+        await window.electron.executeCommand(commandId);
+        return true;
+      }
+      const queued = windowPresetCommandQueueRef.current.then(async () => {
+        const result = await executeWindowManagementPresetCommandById(commandId);
+        if (result.success && document.hasFocus()) {
+          try {
+            await window.electron.hideWindow();
+          } catch {}
+        }
+      });
+      windowPresetCommandQueueRef.current = queued.then(() => undefined, () => undefined);
+      await queued;
+      return true;
+    }
+    if (commandId === 'system-window-management') {
+      whisperSessionRef.current = false;
+      if (showWindowManager) {
+        setShowWindowManager(false);
+        return true;
+      }
+      openWindowManager();
+      setSearchQuery('');
+      setSelectedIndex(0);
+      // Only hide when launcher is the actively focused window (launcher-invoked flow).
+      // For global-hotkey/background invocation, forcing hide can cause focus churn
+      // that immediately blurs and closes the detached window manager panel.
+      if (document.hasFocus()) {
+        try {
+          await window.electron.hideWindow();
+        } catch {}
+      }
       return true;
     }
     if (commandId === 'system-add-to-memory') {
@@ -1149,12 +1211,12 @@ const App: React.FC = () => {
       return true;
     }
     return false;
-  }, [memoryActionLoading, selectedTextSnapshot, showMemoryFeedback, showOnboarding, openOnboarding, openWhisper, setShowWhisper, setShowWhisperOnboarding, setShowWhisperHint, openClipboardManager, openSnippetManager, openFileSearch, openSpeak, setShowSpeak]);
+  }, [memoryActionLoading, selectedTextSnapshot, showMemoryFeedback, showOnboarding, showWindowManager, openOnboarding, openWhisper, setShowWhisper, setShowWhisperOnboarding, setShowWhisperHint, openClipboardManager, openSnippetManager, openFileSearch, openSpeak, openWindowManager, setShowSpeak, setShowWindowManager]);
 
   useEffect(() => {
     const cleanup = window.electron.onRunSystemCommand(async (commandId: string) => {
       try {
-        await runLocalSystemCommand(commandId);
+        await runLocalSystemCommand(commandId, { fromMainEvent: true });
       } catch (error) {
         console.error('Failed to run system command from main process:', error);
       }
@@ -1548,6 +1610,15 @@ const App: React.FC = () => {
           onClose={() => {
             setShowSpeak(false);
             void window.electron.speakStop();
+          }}
+        />
+      ) : null}
+      {showWindowManager && windowManagerPortalTarget ? (
+        <WindowManagerPanel
+          show={showWindowManager}
+          portalTarget={windowManagerPortalTarget}
+          onClose={() => {
+            setShowWindowManager(false);
           }}
         />
       ) : null}

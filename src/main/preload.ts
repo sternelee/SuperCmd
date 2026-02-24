@@ -613,10 +613,18 @@ contextBridge.exposeInMainWorld('electron', {
   // ─── WindowManagement ────────────────────────────────────────────
   getActiveWindow: (): Promise<any> =>
     ipcRenderer.invoke('window-management-get-active-window'),
+  getWindowManagementTargetWindow: (): Promise<any> =>
+    ipcRenderer.invoke('window-management-get-target-window'),
+  getWindowManagementContext: (): Promise<any> =>
+    ipcRenderer.invoke('window-management-get-context'),
   getWindowsOnActiveDesktop: (): Promise<any[]> =>
     ipcRenderer.invoke('window-management-get-windows-on-active-desktop'),
   getDesktops: (): Promise<any[]> =>
     ipcRenderer.invoke('window-management-get-desktops'),
-  setWindowBounds: (options: any): Promise<void> =>
+  setWindowBounds: (options: any): Promise<boolean> =>
     ipcRenderer.invoke('window-management-set-window-bounds', options),
+  setWindowLayout: (items: any[]): Promise<boolean> =>
+    ipcRenderer.invoke('window-management-set-window-layout', items),
+  getWindowManagementSnapshot: (): Promise<any> =>
+    ipcRenderer.invoke('window-management-snapshot'),
 });

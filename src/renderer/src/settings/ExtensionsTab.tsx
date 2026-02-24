@@ -18,6 +18,7 @@ import {
   FileOutput,
   LogOut,
   Sparkles,
+  LayoutGrid,
 } from 'lucide-react';
 import supercmdLogo from '../../../../supercmd.svg';
 import HotkeyRecorder from './HotkeyRecorder';
@@ -653,6 +654,7 @@ const ExtensionsTab: React.FC<{
     if (commandId.includes('open-ai-settings')) return <Brain className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     if (commandId.includes('open-extensions-settings')) return <Wand2 className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     if (commandId.includes('search-files')) return <FileSearch className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
+    if (commandId.includes('window-management')) return <LayoutGrid className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     if (commandId.includes('create-snippet')) return <FilePlus2 className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     if (commandId.includes('import-snippets')) return <FileInput className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     if (commandId.includes('export-snippets')) return <FileOutput className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
