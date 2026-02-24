@@ -111,9 +111,9 @@ function keyEventToAccelerator(e: KeyboardLikeEvent): string | null {
   };
 
   const mappedKey =
+    mapCodeToAcceleratorToken(e.code as string) ||
     keyMap[key] ||
-    (key.length === 1 ? key.toUpperCase() : null) ||
-    mapCodeToAcceleratorToken(e.code) ||
+    (key.length === 1 && key !== ' ' && key !== '\u00A0' ? key.toUpperCase() : null) ||
     key;
 
   const allowWithoutModifier = /^F\d{1,2}$/i.test(mappedKey) || mappedKey === 'CapsLock' || mappedKey === 'Fn';
@@ -158,9 +158,9 @@ function mapKeyToAcceleratorToken(key: string): string | null {
 }
 
 function mapKeyboardEventToAcceleratorToken(e: KeyboardLikeEvent): string | null {
-  const byKey = mapKeyToAcceleratorToken(e.key);
-  if (byKey) return byKey;
-  return mapCodeToAcceleratorToken(e.code);
+  const byCode = mapCodeToAcceleratorToken(e.code as string);
+  if (byCode) return byCode;
+  return mapKeyToAcceleratorToken(e.key);
 }
 
 function formatShortcut(shortcut: string): string {
