@@ -265,6 +265,7 @@ let oauthBlurHideSuppressionDepth = 0; // Keep launcher alive while OAuth browse
 let oauthBlurHideSuppressionTimer: NodeJS.Timeout | null = null;
 const OAUTH_BLUR_SUPPRESSION_TIMEOUT_MS = 3 * 60 * 1000;
 let currentShortcut = '';
+const DEVTOOLS_SHORTCUT = normalizeAccelerator('CommandOrControl+Option+I');
 let globalShortcutRegistrationState: {
   requestedShortcut: string;
   activeShortcut: string;
@@ -2959,15 +2960,6 @@ function createWindow(): void {
   // macOS can emit the invalid-action beep when the key-equivalent lands on the
   // newly focused window while the key is still held.
   mainWindow.webContents.on('before-input-event', (event: any, input: any) => {
-    if (isWindowDevToolsShortcutInput(input)) {
-      event.preventDefault();
-      const opened = openPreferredDevTools();
-      if (!opened) {
-        console.warn('[DevTools] No window available to open developer tools.');
-      }
-      return;
-    }
-
     const inputType = String(input?.type || '').toLowerCase();
     if (inputType !== 'keydown') return;
     if (!shouldSuppressOpeningShortcutInput(input)) return;
@@ -3330,7 +3322,6 @@ function createPromptWindow(initialBounds?: { x: number; y: number; width: numbe
   promptWindow.on('closed', () => {
     promptWindow = null;
   });
-  registerWindowKeyboardShortcuts(promptWindow);
 }
 
 function schedulePromptWindowPrewarm(): void {
@@ -5287,35 +5278,11 @@ function isEscapeInput(input: any): boolean {
   return key === 'escape' || code === 'escape';
 }
 
-function isWindowDevToolsShortcutInput(input: any): boolean {
-  const inputType = String(input?.type || '').toLowerCase();
-  if (inputType !== 'keydown') return false;
-
-  const key = String(input?.key || '').toLowerCase();
-  const code = String(input?.code || '').toLowerCase();
-  if (key !== 'i' && code !== 'keyi') return false;
-
-  if (process.platform === 'darwin') {
-    return Boolean(input.meta) && Boolean(input.alt) && !input.control && !input.shift;
-  }
-
-  return Boolean(input.control) && Boolean(input.alt) && !input.meta && !input.shift;
-}
-
-function registerWindowKeyboardShortcuts(
+function registerCloseWindowShortcut(
   win: InstanceType<typeof BrowserWindow>,
   options?: { closeOnEscape?: boolean }
 ): void {
   win.webContents.on('before-input-event', (event: any, input: any) => {
-    if (isWindowDevToolsShortcutInput(input)) {
-      event.preventDefault();
-      const opened = openPreferredDevTools();
-      if (!opened) {
-        console.warn('[DevTools] No window available to open developer tools.');
-      }
-      return;
-    }
-
     if (!isCloseWindowShortcutInput(input) && !(options?.closeOnEscape && isEscapeInput(input))) return;
     event.preventDefault();
     if (!win.isDestroyed()) {
@@ -5375,7 +5342,7 @@ function openSettingsWindow(payload?: SettingsNavigationPayload): void {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
-  registerWindowKeyboardShortcuts(settingsWindow);
+  registerCloseWindowShortcut(settingsWindow);
 
   const hash = buildSettingsHash(payload);
   loadWindowUrl(settingsWindow, hash);
@@ -5444,7 +5411,7 @@ function openExtensionStoreWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
-  registerWindowKeyboardShortcuts(extensionStoreWindow, { closeOnEscape: true });
+  registerCloseWindowShortcut(extensionStoreWindow, { closeOnEscape: true });
 
   loadWindowUrl(extensionStoreWindow, '/extension-store');
 
@@ -6019,6 +5986,30 @@ function registerCommandHotkeys(hotkeys: Record<string, string>): void {
 
   syncFnSpeakToggleWatcher(hotkeys);
   syncFnCommandWatchers(hotkeys);
+}
+
+function registerDevToolsShortcut(): void {
+  try {
+    unregisterShortcutVariants(DEVTOOLS_SHORTCUT);
+  } catch {}
+
+  if (process.env.NODE_ENV !== 'development') {
+    return;
+  }
+
+  try {
+    const success = globalShortcut.register(DEVTOOLS_SHORTCUT, () => {
+      const opened = openPreferredDevTools();
+      if (!opened) {
+        console.warn('[DevTools] No window available to open developer tools.');
+      }
+    });
+    if (!success) {
+      console.warn(`[DevTools] Failed to register shortcut: ${DEVTOOLS_SHORTCUT}`);
+    }
+  } catch (error) {
+    console.warn(`[DevTools] Error registering shortcut: ${DEVTOOLS_SHORTCUT}`, error);
+  }
 }
 
 // ─── App Initialization ─────────────────────────────────────────────
@@ -9194,6 +9185,7 @@ return appURL's |path|() as text`,
   schedulePromptWindowPrewarm();
   registerGlobalShortcut(settings.globalShortcut);
   registerCommandHotkeys(settings.commandHotkeys);
+  registerDevToolsShortcut();
 
   // Fallback: when another SuperCmd window gains focus (e.g. Settings),
   // close the launcher in default mode even if a native blur event was missed.
