@@ -217,9 +217,9 @@ const SnippetForm: React.FC<SnippetFormProps> = ({ snippet, onSave, onCancel }) 
   };
 
   return (
-    <div className="w-full h-full flex flex-col" onKeyDown={handleKeyDown}>
+    <div className="snippet-view w-full h-full flex flex-col" onKeyDown={handleKeyDown}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
+      <div className="snippet-header flex items-center gap-3 px-5 py-3.5">
         <button
           onClick={onCancel}
           className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
@@ -245,7 +245,7 @@ const SnippetForm: React.FC<SnippetFormProps> = ({ snippet, onSave, onCancel }) 
               value={name}
               onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })); }}
               placeholder="Snippet name"
-              className="w-full bg-white/[0.06] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] placeholder-white/30 outline-none focus:border-white/20 transition-colors"
+              className="w-full bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)] transition-colors"
             />
             {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
           </div>
@@ -263,7 +263,7 @@ const SnippetForm: React.FC<SnippetFormProps> = ({ snippet, onSave, onCancel }) 
               onChange={(e) => { setContent(e.target.value); setErrors((p) => ({ ...p, content: '' })); }}
               placeholder="Type your snippet content here...&#10;Use {clipboard}, {date}, {time} for dynamic values"
               rows={6}
-              className="w-full bg-white/[0.06] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] placeholder-white/30 outline-none focus:border-white/20 transition-colors font-mono resize-y leading-relaxed"
+              className="w-full bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)] transition-colors font-mono resize-y leading-relaxed"
             />
             {errors.content && <p className="text-red-400 text-xs mt-1">{errors.content}</p>}
 
@@ -276,7 +276,7 @@ const SnippetForm: React.FC<SnippetFormProps> = ({ snippet, onSave, onCancel }) 
                   refreshPlaceholderMenuPos();
                   setShowPlaceholderMenu((p) => !p);
                 }}
-                className="px-2 py-1.5 text-[11px] rounded-md bg-white/[0.06] text-white/65 hover:bg-white/[0.1] hover:text-white/80 transition-colors"
+                className="px-2.5 py-1.5 text-[11px] rounded-md border border-[rgba(124,136,154,0.24)] bg-white/[0.04] text-[var(--text-secondary)] hover:bg-white/[0.08] transition-colors"
               >
                 Insert Dynamic Value
               </button>
@@ -301,7 +301,7 @@ const SnippetForm: React.FC<SnippetFormProps> = ({ snippet, onSave, onCancel }) 
                 setErrors((p) => ({ ...p, keyword: '' }));
               }}
               placeholder="Optional keyword"
-              className="w-full bg-white/[0.06] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] placeholder-white/30 outline-none focus:border-white/20 transition-colors"
+              className="w-full bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)] transition-colors"
             />
             {errors.keyword && <p className="text-red-400 text-xs mt-1">{errors.keyword}</p>}
             <p className="text-white/25 text-xs mt-2">
@@ -314,24 +314,24 @@ const SnippetForm: React.FC<SnippetFormProps> = ({ snippet, onSave, onCancel }) 
       </div>
 
       {/* Footer */}
-      <div className="sc-glass-footer flex items-center px-4 py-3.5">
-        <div className="flex items-center gap-2 text-white/40 text-xs flex-1 min-w-0 font-medium">
+      <div className="sc-glass-footer flex items-center px-4 py-2.5">
+        <div className="flex items-center gap-2 text-[var(--text-subtle)] text-xs flex-1 min-w-0 font-normal">
           <span className="truncate">{snippet ? 'Edit Snippet' : 'Create Snippet'}</span>
         </div>
         <button
           onClick={handleSave}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+          className="flex items-center gap-1.5 text-[var(--text-primary)] hover:text-[var(--text-secondary)] transition-colors cursor-pointer"
         >
-          <span className="text-white text-xs font-semibold">Save Snippet</span>
-          <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">⌘</kbd>
-          <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-white/[0.08] text-[11px] text-white/40 font-medium">↩</kbd>
+          <span className="text-xs font-normal">Save Snippet</span>
+          <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-muted)] font-medium">⌘</kbd>
+          <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-muted)] font-medium">↩</kbd>
         </button>
       </div>
 
       {showPlaceholderMenu && createPortal(
         <div
           id="snippet-placeholder-menu"
-          className="fixed z-[120] rounded-lg overflow-hidden border border-white/[0.08]"
+          className="fixed z-[120] rounded-lg overflow-hidden border border-[rgba(124,136,154,0.24)]"
           style={{
             top: placeholderMenuPos.top,
             left: placeholderMenuPos.left,
@@ -341,13 +341,13 @@ const SnippetForm: React.FC<SnippetFormProps> = ({ snippet, onSave, onCancel }) 
             boxShadow: '0 12px 28px rgba(var(--backdrop-rgb), 0.45)',
           }}
         >
-          <div className="px-2 py-1.5 border-b border-white/[0.08]">
+          <div className="px-2 py-1.5 border-b border-[rgba(124,136,154,0.24)]">
             <input
               type="text"
               value={placeholderQuery}
               onChange={(e) => setPlaceholderQuery(e.target.value)}
               placeholder="Search..."
-              className="w-full bg-transparent text-[13px] text-white/75 placeholder-white/30 outline-none"
+              className="w-full bg-transparent text-[13px] text-white/75 placeholder:text-[color:var(--text-subtle)] outline-none"
               autoFocus
             />
           </div>
@@ -685,7 +685,6 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
   const isMetaEnter = (e: React.KeyboardEvent) =>
     e.metaKey &&
     (e.key === 'Enter' || e.key === 'Return' || e.code === 'Enter' || e.code === 'NumpadEnter');
-
   // ─── Keyboard ───────────────────────────────────────────────────
 
   const handleKeyDown = useCallback(
@@ -697,10 +696,16 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
       }
 
       if (dynamicPrompt) {
+        const plainEnter =
+          (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') &&
+          !e.metaKey &&
+          !e.ctrlKey &&
+          !e.altKey &&
+          !e.shiftKey;
         if (e.key === 'Escape') {
           e.preventDefault();
           setDynamicPrompt(null);
-        } else if (e.key === 'Enter' && e.metaKey) {
+        } else if (plainEnter || (e.key === 'Enter' && e.metaKey)) {
           e.preventDefault();
           handleConfirmDynamicPrompt();
         }
@@ -868,9 +873,9 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
   };
 
   return (
-    <div className="w-full h-full flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
+    <div className="snippet-view snippet-search-view w-full h-full flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
+      <div className="snippet-header flex items-center gap-3 px-5 py-3.5">
         <button
           onClick={onClose}
           className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
@@ -883,7 +888,7 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
           placeholder="Search snippets..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 bg-transparent border-none outline-none text-white/95 placeholder-white/45 text-[15px] font-medium tracking-[0.005em]"
+          className="flex-1 bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
           autoFocus
         />
         {searchQuery && (
@@ -921,7 +926,7 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
         {/* Left: List (40%) */}
         <div
           ref={listRef}
-          className="w-[40%] overflow-y-auto custom-scrollbar border-r border-white/[0.06]"
+          className="snippet-split w-[40%] overflow-y-auto custom-scrollbar"
         >
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-white/50">
@@ -942,26 +947,26 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
               )}
             </div>
           ) : (
-            <div className="p-2.5 space-y-1.5">
+            <div className="p-2 space-y-1">
               {filteredSnippets.map((snippet, index) => (
                 <div
                   key={snippet.id}
                   ref={(el) => (itemRefs.current[index] = el)}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                  className={`px-2.5 py-2 rounded-md border cursor-pointer transition-colors ${
                     index === selectedIndex
-                      ? 'bg-white/10'
-                      : 'hover:bg-white/5'
+                      ? 'bg-[var(--launcher-card-selected-bg)] border-[var(--launcher-card-border)]'
+                      : 'border-transparent hover:bg-[var(--launcher-card-hover-bg)] hover:border-[var(--launcher-card-border)]'
                   }`}
                   onClick={() => setSelectedIndex(index)}
                   onDoubleClick={() => handlePaste(snippet)}
                 >
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2">
                     <div className="text-white/40 flex-shrink-0 mt-0.5">
-                      <FileText className="w-4 h-4" />
+                      <FileText className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-white/80 text-sm truncate font-medium">
+                        <span className="text-white/80 text-[13px] truncate font-medium leading-tight">
                           {snippet.name}
                         </span>
                         {snippet.pinned ? (
@@ -973,7 +978,7 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
                           </code>
                         )}
                       </div>
-                      <div className="text-white/30 text-xs truncate mt-0.5">
+                      <div className="text-white/30 text-[11px] truncate mt-0.5 leading-tight">
                         {snippet.content.split('\n')[0]}
                       </div>
                     </div>
@@ -992,7 +997,7 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
                 {selectedSnippet.content}
               </pre>
 
-              <div className="mt-4 pt-3 border-t border-white/[0.08] space-y-1.5">
+              <div className="mt-4 pt-3 border-t border-[var(--snippet-divider)] space-y-1.5">
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className="text-white/35">Name</span>
                   <span className="text-white/65 text-right truncate">
@@ -1042,10 +1047,24 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
       {dynamicPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(var(--backdrop-rgb), 0.25)' }}>
           <div
-            className="w-[520px] max-w-[92vw] rounded-xl border border-white/[0.1] overflow-hidden"
-            style={{ background: 'var(--bg-overlay-strong)', backdropFilter: 'blur(28px)' }}
+            className="w-[520px] max-w-[92vw] rounded-xl overflow-hidden"
+            style={
+              isGlassyTheme
+                ? {
+                    background: 'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+                    backdropFilter: 'blur(96px) saturate(190%)',
+                    WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+                    border: '1px solid rgba(var(--on-surface-rgb), 0.08)',
+                  }
+                : {
+                    background: 'var(--bg-overlay-strong)',
+                    backdropFilter: 'blur(28px)',
+                    WebkitBackdropFilter: 'blur(28px)',
+                    border: '1px solid var(--snippet-divider)',
+                  }
+            }
           >
-            <div className="px-4 py-3 border-b border-white/[0.08] text-white/85 text-sm font-medium">
+            <div className="px-4 py-3 border-b border-[var(--snippet-divider)] text-white/85 text-sm font-medium">
               Fill Dynamic Values
             </div>
             <div className="p-4 space-y-3">
@@ -1067,13 +1086,13 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
                       )
                     }
                     placeholder={field.defaultValue || ''}
-                    className="w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-2.5 py-1.5 text-[13px] text-white/85 placeholder-white/30 outline-none focus:border-white/25"
+                    className="w-full bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-[13px] text-white/85 placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
                   />
                 </div>
               ))}
               <div className="pt-2">
                 <div className="text-[11px] uppercase tracking-wider text-white/35 mb-1.5">Preview</div>
-                <div className="rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-sm text-white/85 whitespace-pre-wrap break-words font-mono">
+                <div className="rounded-lg border border-[var(--snippet-divider)] bg-white/[0.04] px-3 py-2 text-sm text-white/85 whitespace-pre-wrap break-words font-mono">
                   {renderSnippetPreviewWithHighlights(
                     dynamicPrompt.snippet.content,
                     dynamicPrompt.values
@@ -1081,18 +1100,20 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
                 </div>
               </div>
             </div>
-            <div className="px-4 py-3 border-t border-white/[0.08] flex items-center justify-end gap-2">
+            <div className="px-4 py-3 border-t border-[var(--snippet-divider)] flex items-center justify-end gap-2">
               <button
                 onClick={() => setDynamicPrompt(null)}
-                className="px-3 py-1.5 rounded-md text-xs text-white/60 hover:text-white/80 hover:bg-white/[0.06] transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--snippet-divider)] bg-white/[0.03] text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-white/[0.08] transition-colors"
               >
-                Cancel
+                <span>Cancel</span>
+                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-muted)] font-medium">Esc</kbd>
               </button>
               <button
                 onClick={handleConfirmDynamicPrompt}
-                className="px-3 py-1.5 rounded-md text-xs text-white bg-white/[0.12] hover:bg-white/[0.18] transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--snippet-divider-strong)] bg-white/[0.14] text-xs text-[var(--text-primary)] hover:bg-white/[0.2] transition-colors"
               >
-                {dynamicPrompt.mode === 'paste' ? 'Paste' : 'Copy'}
+                <span>{dynamicPrompt.mode === 'paste' ? 'Paste' : 'Copy'}</span>
+                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-muted)] font-medium">↩</kbd>
               </button>
             </div>
           </div>

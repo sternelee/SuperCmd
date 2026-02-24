@@ -417,12 +417,12 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
               <p className="text-sm">No items found</p>
             </div>
           ) : (
-            <div className="p-2.5 space-y-1.5">
+            <div className="p-2 space-y-1">
               {filteredItems.map((item, index) => (
                 <div
                   key={item.id}
                   ref={(el) => (itemRefs.current[index] = el)}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                  className={`px-2.5 py-2 rounded-md border cursor-pointer transition-colors ${
                     index === selectedIndex
                       ? 'bg-[var(--launcher-card-selected-bg)] border-transparent'
                       : 'border-transparent hover:border-[var(--launcher-card-border)] hover:bg-[var(--launcher-card-hover-bg)]'
@@ -430,19 +430,19 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
                   onClick={() => setSelectedIndex(index)}
                   onDoubleClick={() => handlePasteItem(item)}
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
                     {item.type === 'image' ? (
                       <>
                         <img
                           src={`file://${item.content}`}
                           alt="Clipboard"
-                          className="w-8 h-8 object-cover rounded flex-shrink-0"
+                          className="w-7 h-7 object-cover rounded flex-shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="text-[var(--text-secondary)] text-sm truncate">
+                          <div className="text-[var(--text-secondary)] text-[13px] truncate leading-tight">
                             Image
                           </div>
-                          <div className="text-[var(--text-muted)] text-xs">
+                          <div className="text-[var(--text-muted)] text-[11px] leading-tight">
                             {item.metadata?.width} × {item.metadata?.height}
                           </div>
                         </div>
@@ -453,7 +453,7 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
                           {getItemIcon(item.type)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-[var(--text-secondary)] text-sm truncate">
+                          <div className="text-[var(--text-secondary)] text-[13px] truncate">
                             {item.preview || item.content}
                           </div>
                         </div>
@@ -469,13 +469,13 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
         {/* Right: Preview (60%) */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {selectedItem ? (
-            <div className="p-5">
+            <div className={selectedItem.type === 'image' ? 'p-1' : 'p-5'}>
               {selectedItem.type === 'image' ? (
                 <div>
                   <img
                     src={`file://${selectedItem.content}`}
                     alt="Clipboard"
-                    className="w-full rounded-lg border border-[var(--border-primary)]"
+                    className="w-full"
                   />
                 </div>
               ) : (
@@ -484,7 +484,7 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
                 </pre>
               )}
 
-              <div className="mt-4 pt-3 border-t border-[var(--ui-divider)]">
+              <div className={selectedItem.type === 'image' ? 'px-5 pb-5 pt-3 border-t border-[var(--ui-divider)]' : 'mt-4 pt-3 border-t border-[var(--ui-divider)]'}>
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className="text-[var(--text-subtle)]">Date</span>
                   <span className="text-[var(--text-muted)] text-right truncate">
