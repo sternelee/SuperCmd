@@ -7585,6 +7585,10 @@ function registerDevToolsShortcut(): void {
     unregisterShortcutVariants(DEVTOOLS_SHORTCUT);
   } catch {}
 
+  if (process.env.NODE_ENV !== 'development') {
+    return;
+  }
+
   try {
     const success = globalShortcut.register(DEVTOOLS_SHORTCUT, () => {
       const opened = openPreferredDevTools();
