@@ -471,11 +471,12 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
           {selectedItem ? (
             <div className={selectedItem.type === 'image' ? 'p-1' : 'p-5'}>
               {selectedItem.type === 'image' ? (
-                <div>
+                <div className="flex items-center justify-center">
                   <img
                     src={`file://${selectedItem.content}`}
                     alt="Clipboard"
-                    className="w-full"
+                    className="w-full object-contain"
+                    style={{ maxHeight: 'calc(75vh - 80px)' }}
                   />
                 </div>
               ) : (
