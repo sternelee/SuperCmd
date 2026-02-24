@@ -9,9 +9,39 @@
  */
 
 import { app, clipboard, nativeImage } from 'electron';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+
+/**
+ * Write a GIF file to macOS pasteboard with file URL + GIF data + TIFF
+ * fallback via NSPasteboard so apps like Twitter/Slack treat it as a GIF
+ * file upload and other apps get a static fallback.
+ */
+function writeGifToClipboard(filePath: string): boolean {
+  try {
+    const swift = `
+import Cocoa
+let filePath = CommandLine.arguments[1]
+let fileUrl = URL(fileURLWithPath: filePath)
+guard let gifData = try? Data(contentsOf: fileUrl) else { exit(1) }
+let image = NSImage(data: gifData)
+let pb = NSPasteboard.general
+pb.clearContents()
+pb.writeObjects([fileUrl as NSURL])
+pb.addTypes([NSPasteboard.PasteboardType("com.compuserve.gif"), .tiff], owner: nil)
+pb.setData(gifData, forType: NSPasteboard.PasteboardType("com.compuserve.gif"))
+if let tiff = image?.tiffRepresentation {
+    pb.setData(tiff, forType: .tiff)
+}
+`;
+    execFileSync('swift', ['-e', swift, filePath], { stdio: 'ignore', timeout: 10_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface ClipboardItem {
   id: string;
@@ -371,12 +401,14 @@ export function copyItemToClipboard(id: string): boolean {
     if (item.type === 'image') {
       const ext = path.extname(item.content).toLowerCase();
       if (ext === '.gif' && fs.existsSync(item.content)) {
-        // Write raw GIF data so pasting preserves animation.
-        // No static fallback — most apps prefer TIFF/PNG over GIF which
-        // would cause them to paste a still frame instead of the animation.
-        const gifData = fs.readFileSync(item.content);
-        clipboard.clear();
-        clipboard.writeBuffer('com.compuserve.gif', gifData);
+        // Write GIF via NSPasteboard with both com.compuserve.gif (animated)
+        // and public.tiff (static fallback) so GIF-aware apps get animation.
+        if (!writeGifToClipboard(item.content)) {
+          // Fallback: write raw GIF buffer only
+          const gifData = fs.readFileSync(item.content);
+          clipboard.clear();
+          clipboard.writeBuffer('com.compuserve.gif', gifData);
+        }
       } else {
         const image = nativeImage.createFromPath(item.content);
         clipboard.writeImage(image);

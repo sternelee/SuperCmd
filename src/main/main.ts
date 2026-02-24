@@ -8545,6 +8545,38 @@ return appURL's |path|() as text`,
     setClipboardMonitorEnabled(enabled);
   });
 
+  // ── Helper: write a GIF file to macOS pasteboard with proper UTIs ──
+  // Uses Swift to access NSPasteboard directly and write:
+  //  1. File URL (public.file-url) — apps like Twitter/Slack/Discord detect
+  //     a .gif file and upload it with animation preserved.
+  //  2. Raw GIF data (com.compuserve.gif) — for apps that read image data.
+  //  3. TIFF fallback (public.tiff) — for apps that only support static images.
+  function writeGifToClipboard(filePath: string): boolean {
+    try {
+      const { execFileSync } = require('child_process') as typeof import('child_process');
+      const swift = `
+import Cocoa
+let filePath = CommandLine.arguments[1]
+let fileUrl = URL(fileURLWithPath: filePath)
+guard let gifData = try? Data(contentsOf: fileUrl) else { exit(1) }
+let image = NSImage(data: gifData)
+let pb = NSPasteboard.general
+pb.clearContents()
+pb.writeObjects([fileUrl as NSURL])
+pb.addTypes([NSPasteboard.PasteboardType("com.compuserve.gif"), .tiff], owner: nil)
+pb.setData(gifData, forType: NSPasteboard.PasteboardType("com.compuserve.gif"))
+if let tiff = image?.tiffRepresentation {
+    pb.setData(tiff, forType: .tiff)
+}
+`;
+      execFileSync('swift', ['-e', swift, filePath], { stdio: 'ignore', timeout: 10_000 });
+      return true;
+    } catch (e) {
+      console.error('writeGifToClipboard swift failed:', e);
+      return false;
+    }
+  }
+
   // Focus-safe clipboard APIs for extension/runtime shims.
   ipcMain.handle('clipboard-write', (_event: any, payload: { text?: string; html?: string; file?: string }) => {
     try {
@@ -8584,13 +8616,16 @@ return appURL's |path|() as text`,
             // For image files, write the raw image data to the clipboard
             // so pasting works in chat apps, editors, etc.
             try {
+              // GIFs need special handling: write both com.compuserve.gif and
+              // public.tiff via NSPasteboard so GIF-aware apps get animation
+              // and other apps get a static frame.
+              if (ext === '.gif') {
+                if (writeGifToClipboard(normalizedFile)) return true;
+              }
               const rawData = fs.readFileSync(normalizedFile);
               systemClipboard.clear();
-              // Write the native format (e.g. GIF, PNG, JPEG)
               systemClipboard.writeBuffer(imageUti, rawData);
-              // For non-GIF images, also write a PNG fallback for broader app compatibility.
-              // GIFs don't get a fallback because most apps prefer TIFF/PNG over GIF,
-              // which would cause them to paste a static image instead of the animation.
+              // For non-GIF images, also write a PNG fallback.
               if (ext !== '.gif') {
                 const fallbackImage = nativeImage.createFromPath(normalizedFile);
                 if (!fallbackImage.isEmpty()) {
@@ -8841,15 +8876,15 @@ return appURL's |path|() as text`,
       };
       const imageUti = IMAGE_EXTENSIONS[ext];
 
-      if (imageUti) {
+      if (ext === '.gif') {
+        writeGifToClipboard(normalizedFile);
+      } else if (imageUti) {
         const rawData = fs.readFileSync(normalizedFile);
         systemClipboard.clear();
         systemClipboard.writeBuffer(imageUti, rawData);
-        if (ext !== '.gif') {
-          const fallbackImage = nativeImage.createFromPath(normalizedFile);
-          if (!fallbackImage.isEmpty()) {
-            systemClipboard.writeBuffer('public.png', fallbackImage.toPNG());
-          }
+        const fallbackImage = nativeImage.createFromPath(normalizedFile);
+        if (!fallbackImage.isEmpty()) {
+          systemClipboard.writeBuffer('public.png', fallbackImage.toPNG());
         }
       } else {
         // Non-image file: copy as file reference
