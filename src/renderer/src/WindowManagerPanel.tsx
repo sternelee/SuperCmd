@@ -35,6 +35,10 @@ type PresetId =
   | 'increase-right-10'
   | 'increase-bottom-10'
   | 'increase-top-10'
+  | 'decrease-left-10'
+  | 'decrease-right-10'
+  | 'decrease-bottom-10'
+  | 'decrease-top-10'
   | 'move-up-10'
   | 'move-down-10'
   | 'move-left-10'
@@ -75,6 +79,10 @@ export const WINDOW_MANAGEMENT_PRESET_COMMANDS: WindowManagementPresetCommand[] 
   { commandId: 'system-window-management-increase-right-10', presetId: 'increase-right-10' },
   { commandId: 'system-window-management-increase-bottom-10', presetId: 'increase-bottom-10' },
   { commandId: 'system-window-management-increase-top-10', presetId: 'increase-top-10' },
+  { commandId: 'system-window-management-decrease-left-10', presetId: 'decrease-left-10' },
+  { commandId: 'system-window-management-decrease-right-10', presetId: 'decrease-right-10' },
+  { commandId: 'system-window-management-decrease-bottom-10', presetId: 'decrease-bottom-10' },
+  { commandId: 'system-window-management-decrease-top-10', presetId: 'decrease-top-10' },
   { commandId: 'system-window-management-move-up-10', presetId: 'move-up-10' },
   { commandId: 'system-window-management-move-down-10', presetId: 'move-down-10' },
   { commandId: 'system-window-management-move-left-10', presetId: 'move-left-10' },
@@ -104,6 +112,10 @@ const PRESETS: Array<{ id: PresetId; label: string; subtitle: string }> = [
   { id: 'increase-right-10', label: 'Increase on right by 10%', subtitle: 'Current window' },
   { id: 'increase-bottom-10', label: 'Increase on bottom by 10%', subtitle: 'Current window' },
   { id: 'increase-top-10', label: 'Increase on top by 10%', subtitle: 'Current window' },
+  { id: 'decrease-left-10', label: 'Decrease on left by 10%', subtitle: 'Current window' },
+  { id: 'decrease-right-10', label: 'Decrease on right by 10%', subtitle: 'Current window' },
+  { id: 'decrease-bottom-10', label: 'Decrease on bottom by 10%', subtitle: 'Current window' },
+  { id: 'decrease-top-10', label: 'Decrease on top by 10%', subtitle: 'Current window' },
   { id: 'move-up-10', label: 'Move up by 10%', subtitle: 'Current window' },
   { id: 'move-down-10', label: 'Move down by 10%', subtitle: 'Current window' },
   { id: 'move-left-10', label: 'Move left by 10%', subtitle: 'Current window' },
@@ -118,6 +130,10 @@ const SHIFT_ENTER_ONLY_PRESETS = new Set<PresetId>([
   'increase-right-10',
   'increase-bottom-10',
   'increase-top-10',
+  'decrease-left-10',
+  'decrease-right-10',
+  'decrease-bottom-10',
+  'decrease-top-10',
   'move-up-10',
   'move-down-10',
   'move-left-10',
@@ -312,6 +328,44 @@ function applyFineTunePreset(presetId: PresetId, target: ManagedWindow, area: Sc
         y: base.y,
         width: base.width,
         height: base.height + stepY,
+      };
+      break;
+    case 'decrease-left-10': {
+      const rightEdge = base.x + base.width;
+      const width = Math.max(MIN_WINDOW_WIDTH, base.width - stepX);
+      next = {
+        x: rightEdge - width,
+        y: base.y,
+        width,
+        height: base.height,
+      };
+      break;
+    }
+    case 'decrease-right-10':
+      next = {
+        x: base.x,
+        y: base.y,
+        width: Math.max(MIN_WINDOW_WIDTH, base.width - stepX),
+        height: base.height,
+      };
+      break;
+    case 'decrease-top-10': {
+      const bottomEdge = base.y + base.height;
+      const height = Math.max(MIN_WINDOW_HEIGHT, base.height - stepY);
+      next = {
+        x: base.x,
+        y: bottomEdge - height,
+        width: base.width,
+        height,
+      };
+      break;
+    }
+    case 'decrease-bottom-10':
+      next = {
+        x: base.x,
+        y: base.y,
+        width: base.width,
+        height: Math.max(MIN_WINDOW_HEIGHT, base.height - stepY),
       };
       break;
     case 'move-up-10':

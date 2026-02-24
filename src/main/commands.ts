@@ -1037,6 +1037,30 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
       category: 'system',
     },
     {
+      id: 'system-window-management-decrease-left-10',
+      title: 'Window: Decrease Left by 10%',
+      keywords: ['window', 'management', 'decrease', 'left', '10%'],
+      category: 'system',
+    },
+    {
+      id: 'system-window-management-decrease-right-10',
+      title: 'Window: Decrease Right by 10%',
+      keywords: ['window', 'management', 'decrease', 'right', '10%'],
+      category: 'system',
+    },
+    {
+      id: 'system-window-management-decrease-top-10',
+      title: 'Window: Decrease Top by 10%',
+      keywords: ['window', 'management', 'decrease', 'top', '10%'],
+      category: 'system',
+    },
+    {
+      id: 'system-window-management-decrease-bottom-10',
+      title: 'Window: Decrease Bottom by 10%',
+      keywords: ['window', 'management', 'decrease', 'bottom', '10%'],
+      category: 'system',
+    },
+    {
       id: 'system-window-management-move-up-10',
       title: 'Window: Move Up by 10%',
       keywords: ['window', 'management', 'move', 'up', '10%'],
