@@ -105,7 +105,7 @@ let hasLoggedLiquidGlassRuntimeIncompatibility = false;
 let windowManagerAccessRequested = false;
 let windowManagementTargetWindowId: string | null = null;
 let windowManagementTargetWorkArea: { x: number; y: number; width: number; height: number } | null = null;
-const WINDOW_MANAGEMENT_MUTATION_MIN_INTERVAL_MS = 20;
+const WINDOW_MANAGEMENT_MUTATION_MIN_INTERVAL_MS = 6;
 let windowManagementMutationQueue: Promise<void> = Promise.resolve();
 let lastWindowManagementMutationAt = 0;
 const WINDOW_MANAGER_WORKER_REQUEST_TIMEOUT_MS = 1400;
@@ -1236,8 +1236,8 @@ const WINDOW_MANAGEMENT_PRESET_COMMAND_IDS = new Set<string>([
   'system-window-management-move-right-10',
 ]);
 type QueuedWindowMutation = { id: string; x: number; y: number; width: number; height: number };
-const WINDOW_MANAGEMENT_MUTATION_BATCH_MS = 42;
-const WINDOW_MANAGEMENT_PRESET_HOTKEY_MIN_INTERVAL_MS = 52;
+const WINDOW_MANAGEMENT_MUTATION_BATCH_MS = 6;
+const WINDOW_MANAGEMENT_PRESET_HOTKEY_MIN_INTERVAL_MS = 18;
 let pendingWindowMutationsById = new Map<string, QueuedWindowMutation>();
 let windowMutationBatchTimer: ReturnType<typeof setTimeout> | null = null;
 let windowMutationBatchInFlight = false;
@@ -1296,18 +1296,8 @@ async function flushQueuedWindowMutations(): Promise<void> {
   try {
     await enqueueWindowManagementMutation(async () => {
       await ensureWindowManagerAccess();
-      const windows = await getNodeWindows();
-      const windowMap = new Map<string, NodeWindowInfo>();
-      windows.forEach((win) => {
-        if (win?.id !== undefined) {
-          windowMap.set(String(win.id), win);
-        }
-      });
       for (let index = 0; index < batch.length; index += 1) {
         const entry = batch[index];
-        const win = windowMap.get(entry.id);
-        if (!win) continue;
-        if (isSelfManagedWindow(win)) continue;
         try {
           await callWindowManagerWorker(
             'set-window-bounds',
@@ -1327,7 +1317,7 @@ async function flushQueuedWindowMutations(): Promise<void> {
           console.warn('[WindowManager] Failed setBounds for window:', entry.id, error);
         }
         if (index < batch.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 4));
+          await new Promise((resolve) => setTimeout(resolve, 1));
         }
       }
     });

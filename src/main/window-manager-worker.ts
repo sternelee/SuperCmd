@@ -69,6 +69,20 @@ function normalizeWindowInfo(win: any): NodeWindowInfo | null {
   };
 }
 
+function isSelfManagedWindow(info: NodeWindowInfo | null): boolean {
+  if (!info) return false;
+  const pid = Number(info.processId);
+  if (Number.isFinite(pid) && pid > 0) {
+    // Worker runs as a child process of Electron main.
+    if (pid === process.ppid) return true;
+  }
+  const title = String(info.title || '').toLowerCase();
+  if (title.includes('supercmd')) return true;
+  const appPath = String(info.path || '');
+  if (appPath.includes('SuperCmd.app')) return true;
+  return false;
+}
+
 function getWindowsRaw(): any[] {
   const api = getWindowManagerApi();
   if (!api || typeof api.getWindows !== 'function') return [];
@@ -114,7 +128,7 @@ async function handleRequest(request: WorkerRequest): Promise<WorkerResponse> {
       case 'list-windows': {
         const windows = getWindowsRaw()
           .map((win) => normalizeWindowInfo(win))
-          .filter(Boolean);
+          .filter((info) => Boolean(info) && !isSelfManagedWindow(info as NodeWindowInfo));
         return { id: request.id, ok: true, result: windows };
       }
       case 'get-active-window': {
@@ -122,13 +136,21 @@ async function handleRequest(request: WorkerRequest): Promise<WorkerResponse> {
           return { id: request.id, ok: true, result: null };
         }
         const active = api.getActiveWindow();
-        return { id: request.id, ok: true, result: normalizeWindowInfo(active) };
+        const info = normalizeWindowInfo(active);
+        if (isSelfManagedWindow(info)) {
+          return { id: request.id, ok: true, result: null };
+        }
+        return { id: request.id, ok: true, result: info };
       }
       case 'get-window-by-id': {
         const id = String(request.payload?.id || '').trim();
         if (!id) return { id: request.id, ok: true, result: null };
         const win = getWindowByIdRaw(id);
-        return { id: request.id, ok: true, result: normalizeWindowInfo(win) };
+        const info = normalizeWindowInfo(win);
+        if (isSelfManagedWindow(info)) {
+          return { id: request.id, ok: true, result: null };
+        }
+        return { id: request.id, ok: true, result: info };
       }
       case 'set-window-bounds': {
         const id = String(request.payload?.id || '').trim();
@@ -138,6 +160,10 @@ async function handleRequest(request: WorkerRequest): Promise<WorkerResponse> {
         }
         const win = getWindowByIdRaw(id);
         if (!win || typeof win.setBounds !== 'function') {
+          return { id: request.id, ok: true, result: false };
+        }
+        const info = normalizeWindowInfo(win);
+        if (isSelfManagedWindow(info)) {
           return { id: request.id, ok: true, result: false };
         }
         const x = Number(bounds.x);

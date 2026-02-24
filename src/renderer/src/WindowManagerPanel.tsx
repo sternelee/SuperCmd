@@ -126,7 +126,7 @@ const SHIFT_ENTER_ONLY_PRESETS = new Set<PresetId>([
 const WINDOW_ADJUST_RATIO = 0.1;
 const MIN_WINDOW_WIDTH = 120;
 const MIN_WINDOW_HEIGHT = 60;
-const WINDOW_PRESET_EXECUTION_MIN_INTERVAL_MS = 64;
+const WINDOW_PRESET_EXECUTION_MIN_INTERVAL_MS = 14;
 let windowPresetExecutionQueue: Promise<void> = Promise.resolve();
 let lastWindowPresetExecutionAt = 0;
 
