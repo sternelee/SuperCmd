@@ -1219,6 +1219,8 @@ const WINDOW_MANAGEMENT_PRESET_COMMAND_IDS = new Set<string>([
   'system-window-management-center',
   'system-window-management-center-80',
   'system-window-management-fill',
+  'system-window-management-next-display',
+  'system-window-management-prev-display',
   'system-window-management-top-left',
   'system-window-management-top-right',
   'system-window-management-bottom-left',
@@ -9391,11 +9393,25 @@ return appURL's |path|() as text`,
       // Return a minimal implementation
       const { screen } = require('electron');
       const displays = screen.getAllDisplays();
+      const cursorPoint = screen.getCursorScreenPoint();
+      const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
 
       return displays.map((display: any, index: number) => ({
         id: String(index + 1),
-        active: index === 0,
+        active: display.id === activeDisplay?.id,
         screenId: String(display.id),
+        bounds: {
+          x: Number(display.bounds?.x || 0),
+          y: Number(display.bounds?.y || 0),
+          width: Number(display.bounds?.width || 0),
+          height: Number(display.bounds?.height || 0),
+        },
+        workArea: {
+          x: Number(display.workArea?.x || display.bounds?.x || 0),
+          y: Number(display.workArea?.y || display.bounds?.y || 0),
+          width: Number(display.workArea?.width || display.bounds?.width || 0),
+          height: Number(display.workArea?.height || display.bounds?.height || 0),
+        },
         size: {
           width: display.bounds.width,
           height: display.bounds.height

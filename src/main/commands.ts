@@ -966,8 +966,8 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
     },
     {
       id: 'system-window-management-fill',
-      title: 'Window: Fill Screen',
-      keywords: ['window', 'management', 'fill', 'maximize', 'fullscreen'],
+      title: 'Window: Maximize',
+      keywords: ['window', 'management', 'maximize', 'fill', 'fullscreen'],
       category: 'system',
     },
     {
@@ -1082,6 +1082,18 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
       id: 'system-window-management-move-right-10',
       title: 'Window: Move Right by 10%',
       keywords: ['window', 'management', 'move', 'right', '10%'],
+      category: 'system',
+    },
+    {
+      id: 'system-window-management-next-display',
+      title: 'Window: Next Display',
+      keywords: ['window', 'management', 'next', 'display', 'monitor', 'screen'],
+      category: 'system',
+    },
+    {
+      id: 'system-window-management-prev-display',
+      title: 'Window: Previous Display',
+      keywords: ['window', 'management', 'previous', 'prev', 'display', 'monitor', 'screen'],
       category: 'system',
     },
     {

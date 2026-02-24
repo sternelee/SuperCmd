@@ -1058,7 +1058,10 @@ const App: React.FC = () => {
     ]
   );
 
-  const runLocalSystemCommand = useCallback(async (commandId: string): Promise<boolean> => {
+  const runLocalSystemCommand = useCallback(async (
+    commandId: string,
+    options?: { fromMainEvent?: boolean }
+  ): Promise<boolean> => {
     if (commandId === 'system-supercmd-whisper' || commandId === 'system-supercmd-speak') {
       try {
         const settings = await window.electron.getSettings();
@@ -1101,6 +1104,12 @@ const App: React.FC = () => {
     }
     if (isWindowManagementPresetCommandId(commandId)) {
       whisperSessionRef.current = false;
+      // For launcher-initiated execution, route through main first so it can
+      // capture the real frontmost target window before running the preset.
+      if (!options?.fromMainEvent) {
+        await window.electron.executeCommand(commandId);
+        return true;
+      }
       const queued = windowPresetCommandQueueRef.current.then(async () => {
         const result = await executeWindowManagementPresetCommandById(commandId);
         if (result.success && document.hasFocus()) {
@@ -1207,7 +1216,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const cleanup = window.electron.onRunSystemCommand(async (commandId: string) => {
       try {
-        await runLocalSystemCommand(commandId);
+        await runLocalSystemCommand(commandId, { fromMainEvent: true });
       } catch (error) {
         console.error('Failed to run system command from main process:', error);
       }
