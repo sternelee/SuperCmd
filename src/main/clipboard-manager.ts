@@ -371,15 +371,12 @@ export function copyItemToClipboard(id: string): boolean {
     if (item.type === 'image') {
       const ext = path.extname(item.content).toLowerCase();
       if (ext === '.gif' && fs.existsSync(item.content)) {
-        // Write raw GIF data so pasting preserves animation
+        // Write raw GIF data so pasting preserves animation.
+        // No static fallback — most apps prefer TIFF/PNG over GIF which
+        // would cause them to paste a still frame instead of the animation.
         const gifData = fs.readFileSync(item.content);
         clipboard.clear();
         clipboard.writeBuffer('com.compuserve.gif', gifData);
-        // Also write a static fallback for apps that don't support GIF
-        const fallback = nativeImage.createFromPath(item.content);
-        if (!fallback.isEmpty()) {
-          clipboard.writeBuffer('public.tiff', fallback.toPNG());
-        }
       } else {
         const image = nativeImage.createFromPath(item.content);
         clipboard.writeImage(image);

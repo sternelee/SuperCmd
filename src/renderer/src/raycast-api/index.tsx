@@ -643,12 +643,18 @@ export const Clipboard = {
       // Prefer main-process paste flow: hides SuperCmd first and pastes into
       // the previously focused app/editor. This prevents pasting into the
       // launcher's own search field.
+      if (file && electron?.pasteFile) {
+        // File paste (GIFs, images): writes file data to clipboard in main
+        // process and simulates Cmd+V with proper focus management.
+        const pasted = await electron.pasteFile(file);
+        if (pasted) return;
+      }
       if (!html && !file && electron?.pasteText) {
         const pasted = await electron.pasteText(text);
         if (pasted) return;
       }
 
-      // Fallback path (no paste-text bridge or HTML payload).
+      // Fallback path (no paste bridge or HTML payload).
       await this.copy(content, { concealed: true });
       if (electron?.hideWindow) {
         await electron.hideWindow();

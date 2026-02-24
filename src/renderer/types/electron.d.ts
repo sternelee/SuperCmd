@@ -480,6 +480,7 @@ export interface ElectronAPI {
   snippetImport: () => Promise<{ imported: number; skipped: number }>;
   snippetExport: () => Promise<boolean>;
   pasteText: (text: string) => Promise<boolean>;
+  pasteFile: (filePath: string) => Promise<boolean>;
   typeTextLive: (text: string) => Promise<boolean>;
   whisperTypeTextLive: (
     text: string

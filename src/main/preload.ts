@@ -503,6 +503,8 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke('snippet-export'),
   pasteText: (text: string): Promise<boolean> =>
     ipcRenderer.invoke('paste-text', text),
+  pasteFile: (filePath: string): Promise<boolean> =>
+    ipcRenderer.invoke('paste-file', filePath),
   typeTextLive: (text: string): Promise<boolean> =>
     ipcRenderer.invoke('type-text-live', text),
   whisperTypeTextLive: (

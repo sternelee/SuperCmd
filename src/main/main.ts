@@ -8588,10 +8588,14 @@ return appURL's |path|() as text`,
               systemClipboard.clear();
               // Write the native format (e.g. GIF, PNG, JPEG)
               systemClipboard.writeBuffer(imageUti, rawData);
-              // Also write a TIFF/PNG fallback for apps that don't support the native format
-              const fallbackImage = nativeImage.createFromPath(normalizedFile);
-              if (!fallbackImage.isEmpty()) {
-                systemClipboard.writeBuffer('public.tiff', fallbackImage.toJPEG(95) ? fallbackImage.toPNG() : fallbackImage.toPNG());
+              // For non-GIF images, also write a PNG fallback for broader app compatibility.
+              // GIFs don't get a fallback because most apps prefer TIFF/PNG over GIF,
+              // which would cause them to paste a static image instead of the animation.
+              if (ext !== '.gif') {
+                const fallbackImage = nativeImage.createFromPath(normalizedFile);
+                if (!fallbackImage.isEmpty()) {
+                  systemClipboard.writeBuffer('public.png', fallbackImage.toPNG());
+                }
               }
               return true;
             } catch (imgErr) {
@@ -8815,6 +8819,48 @@ return appURL's |path|() as text`,
       return pasted;
     } catch (error) {
       console.error('paste-text failed:', error);
+      return false;
+    }
+  });
+
+  // Paste a file (image/GIF) into the previously focused app.
+  // Writes file data to clipboard, hides SuperCmd, and simulates Cmd+V.
+  ipcMain.handle('paste-file', async (_event: any, filePath: string) => {
+    const fs = require('fs') as typeof import('fs');
+    const normalizedFile = path.resolve(String(filePath || ''));
+    if (!normalizedFile || !fs.existsSync(normalizedFile)) return false;
+
+    try {
+      const ext = path.extname(normalizedFile).toLowerCase();
+      const IMAGE_EXTENSIONS: Record<string, string> = {
+        '.gif': 'com.compuserve.gif',
+        '.png': 'public.png',
+        '.jpg': 'public.jpeg',
+        '.jpeg': 'public.jpeg',
+        '.webp': 'org.webmproject.webp',
+      };
+      const imageUti = IMAGE_EXTENSIONS[ext];
+
+      if (imageUti) {
+        const rawData = fs.readFileSync(normalizedFile);
+        systemClipboard.clear();
+        systemClipboard.writeBuffer(imageUti, rawData);
+        if (ext !== '.gif') {
+          const fallbackImage = nativeImage.createFromPath(normalizedFile);
+          if (!fallbackImage.isEmpty()) {
+            systemClipboard.writeBuffer('public.png', fallbackImage.toPNG());
+          }
+        }
+      } else {
+        // Non-image file: copy as file reference
+        const { execFileSync } = require('child_process') as typeof import('child_process');
+        const script = `set the clipboard to (POSIX file ${JSON.stringify(normalizedFile)})`;
+        execFileSync('osascript', ['-e', script], { stdio: 'ignore' });
+      }
+
+      return await hideAndPaste();
+    } catch (error) {
+      console.error('paste-file failed:', error);
       return false;
     }
   });
