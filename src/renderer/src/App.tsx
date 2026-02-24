@@ -1897,7 +1897,6 @@ const App: React.FC = () => {
                     navigator.clipboard.writeText(calcResult.result);
                     window.electron.hideWindow();
                   }}
-                  onMouseMove={() => setSelectedIndex(0)}
                 >
                   <div className="flex items-center justify-center gap-6">
                     <div className="text-center">
@@ -1949,7 +1948,6 @@ const App: React.FC = () => {
                             flatIndex + calcOffset === selectedIndex ? 'selected' : ''
                           }`}
                           onClick={() => handleCommandExecute(command)}
-                          onMouseMove={() => setSelectedIndex(flatIndex + calcOffset)}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setSelectedIndex(flatIndex + calcOffset);
