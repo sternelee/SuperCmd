@@ -55,6 +55,13 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.removeListener('window-hidden', listener);
     };
   },
+  onCommandsUpdated: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('commands-updated', listener);
+    return () => {
+      ipcRenderer.removeListener('commands-updated', listener);
+    };
+  },
   onRunSystemCommand: (callback: (commandId: string) => void) => {
     const listener = (_event: any, commandId: string) => callback(commandId);
     ipcRenderer.on('run-system-command', listener);

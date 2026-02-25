@@ -1,5 +1,5 @@
 /**
- * AI Provider — streaming LLM completions via OpenAI, Anthropic, or Ollama.
+ * AI Provider — streaming LLM completions via OpenAI, Anthropic, Gemini, or Ollama.
  *
  * Uses Node.js built-in https/http modules — no npm dependencies.
  */
@@ -19,7 +19,7 @@ export interface AIRequestOptions {
 // ─── Model routing ────────────────────────────────────────────────────
 
 interface ModelRoute {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'openai-compatible';
+  provider: 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'openai-compatible';
   modelId: string;
 }
 
@@ -36,6 +36,10 @@ const MODEL_ROUTES: Record<string, ModelRoute> = {
   'anthropic-claude-opus': { provider: 'anthropic', modelId: 'claude-opus-4-20250514' },
   'anthropic-claude-sonnet': { provider: 'anthropic', modelId: 'claude-sonnet-4-20250514' },
   'anthropic-claude-haiku': { provider: 'anthropic', modelId: 'claude-haiku-4-5-20251001' },
+  // Google Gemini
+  'gemini-gemini-2.5-pro': { provider: 'gemini', modelId: 'gemini-2.5-pro' },
+  'gemini-gemini-2.5-flash': { provider: 'gemini', modelId: 'gemini-2.5-flash' },
+  'gemini-gemini-2.5-flash-lite': { provider: 'gemini', modelId: 'gemini-2.5-flash-lite' },
   // Ollama (user-managed models)
   'ollama-llama3': { provider: 'ollama', modelId: 'llama3' },
   'ollama-mistral': { provider: 'ollama', modelId: 'mistral' },
@@ -49,10 +53,10 @@ function resolveModel(model: string | undefined, config: AISettings): ModelRoute
   // If the model key is not in our routing table, strip provider prefix and route directly
   if (model) {
     // Order matters: check longer prefixes first to avoid partial matches
-    const prefixes = ['openai-compatible-', 'anthropic-', 'ollama-', 'openai-'] as const;
+    const prefixes = ['openai-compatible-', 'anthropic-', 'gemini-', 'ollama-', 'openai-'] as const;
     for (const prefix of prefixes) {
       if (model.startsWith(prefix)) {
-        return { provider: prefix.slice(0, -1) as 'openai' | 'anthropic' | 'ollama' | 'openai-compatible', modelId: model.slice(prefix.length) };
+        return { provider: prefix.slice(0, -1) as 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'openai-compatible', modelId: model.slice(prefix.length) };
       }
     }
     return { provider: config.provider, modelId: model };
@@ -64,10 +68,10 @@ function resolveModel(model: string | undefined, config: AISettings): ModelRoute
     }
     // Handle dynamic model IDs (e.g. "ollama-llama3.2")
     // Order matters: check longer prefixes first to avoid partial matches
-    const prefixes = ['openai-compatible-', 'anthropic-', 'ollama-', 'openai-'] as const;
+    const prefixes = ['openai-compatible-', 'anthropic-', 'gemini-', 'ollama-', 'openai-'] as const;
     for (const prefix of prefixes) {
       if (config.defaultModel.startsWith(prefix)) {
-        return { provider: prefix.slice(0, -1) as 'openai' | 'anthropic' | 'ollama' | 'openai-compatible', modelId: config.defaultModel.slice(prefix.length) };
+        return { provider: prefix.slice(0, -1) as 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'openai-compatible', modelId: config.defaultModel.slice(prefix.length) };
       }
     }
   }
@@ -75,6 +79,7 @@ function resolveModel(model: string | undefined, config: AISettings): ModelRoute
   const defaults: Record<string, string> = {
     openai: 'gpt-4o-mini',
     anthropic: 'claude-haiku-4-5-20251001',
+    gemini: 'gemini-2.5-flash',
     ollama: 'llama3',
     'openai-compatible': config.openaiCompatibleModel?.trim() || 'gpt-4o',
   };
@@ -89,6 +94,8 @@ function hasProviderCredentials(provider: ModelRoute['provider'], config: AISett
       return !!config.openaiApiKey;
     case 'anthropic':
       return !!config.anthropicApiKey;
+    case 'gemini':
+      return !!config.geminiApiKey;
     case 'ollama':
       return !!config.ollamaBaseUrl;
     case 'openai-compatible':
@@ -127,6 +134,9 @@ export async function* streamAI(
       break;
     case 'anthropic':
       yield* streamAnthropic(config.anthropicApiKey, route.modelId, options.prompt, temperature, options.systemPrompt, options.signal);
+      break;
+    case 'gemini':
+      yield* streamGemini(config.geminiApiKey, route.modelId, options.prompt, temperature, options.systemPrompt, options.signal);
       break;
     case 'ollama':
       yield* streamOllama(config.ollamaBaseUrl, route.modelId, options.prompt, temperature, options.systemPrompt, options.signal);
@@ -292,6 +302,51 @@ async function* streamAnthropic(
   });
 }
 
+// ─── Gemini ──────────────────────────────────────────────────────────
+
+async function* streamGemini(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  temperature: number,
+  systemPrompt?: string,
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+  const body: any = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature },
+  };
+  if (systemPrompt) {
+    body.systemInstruction = { parts: [{ text: systemPrompt }] };
+  }
+
+  const response = await httpRequest({
+    hostname: 'generativelanguage.googleapis.com',
+    path: `/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+    useHttps: true,
+  });
+
+  const parsed = JSON.parse(await readResponseBody(response) || '{}');
+  const text = Array.isArray(parsed?.candidates?.[0]?.content?.parts)
+    ? parsed.candidates[0].content.parts
+        .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
+        .join('')
+    : '';
+
+  if (text) {
+    yield text;
+    return;
+  }
+
+  const reason = String(parsed?.candidates?.[0]?.finishReason || parsed?.promptFeedback?.blockReason || '').trim();
+  if (reason) throw new Error(`Gemini returned no text (${reason}).`);
+  throw new Error('Gemini returned no text.');
+}
+
 // ─── Ollama ──────────────────────────────────────────────────────────
 
 async function* streamOllama(
@@ -384,6 +439,14 @@ function httpRequest(opts: HttpRequestOptions): Promise<http.IncomingMessage> {
     req.write(opts.body);
     req.end();
   });
+}
+
+async function readResponseBody(response: http.IncomingMessage): Promise<string> {
+  let body = '';
+  for await (const rawChunk of response) {
+    body += rawChunk.toString();
+  }
+  return body;
 }
 
 async function* parseSSE(

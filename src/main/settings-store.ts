@@ -10,9 +10,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export interface AISettings {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'openai-compatible';
+  provider: 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'openai-compatible';
   openaiApiKey: string;
   anthropicApiKey: string;
+  geminiApiKey: string;
   elevenlabsApiKey: string;
   supermemoryApiKey: string;
   supermemoryClient: string;
@@ -48,6 +49,7 @@ export interface AppSettings {
   commandAliases: Record<string, string>;
   pinnedCommands: string[];
   recentCommands: string[];
+  recentCommandLaunchCounts: Record<string, number>;
   hasSeenOnboarding: boolean;
   hasSeenWhisperOnboarding: boolean;
   ai: AISettings;
@@ -89,6 +91,7 @@ const DEFAULT_AI_SETTINGS: AISettings = {
   provider: 'openai',
   openaiApiKey: '',
   anthropicApiKey: '',
+  geminiApiKey: '',
   elevenlabsApiKey: '',
   supermemoryApiKey: '',
   supermemoryClient: '',
@@ -126,6 +129,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   commandAliases: {},
   pinnedCommands: [],
   recentCommands: [],
+  recentCommandLaunchCounts: {},
   hasSeenOnboarding: false,
   hasSeenWhisperOnboarding: false,
   ai: { ...DEFAULT_AI_SETTINGS },
@@ -219,6 +223,19 @@ function normalizeHyperKeyQuickPressAction(value: any): 'toggle-caps-lock' | 'es
   return 'toggle-caps-lock';
 }
 
+function normalizeRecentCommandLaunchCounts(value: any): Record<string, number> {
+  if (!value || typeof value !== 'object') return {};
+  const normalized: Record<string, number> = {};
+  for (const [commandId, launchCount] of Object.entries(value as Record<string, any>)) {
+    const id = String(commandId || '').trim();
+    if (!id) continue;
+    const parsedCount = Number(launchCount);
+    if (!Number.isFinite(parsedCount) || parsedCount <= 0) continue;
+    normalized[id] = Math.floor(parsedCount);
+  }
+  return normalized;
+}
+
 function getSettingsPath(): string {
   return path.join(app.getPath('userData'), 'settings.json');
 }
@@ -276,6 +293,7 @@ export function loadSettings(): AppSettings {
       },
       pinnedCommands: parsed.pinnedCommands ?? DEFAULT_SETTINGS.pinnedCommands,
       recentCommands: parsed.recentCommands ?? DEFAULT_SETTINGS.recentCommands,
+      recentCommandLaunchCounts: normalizeRecentCommandLaunchCounts(parsed.recentCommandLaunchCounts),
       // Existing users with older settings should not be forced into onboarding.
       hasSeenOnboarding:
         parsed.hasSeenOnboarding ?? true,
