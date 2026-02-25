@@ -963,6 +963,10 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                       </span>
                     ))}
                   </div>
+                  <p className="text-white/46 text-xs leading-relaxed">
+                    Tip: use <span className="text-white/62">Cmd + Shift + K</span> for Global AI Prompt and{' '}
+                    <span className="text-white/62">Cmd + Shift + O</span> to add selected text to Memory.
+                  </p>
                 </div>
               </div>
             </div>

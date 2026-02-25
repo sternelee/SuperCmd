@@ -227,13 +227,15 @@ export function withAccessToken(options: any) {
 
       if (oauthNeedsAuth) {
         const deps = getOAuthRuntimeDeps();
-        const iconSrc = oauthInfo?.icon ? deps.resolveIconSrc(oauthInfo.icon) : deps.getExtensionContext().extensionIconDataUrl;
+        const providerIconSrc = oauthInfo?.icon ? deps.resolveIconSrc(String(oauthInfo.icon)) : '';
+        const extensionIconSrc = deps.getExtensionContext().extensionIconDataUrl || '';
+        const iconSrc = providerIconSrc || extensionIconSrc;
 
         return (
           <div className="h-full flex flex-col">
             <div className="flex-1 flex items-center justify-center px-6">
               <div className="w-full max-w-[520px] text-center">
-                <div className="mx-auto mb-5 w-14 h-14 rounded-2xl border border-white/[0.12] bg-white/[0.04] flex items-center justify-center overflow-hidden">
+                <div className="mx-auto mb-5 w-14 h-14 rounded-2xl bg-white/[0.04] flex items-center justify-center overflow-hidden">
                   {iconSrc ? <img src={iconSrc} alt="" className="w-9 h-9 object-contain" /> : <Sparkle className="w-5 h-5 text-white/70" />}
                 </div>
                 <div className="text-white/95 text-[34px] leading-tight font-semibold mb-1">{oauthInfo?.name || 'Sign In Required'}</div>
@@ -242,13 +244,13 @@ export function withAccessToken(options: any) {
                   type="button"
                   onClick={handleOAuthSignIn}
                   disabled={oauthBusy}
-                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${oauthBusy ? 'bg-white/[0.08] text-white/45 cursor-not-allowed' : 'bg-white/[0.14] hover:bg-white/[0.20] text-white'}`}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border border-transparent transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_8px_24px_rgba(0,0,0,0.28)] ${oauthBusy ? 'bg-white/[0.08] text-white/45 cursor-not-allowed' : 'bg-white/[0.14] hover:bg-white/[0.18] text-white'}`}
                 >
                   {oauthBusy ? 'Opening...' : `Sign in with ${oauthInfo?.name || 'Provider'}`}
                 </button>
               </div>
             </div>
-            <div className="px-4 py-3 border-t border-white/[0.06] text-center text-sm text-white/55">
+            <div className="px-4 py-3 text-center text-sm text-white/55">
               Need to open in another browser?{' '}
               <button type="button" onClick={handleOAuthCopyLink} className="text-cyan-300 hover:text-cyan-200 transition-colors">
                 Copy authorization link
