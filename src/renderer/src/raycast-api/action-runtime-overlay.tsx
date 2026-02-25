@@ -153,6 +153,9 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
     const isGlassyTheme =
       document.documentElement.classList.contains('sc-glassy') ||
       document.body.classList.contains('sc-glassy');
+    const isNativeLiquidGlass =
+      document.documentElement.classList.contains('sc-native-liquid-glass') ||
+      document.body.classList.contains('sc-native-liquid-glass');
 
     return (
       <div
@@ -165,10 +168,28 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
         <div
           ref={panelRef}
           className={`absolute bottom-12 right-3 w-80 max-h-[65vh] overflow-hidden flex flex-col ${
-            isGlassyTheme ? 'rounded-3xl p-1' : 'rounded-xl shadow-2xl'
+            (isNativeLiquidGlass || isGlassyTheme) ? 'rounded-3xl p-1' : 'rounded-xl shadow-2xl'
           }`}
           style={
-            isGlassyTheme
+            isNativeLiquidGlass
+              ? {
+                  background: `
+                    linear-gradient(160deg,
+                      rgba(var(--on-surface-rgb), 0.045) 0%,
+                      rgba(var(--on-surface-rgb), 0.012) 46%,
+                      rgba(var(--on-surface-rgb), 0.03) 100%
+                    ),
+                    rgba(var(--surface-base-rgb), 0.14)
+                  `,
+                  backdropFilter: 'blur(44px) saturate(155%)',
+                  WebkitBackdropFilter: 'blur(44px) saturate(155%)',
+                  border: '1px solid rgba(var(--on-surface-rgb), 0.16)',
+                  boxShadow: `
+                    0 18px 38px -12px rgba(var(--backdrop-rgb), 0.26),
+                    inset 0 -1px 0 0 rgba(var(--on-surface-rgb), 0.05)
+                  `,
+                }
+              : isGlassyTheme
               ? {
                   background: `
                     linear-gradient(160deg,
@@ -213,8 +234,8 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
                       data-action-idx={idx}
                       className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
                         idx === selectedIdx
-                          ? 'bg-white/[0.18]'
-                          : 'hover:bg-white/[0.08]'
+                          ? 'bg-[var(--action-menu-selected-bg)]'
+                          : 'hover:bg-[var(--overlay-item-hover-bg)]'
                       }`}
                       style={
                         idx === selectedIdx

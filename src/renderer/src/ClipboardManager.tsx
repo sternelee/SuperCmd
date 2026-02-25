@@ -41,6 +41,9 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
   const isGlassyTheme =
     document.documentElement.classList.contains('sc-glassy') ||
     document.body.classList.contains('sc-glassy');
+  const isNativeLiquidGlass =
+    document.documentElement.classList.contains('sc-native-liquid-glass') ||
+    document.body.classList.contains('sc-native-liquid-glass');
 
   const loadHistory = useCallback(async (withLoading = false) => {
     if (withLoading) setIsLoading(true);
@@ -532,7 +535,15 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
             className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0"
             tabIndex={0}
             style={
-              isGlassyTheme
+              isNativeLiquidGlass
+                ? {
+                    background: 'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.045), rgba(var(--on-surface-rgb), 0.012)), rgba(var(--surface-base-rgb), 0.14)',
+                    backdropFilter: 'blur(44px) saturate(155%)',
+                    WebkitBackdropFilter: 'blur(44px) saturate(155%)',
+                    border: '1px solid rgba(var(--on-surface-rgb), 0.16)',
+                    boxShadow: '0 18px 38px -12px rgba(var(--backdrop-rgb), 0.26)',
+                  }
+                : isGlassyTheme
                 ? {
                     background: 'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
                     backdropFilter: 'blur(96px) saturate(190%)',
@@ -558,13 +569,13 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
                   className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
                     idx === selectedActionIndex
                       ? action.style === 'destructive'
-                        ? 'bg-white/[0.18] text-[var(--status-danger-faded)]'
-                        : 'bg-white/[0.18] text-[var(--text-primary)]'
+                        ? 'bg-[var(--action-menu-selected-bg)] text-[var(--status-danger-faded)]'
+                        : 'bg-[var(--action-menu-selected-bg)] text-[var(--text-primary)]'
                       : ''
                   } ${
                     action.style === 'destructive'
-                      ? 'hover:bg-white/[0.08] text-[var(--status-danger-faded)]'
-                      : 'hover:bg-white/[0.08] text-[var(--text-secondary)]'
+                      ? 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--status-danger-faded)]'
+                      : 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--text-secondary)]'
                   }`}
                   style={
                     idx === selectedActionIndex
