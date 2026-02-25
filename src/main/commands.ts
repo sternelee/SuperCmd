@@ -1148,12 +1148,6 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
       category: 'system',
     },
     {
-      id: 'system-window-management-auto-organize',
-      title: 'Window: Auto Organize',
-      keywords: ['window', 'management', 'auto', 'organize', 'grid', 'arrange'],
-      category: 'system',
-    },
-    {
       id: 'system-window-management-increase-size-10',
       title: 'Window: Increase Size by 10%',
       keywords: ['window', 'management', 'increase', 'size', '10%'],
