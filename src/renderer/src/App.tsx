@@ -334,6 +334,13 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const cleanup = window.electron.onCommandsUpdated?.(() => {
+      fetchCommands({ showLoading: false });
+    });
+    return cleanup;
+  }, [fetchCommands]);
+
+  useEffect(() => {
     const cleanupWindowShown = window.electron.onWindowShown((payload) => {
       refreshThemeFromStorage(false);
       console.log('[WINDOW-SHOWN] fired', payload);

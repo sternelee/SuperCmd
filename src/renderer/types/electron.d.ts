@@ -270,6 +270,7 @@ export interface ElectronAPI {
   onWindowShown: (callback: (payload?: { mode?: 'default' | 'onboarding' | 'whisper' | 'speak' | 'prompt'; systemCommandId?: string; selectedTextSnapshot?: string }) => void) => (() => void);
   onSelectionSnapshotUpdated: (callback: (payload?: { selectedTextSnapshot?: string }) => void) => (() => void);
   onWindowHidden: (callback: () => void) => (() => void);
+  onCommandsUpdated: (callback: () => void) => (() => void);
   onRunSystemCommand: (callback: (commandId: string) => void) => (() => void);
   onOnboardingHotkeyPressed: (callback: () => void) => (() => void);
   setDetachedOverlayState: (overlay: 'whisper' | 'speak', visible: boolean) => void;
