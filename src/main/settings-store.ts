@@ -145,7 +145,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     'system-window-management-decrease-size-10': 'Control+Alt+-',
   },
   commandAliases: {},
-  pinnedCommands: [],
+  pinnedCommands: ['system-open-settings'],
   recentCommands: [],
   recentCommandLaunchCounts: {},
   hasSeenOnboarding: false,
