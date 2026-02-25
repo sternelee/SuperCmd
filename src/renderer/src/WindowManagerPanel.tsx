@@ -142,7 +142,7 @@ const PRESETS: Array<{ id: PresetId; label: string; subtitle: string }> = [
   { id: 'top', label: 'Top', subtitle: 'Current window' },
   { id: 'bottom', label: 'Bottom', subtitle: 'Current window' },
   { id: 'center', label: 'Center', subtitle: 'Current window' },
-  { id: 'center-80', label: 'Center 80%', subtitle: 'Current window' },
+  { id: 'center-80', label: 'Almost Maximize', subtitle: 'Current window' },
   { id: 'fill', label: 'Maximize', subtitle: 'Current window' },
   { id: 'top-left', label: 'Top Left', subtitle: 'Current window' },
   { id: 'top-right', label: 'Top Right', subtitle: 'Current window' },

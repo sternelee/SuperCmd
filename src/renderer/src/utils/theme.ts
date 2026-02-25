@@ -13,6 +13,7 @@ let mediaQuery: MediaQueryList | null = null;
 let mediaQueryCleanupBound = false;
 let externalSyncListenersBound = false;
 let animationTimer: number | null = null;
+let forcedTheme: ResolvedTheme | null = null;
 
 function normalizeThemePreference(value: string | null | undefined): ThemePreference {
   if (value === 'light' || value === 'dark' || value === 'system') return value;
@@ -27,6 +28,10 @@ function resolveSystemTheme(): ResolvedTheme {
 export function resolveTheme(preference: ThemePreference): ResolvedTheme {
   if (preference === 'system') return resolveSystemTheme();
   return preference;
+}
+
+function resolveActiveTheme(preference: ThemePreference): ResolvedTheme {
+  return forcedTheme ?? resolveTheme(preference);
 }
 
 function applyResolvedTheme(theme: ResolvedTheme, animate: boolean): void {
@@ -67,7 +72,7 @@ function syncPreferenceFromStorage(animate: boolean): void {
   const nextPreference = getThemePreference();
   if (nextPreference === currentPreference) return;
   currentPreference = nextPreference;
-  applyResolvedTheme(resolveTheme(currentPreference), animate);
+  applyResolvedTheme(resolveActiveTheme(currentPreference), animate);
 }
 
 function ensureMediaQueryListener(): void {
@@ -77,7 +82,7 @@ function ensureMediaQueryListener(): void {
   mediaQuery = window.matchMedia(THEME_MEDIA_QUERY);
   const onChange = () => {
     if (currentPreference !== 'system') return;
-    applyResolvedTheme(resolveSystemTheme(), true);
+    applyResolvedTheme(resolveActiveTheme(currentPreference), true);
   };
 
   mediaQuery.addEventListener('change', onChange);
@@ -124,14 +129,14 @@ export function setThemePreference(nextPreference: ThemePreference): ResolvedThe
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(THEME_STORAGE_KEY, nextPreference);
   }
-  const resolved = resolveTheme(nextPreference);
+  const resolved = resolveActiveTheme(nextPreference);
   applyResolvedTheme(resolved, true);
   return resolved;
 }
 
 export function refreshThemeFromStorage(animate = false): ResolvedTheme {
   currentPreference = getThemePreference();
-  const resolved = resolveTheme(currentPreference);
+  const resolved = resolveActiveTheme(currentPreference);
   applyResolvedTheme(resolved, animate);
   return resolved;
 }
@@ -144,11 +149,22 @@ export function toggleTheme(): ResolvedTheme {
 export function initializeTheme(): ThemePreference {
   if (initialized) return currentPreference;
   currentPreference = getThemePreference();
-  applyResolvedTheme(resolveTheme(currentPreference), false);
+  applyResolvedTheme(resolveActiveTheme(currentPreference), false);
   ensureMediaQueryListener();
   ensureExternalPreferenceSync();
   initialized = true;
   return currentPreference;
+}
+
+export function setForcedTheme(theme: ResolvedTheme | null, animate = false): ResolvedTheme {
+  const previous = forcedTheme;
+  forcedTheme = theme;
+  const resolved = resolveActiveTheme(currentPreference);
+  if (previous === forcedTheme) {
+    return resolved;
+  }
+  applyResolvedTheme(resolved, animate);
+  return resolved;
 }
 
 export function onThemeChange(handler: (payload: { preference: ThemePreference; theme: ResolvedTheme }) => void): () => void {

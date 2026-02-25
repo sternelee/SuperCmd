@@ -47,7 +47,7 @@ import {
   getMissingRequiredScriptArguments, toScriptArgumentMapFromArray,
 } from './utils/extension-preferences';
 import { applyAppFontSize, getDefaultAppFontSize } from './utils/font-size';
-import { refreshThemeFromStorage } from './utils/theme';
+import { refreshThemeFromStorage, setForcedTheme } from './utils/theme';
 import { applyUiStyle } from './utils/ui-style';
 import ScriptCommandSetupView from './views/ScriptCommandSetupView';
 import ScriptCommandOutputView from './views/ScriptCommandOutputView';
@@ -342,12 +342,20 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const cleanupWindowShown = window.electron.onWindowShown((payload) => {
-      refreshThemeFromStorage(false);
+      const routedSystemCommandId = String(payload?.systemCommandId || '');
+      const isOnboardingMode =
+        payload?.mode === 'onboarding' ||
+        routedSystemCommandId === 'system-open-onboarding' ||
+        routedSystemCommandId === 'system-whisper-onboarding';
+
+      setForcedTheme(isOnboardingMode ? 'dark' : null, false);
+      if (!isOnboardingMode) {
+        refreshThemeFromStorage(false);
+      }
       console.log('[WINDOW-SHOWN] fired', payload);
       const isWhisperMode = payload?.mode === 'whisper';
       const isSpeakMode = payload?.mode === 'speak';
       const isPromptMode = payload?.mode === 'prompt';
-      const routedSystemCommandId = String(payload?.systemCommandId || '');
       if (isWhisperMode) {
         whisperSessionRef.current = true;
         setSelectedTextSnapshot('');
@@ -487,13 +495,11 @@ const App: React.FC = () => {
   // Onboarding is intentionally always shown in dark mode for consistent
   // contrast and readability, independent of the user's regular theme.
   useEffect(() => {
+    setForcedTheme(showOnboarding ? 'dark' : null, false);
     if (!showOnboarding) {
       refreshThemeFromStorage(false);
       return;
     }
-    document.documentElement.classList.add('dark');
-    document.body.classList.add('dark');
-    document.documentElement.style.colorScheme = 'dark';
   }, [showOnboarding]);
 
   // Listen for OAuth logout events from the settings window.

@@ -993,14 +993,14 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
     },
     {
       id: 'system-window-management-center',
-      title: 'Window: Center (60%)',
+      title: 'Window: Center',
       keywords: ['window', 'management', 'center', 'middle', 'resize'],
       category: 'system',
     },
     {
       id: 'system-window-management-center-80',
-      title: 'Window: Center (80%)',
-      keywords: ['window', 'management', 'center', 'middle', '80%', 'resize'],
+      title: 'Window: Almost Maximize',
+      keywords: ['window', 'management', 'center', 'middle', '80%', 'resize', 'almost maximize'],
       category: 'system',
     },
     {
