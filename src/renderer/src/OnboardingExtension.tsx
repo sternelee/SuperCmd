@@ -802,7 +802,7 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                           </p>
                         ) : null}
                         {target.id === 'input-monitoring' ? (
-                          <p className="mt-1 text-[11px] text-amber-100/85">
+                          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-100/85">
                             If SuperCmd is not visible here, click + and manually add SuperCmd from the Applications folder.
                           </p>
                         ) : null}

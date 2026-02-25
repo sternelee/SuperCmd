@@ -484,6 +484,18 @@ const App: React.FC = () => {
     return cleanup;
   }, []);
 
+  // Onboarding is intentionally always shown in dark mode for consistent
+  // contrast and readability, independent of the user's regular theme.
+  useEffect(() => {
+    if (!showOnboarding) {
+      refreshThemeFromStorage(false);
+      return;
+    }
+    document.documentElement.classList.add('dark');
+    document.body.classList.add('dark');
+    document.documentElement.style.colorScheme = 'dark';
+  }, [showOnboarding]);
+
   // Listen for OAuth logout events from the settings window.
   // When the user clicks "Logout" in settings, clear the in-memory token
   // and reset the extension view so the auth prompt shows on next launch.
