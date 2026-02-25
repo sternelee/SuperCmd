@@ -2196,11 +2196,10 @@ const App: React.FC = () => {
           style={{
             ...(isNativeLiquidGlass
               ? {
-                  background:
-                    'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.045), rgba(var(--on-surface-rgb), 0.012)), rgba(var(--surface-base-rgb), 0.14)',
+                  background: 'rgba(var(--surface-base-rgb), 0.72)',
                   backdropFilter: 'blur(44px) saturate(155%)',
                   WebkitBackdropFilter: 'blur(44px) saturate(155%)',
-                  border: '1px solid rgba(var(--on-surface-rgb), 0.16)',
+                  border: '1px solid rgba(var(--on-surface-rgb), 0.22)',
                   boxShadow: '0 18px 38px -12px rgba(var(--backdrop-rgb), 0.26)',
                 }
               : isGlassyTheme
@@ -2284,11 +2283,10 @@ const App: React.FC = () => {
             top: Math.min(contextMenu.y, window.innerHeight - 320),
             ...(isNativeLiquidGlass
               ? {
-                  background:
-                    'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.045), rgba(var(--on-surface-rgb), 0.012)), rgba(var(--surface-base-rgb), 0.14)',
+                  background: 'rgba(var(--surface-base-rgb), 0.72)',
                   backdropFilter: 'blur(44px) saturate(155%)',
                   WebkitBackdropFilter: 'blur(44px) saturate(155%)',
-                  border: '1px solid rgba(var(--on-surface-rgb), 0.16)',
+                  border: '1px solid rgba(var(--on-surface-rgb), 0.22)',
                   boxShadow: '0 18px 38px -12px rgba(var(--backdrop-rgb), 0.26)',
                 }
               : isGlassyTheme

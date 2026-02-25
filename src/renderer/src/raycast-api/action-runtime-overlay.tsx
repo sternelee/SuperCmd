@@ -173,17 +173,10 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
           style={
             isNativeLiquidGlass
               ? {
-                  background: `
-                    linear-gradient(160deg,
-                      rgba(var(--on-surface-rgb), 0.045) 0%,
-                      rgba(var(--on-surface-rgb), 0.012) 46%,
-                      rgba(var(--on-surface-rgb), 0.03) 100%
-                    ),
-                    rgba(var(--surface-base-rgb), 0.14)
-                  `,
+                  background: 'rgba(var(--surface-base-rgb), 0.72)',
                   backdropFilter: 'blur(44px) saturate(155%)',
                   WebkitBackdropFilter: 'blur(44px) saturate(155%)',
-                  border: '1px solid rgba(var(--on-surface-rgb), 0.16)',
+                  border: '1px solid rgba(var(--on-surface-rgb), 0.22)',
                   boxShadow: `
                     0 18px 38px -12px rgba(var(--backdrop-rgb), 0.26),
                     inset 0 -1px 0 0 rgba(var(--on-surface-rgb), 0.05)
