@@ -12,6 +12,7 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { fork, type ChildProcess } from 'child_process';
 import { getAvailableCommands, executeCommand, invalidateCache } from './commands';
 import { loadSettings, saveSettings, setOAuthToken, getOAuthToken, removeOAuthToken } from './settings-store';
@@ -8786,13 +8787,16 @@ app.whenReady().then(async () => {
 
   // ─── IPC: Open URL (for extensions) ─────────────────────────────
 
-  ipcMain.handle('open-url', async (_event: any, url: string) => {
-    if (!url) return false;
+  ipcMain.handle('open-url', async (_event: any, target: string, application?: string) => {
+    if (!target) return false;
+    const rawTarget = String(target).trim();
+    if (!rawTarget) return false;
+    const appName = typeof application === 'string' ? application.trim() : '';
 
-    if (url.startsWith('raycast://')) {
-      const deepLink = parseRaycastDeepLink(url);
+    if (rawTarget.startsWith('raycast://')) {
+      const deepLink = parseRaycastDeepLink(rawTarget);
       if (!deepLink) {
-        console.warn(`Unsupported Raycast deep link: ${url}`);
+        console.warn(`Unsupported Raycast deep link: ${rawTarget}`);
         return false;
       }
 
@@ -8815,7 +8819,7 @@ app.whenReady().then(async () => {
           );
           return true;
         } catch (e) {
-          console.error(`Failed to launch script command deeplink: ${url}`, e);
+          console.error(`Failed to launch script command deeplink: ${rawTarget}`, e);
           return false;
         }
       }
@@ -8844,16 +8848,75 @@ app.whenReady().then(async () => {
         );
         return true;
       } catch (e) {
-        console.error(`Failed to launch Raycast deep link: ${url}`, e);
+        console.error(`Failed to launch Raycast deep link: ${rawTarget}`, e);
+        return false;
+      }
+    }
+
+    const normalizedTarget = (() => {
+      if (rawTarget.startsWith('file://')) {
+        try {
+          return decodeURIComponent(new URL(rawTarget).pathname);
+        } catch {
+          return rawTarget;
+        }
+      }
+      if (rawTarget.startsWith('~/')) return path.join(os.homedir(), rawTarget.slice(2));
+      if (rawTarget === '~') return os.homedir();
+      return rawTarget;
+    })();
+    const launchTarget = path.isAbsolute(normalizedTarget) ? normalizedTarget : rawTarget;
+
+    if (appName) {
+      try {
+        const { spawn } = require('child_process');
+        const exitCode = await new Promise<number>((resolve) => {
+          const proc = spawn('open', ['-a', appName, launchTarget], { shell: false });
+          let stderr = '';
+
+          proc.stderr?.on('data', (data: Buffer) => {
+            stderr += data.toString();
+          });
+
+          proc.on('close', (code: number | null) => {
+            const resolved = code ?? 1;
+            if (resolved !== 0) {
+              console.error(`Failed to open target with ${appName}: ${launchTarget}`, stderr.trim() || `exit code ${resolved}`);
+            }
+            resolve(resolved);
+          });
+
+          proc.on('error', (err: Error) => {
+            console.error(`Failed to open target with ${appName}: ${launchTarget}`, err);
+            resolve(1);
+          });
+        });
+        return exitCode === 0;
+      } catch (e) {
+        console.error(`Failed to open target with ${appName}: ${launchTarget}`, e);
+        return false;
+      }
+    }
+
+    if (path.isAbsolute(normalizedTarget)) {
+      try {
+        const openPathError = await shell.openPath(normalizedTarget);
+        if (openPathError) {
+          console.error(`Failed to open path: ${normalizedTarget}`, openPathError);
+          return false;
+        }
+        return true;
+      } catch (e) {
+        console.error(`Failed to open path: ${normalizedTarget}`, e);
         return false;
       }
     }
 
     try {
-      await shell.openExternal(url);
+      await shell.openExternal(rawTarget);
       return true;
     } catch (e) {
-      console.error(`Failed to open URL: ${url}`, e);
+      console.error(`Failed to open URL: ${rawTarget}`, e);
       return false;
     }
   });

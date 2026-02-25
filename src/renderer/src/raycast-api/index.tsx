@@ -1236,13 +1236,17 @@ export async function open(target: string, application?: string | Application): 
   const electron = (window as any).electron;
   if (application) {
     const appName = typeof application === 'string' ? application : application.name;
-    // Use 'open -a' to open with a specific application
+    if (electron?.openUrl) {
+      await electron.openUrl(target, appName);
+      return;
+    }
+    // Fallback path if openUrl bridge is unavailable.
     if (electron?.execCommand) {
       await electron.execCommand('open', ['-a', appName, target]);
       return;
     }
   }
-  electron?.openUrl?.(target);
+  await electron?.openUrl?.(target);
 }
 
 export async function closeMainWindow(options?: { clearRootSearch?: boolean; popToRootType?: PopToRootType }): Promise<void> {

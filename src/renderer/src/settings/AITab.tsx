@@ -740,7 +740,7 @@ const AITab: React.FC = () => {
                     onChange={(e) => updateAI({ supermemoryLocalMode: e.target.checked })}
                     className="settings-checkbox"
                   />
-                  <span>Use local Supermemory mode (allow requests without API key)</span>
+                  <span>Use local mode (saved locally)</span>
                 </label>
             </div>
 

@@ -245,7 +245,11 @@ export function createListRuntime(deps: ListRuntimeDeps) {
                       dataIdx={globalIdx}
                       onSelect={() => setSelectedIdx(globalIdx)}
                       onActivate={() => {
-                        setSelectedIdx(globalIdx);
+                        if (globalIdx === selectedIdx) {
+                          primaryAction?.execute();
+                        } else {
+                          setSelectedIdx(globalIdx);
+                        }
                         inputRef.current?.focus();
                       }}
                       onContextAction={(event: React.MouseEvent<HTMLDivElement>) => {
@@ -265,7 +269,28 @@ export function createListRuntime(deps: ListRuntimeDeps) {
             <div key={groupIndex} className="mb-0">
               {group.title && <div className="px-4 pt-0.5 pb-1 text-[11px] uppercase tracking-wider text-[var(--text-subtle)] font-medium select-none">{group.title}</div>}
               {group.items.map(({ item, globalIdx }) => (
-                <ListItemRenderer key={item.id} {...item.props} assetsPath={extInfo.assetsPath || getExtensionContext().assetsPath} isSelected={globalIdx === selectedIdx} dataIdx={globalIdx} onSelect={() => setSelectedIdx(globalIdx)} onActivate={() => setSelectedIdx(globalIdx)} onContextAction={(event: React.MouseEvent<HTMLDivElement>) => { event.preventDefault(); event.stopPropagation(); setSelectedIdx(globalIdx); setShowActions(true); }} />
+                <ListItemRenderer
+                  key={item.id}
+                  {...item.props}
+                  assetsPath={extInfo.assetsPath || getExtensionContext().assetsPath}
+                  isSelected={globalIdx === selectedIdx}
+                  dataIdx={globalIdx}
+                  onSelect={() => setSelectedIdx(globalIdx)}
+                  onActivate={() => {
+                    if (globalIdx === selectedIdx) {
+                      primaryAction?.execute();
+                    } else {
+                      setSelectedIdx(globalIdx);
+                    }
+                    inputRef.current?.focus();
+                  }}
+                  onContextAction={(event: React.MouseEvent<HTMLDivElement>) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setSelectedIdx(globalIdx);
+                    setShowActions(true);
+                  }}
+                />
               ))}
             </div>
           ))

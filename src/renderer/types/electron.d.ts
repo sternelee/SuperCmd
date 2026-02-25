@@ -389,7 +389,7 @@ export interface ElectronAPI {
   getInstalledExtensionsSettingsSchema: () => Promise<InstalledExtensionSettingsSchema[]>;
 
   // Open URL
-  openUrl: (url: string) => Promise<boolean>;
+  openUrl: (url: string, application?: string) => Promise<boolean>;
 
   // Store
   getCatalog: (forceRefresh?: boolean) => Promise<CatalogEntry[]>;

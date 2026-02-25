@@ -303,8 +303,8 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke('update-command-metadata', commandId, metadata),
 
   // ─── Open URL (for extensions) ────────────────────────────────────
-  openUrl: (url: string): Promise<boolean> =>
-    ipcRenderer.invoke('open-url', url),
+  openUrl: (url: string, application?: string): Promise<boolean> =>
+    ipcRenderer.invoke('open-url', url, application),
 
   // ─── Store ────────────────────────────────────────────────────
   getCatalog: (forceRefresh?: boolean): Promise<any[]> =>
