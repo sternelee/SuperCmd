@@ -391,6 +391,37 @@ function applyNativeWindowGlassFallback(
   } catch {}
 }
 
+function isGlassyUiStyleEnabled(): boolean {
+  try {
+    const style = String(loadSettings().uiStyle || 'default').trim().toLowerCase();
+    return style === 'glassy';
+  } catch {
+    return false;
+  }
+}
+
+function shouldUseNativeLiquidGlass(): boolean {
+  return process.platform === 'darwin' && isGlassyUiStyleEnabled() && !!getElectronLiquidGlassApi();
+}
+
+function syncNativeLiquidGlassClassOnWindow(win: any, enabled: boolean): void {
+  if (!win || typeof win.isDestroyed !== 'function' || win.isDestroyed()) return;
+  try {
+    if (win?.webContents && !win.webContents.isDestroyed() && typeof win.webContents.executeJavaScript === 'function') {
+      void win.webContents.executeJavaScript(
+        `(() => {
+          try {
+            const on = ${enabled ? 'true' : 'false'};
+            document.documentElement.classList.toggle('sc-native-liquid-glass', on);
+            document.body.classList.toggle('sc-native-liquid-glass', on);
+          } catch {}
+        })()`,
+        true
+      );
+    }
+  } catch {}
+}
+
 function applyLiquidGlassToWindow(
   win: any,
   options?: {
@@ -403,8 +434,15 @@ function applyLiquidGlassToWindow(
 ): void {
   if (process.platform !== 'darwin') return;
   if (!win || typeof win.isDestroyed !== 'function' || win.isDestroyed()) return;
+  if (!isGlassyUiStyleEnabled()) {
+    syncNativeLiquidGlassClassOnWindow(win, false);
+    return;
+  }
   const windowId = Number(win.id);
-  if (Number.isFinite(windowId) && liquidGlassAppliedWindowIds.has(windowId)) return;
+  if (Number.isFinite(windowId) && liquidGlassAppliedWindowIds.has(windowId)) {
+    syncNativeLiquidGlassClassOnWindow(win, true);
+    return;
+  }
 
   const fallbackVibrancy = options?.fallbackVibrancy || 'under-window';
   const cornerRadius = Number.isFinite(Number(options?.cornerRadius)) ? Number(options?.cornerRadius) : 16;
@@ -414,6 +452,7 @@ function applyLiquidGlassToWindow(
 
   const liquidGlass = getElectronLiquidGlassApi();
   if (!liquidGlass || typeof liquidGlass.addView !== 'function') {
+    syncNativeLiquidGlassClassOnWindow(win, false);
     applyNativeWindowGlassFallback(win, fallbackVibrancy);
     return;
   }
@@ -446,19 +485,7 @@ function applyLiquidGlassToWindow(
       });
       if (typeof glassId === 'number' && glassId >= 0 && Number.isFinite(windowId)) {
         liquidGlassAppliedWindowIds.add(windowId);
-        try {
-          if (win?.webContents && !win.webContents.isDestroyed() && typeof win.webContents.executeJavaScript === 'function') {
-            void win.webContents.executeJavaScript(
-              `(() => {
-                try {
-                  document.documentElement.classList.add('sc-native-liquid-glass');
-                  document.body.classList.add('sc-native-liquid-glass');
-                } catch {}
-              })()`,
-              true
-            );
-          }
-        } catch {}
+        syncNativeLiquidGlassClassOnWindow(win, true);
       }
       if (typeof glassId === 'number' && glassId >= 0 && typeof liquidGlass.unstable_setSubdued === 'function') {
         try { liquidGlass.unstable_setSubdued(glassId, subdued); } catch {}
@@ -4424,7 +4451,9 @@ function createWindow(): void {
     }
 
     const useNativeVibrancyForWindowManager =
-      detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME && !getElectronLiquidGlassApi();
+      isGlassyUiStyleEnabled() &&
+      detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME &&
+      !getElectronLiquidGlassApi();
 
     const popupBounds = parsePopupFeatures(details?.features || '');
     const defaultWidth = detachedPopupName === DETACHED_WHISPER_WINDOW_NAME
@@ -4539,7 +4568,7 @@ function createWindow(): void {
       return;
     }
 
-    if (detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME) {
+    if (detachedPopupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME && isGlassyUiStyleEnabled()) {
       applyLiquidGlassToWindowManagerPopup(childWindow);
     }
 
@@ -4758,7 +4787,7 @@ function getDefaultPromptWindowBounds(): { x: number; y: number; width: number; 
 
 function createPromptWindow(initialBounds?: { x: number; y: number; width: number; height: number }): void {
   if (promptWindow && !promptWindow.isDestroyed()) return;
-  const useNativeLiquidGlass = process.platform === 'darwin' && !!getElectronLiquidGlassApi();
+  const useNativeLiquidGlass = shouldUseNativeLiquidGlass();
   const bounds = initialBounds || getDefaultPromptWindowBounds();
   promptWindow = new BrowserWindow({
     width: bounds.width,
@@ -6983,7 +7012,7 @@ function openSettingsWindow(payload?: SettingsNavigationPayload): void {
   const settingsHeight = Math.max(720, Math.min(860, displayHeight - 96));
   const settingsX = displayX + Math.floor((displayWidth - settingsWidth) / 2);
   const settingsY = displayY + Math.floor((displayHeight - settingsHeight) / 2);
-  const useNativeLiquidGlass = process.platform === 'darwin' && !!getElectronLiquidGlassApi();
+  const useNativeLiquidGlass = shouldUseNativeLiquidGlass();
 
   settingsWindow = new BrowserWindow({
     width: settingsWidth,
@@ -7057,7 +7086,7 @@ function openExtensionStoreWindow(): void {
   const storeHeight = 700;
   const storeX = displayX + Math.floor((displayWidth - storeWidth) / 2);
   const storeY = displayY + Math.floor((displayHeight - storeHeight) / 2);
-  const useNativeLiquidGlass = process.platform === 'darwin' && !!getElectronLiquidGlassApi();
+  const useNativeLiquidGlass = shouldUseNativeLiquidGlass();
 
   extensionStoreWindow = new BrowserWindow({
     width: storeWidth,
@@ -8206,6 +8235,41 @@ app.whenReady().then(async () => {
         try {
           win.webContents.send('settings-updated', result);
         } catch {}
+      }
+      if (patch.uiStyle !== undefined) {
+        const nextStyle = String(result.uiStyle || 'default').trim().toLowerCase();
+        const shouldEnableGlassy = nextStyle === 'glassy';
+        if (!shouldEnableGlassy) {
+          for (const win of BrowserWindow.getAllWindows()) {
+            if (!win || win.isDestroyed()) continue;
+            syncNativeLiquidGlassClassOnWindow(win, false);
+          }
+        } else {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            applyLiquidGlassToWindow(mainWindow, {
+              cornerRadius: 16,
+              fallbackVibrancy: 'under-window',
+            });
+          }
+          if (promptWindow && !promptWindow.isDestroyed()) {
+            applyLiquidGlassToWindow(promptWindow, {
+              cornerRadius: 16,
+              fallbackVibrancy: 'fullscreen-ui',
+            });
+          }
+          if (settingsWindow && !settingsWindow.isDestroyed()) {
+            applyLiquidGlassToWindow(settingsWindow, {
+              cornerRadius: 14,
+              fallbackVibrancy: 'hud',
+            });
+          }
+          if (extensionStoreWindow && !extensionStoreWindow.isDestroyed()) {
+            applyLiquidGlassToWindow(extensionStoreWindow, {
+              cornerRadius: 14,
+              fallbackVibrancy: 'hud',
+            });
+          }
+        }
       }
       if (patch.commandAliases !== undefined) {
         invalidateCache();

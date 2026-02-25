@@ -11,5 +11,8 @@ export function applyUiStyle(style: UiStylePreference): void {
   const isGlassy = style === 'glassy';
   root.classList.toggle('sc-glassy', isGlassy);
   body?.classList.toggle('sc-glassy', isGlassy);
+  if (!isGlassy) {
+    root.classList.remove('sc-native-liquid-glass');
+    body?.classList.remove('sc-native-liquid-glass');
+  }
 }
-
