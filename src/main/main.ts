@@ -5632,12 +5632,15 @@ function toggleWindow(): void {
 async function openLauncherFromUserEntry(): Promise<void> {
   const settings = loadSettings();
   if (!settings.hasSeenOnboarding) {
-    // Fresh install — show onboarding. Keep dock visible so the user can see
-    // the app is running and can click the dock icon to get back if needed.
-    await openLauncherAndRunSystemCommand('system-open-onboarding', {
-      showWindow: true,
-      mode: 'onboarding',
-    });
+    // Fresh install — open launcher and bring settings to the front.
+    // Persist onboarding as seen so this setup-first behavior only happens once.
+    saveSettings({ hasSeenOnboarding: true });
+    startClipboardMonitor();
+    syncFnSpeakToggleWatcher(loadSettings().commandHotkeys);
+    syncFnCommandWatchers(loadSettings().commandHotkeys);
+    setLauncherMode('default');
+    await showWindow();
+    openSettingsWindow();
     return;
   }
 

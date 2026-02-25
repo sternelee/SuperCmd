@@ -162,6 +162,7 @@ export interface AppSettings {
   commandAliases: Record<string, string>;
   pinnedCommands: string[];
   recentCommands: string[];
+  recentCommandLaunchCounts: Record<string, number>;
   hasSeenOnboarding: boolean;
   hasSeenWhisperOnboarding: boolean;
   ai: AISettings;

@@ -56,12 +56,14 @@ import AiChatView from './views/AiChatView';
 import CursorPromptView from './views/CursorPromptView';
 
 const STALE_OVERLAY_RESET_MS = 60_000;
+const MAX_RECENT_SECTION_ITEMS = 5;
 
 const App: React.FC = () => {
   const [commands, setCommands] = useState<CommandInfo[]>([]);
   const [commandAliases, setCommandAliases] = useState<Record<string, string>>({});
   const [pinnedCommands, setPinnedCommands] = useState<string[]>([]);
   const [recentCommands, setRecentCommands] = useState<string[]>([]);
+  const [recentCommandLaunchCounts, setRecentCommandLaunchCounts] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -217,6 +219,17 @@ const App: React.FC = () => {
       const shortcutStatus = await window.electron.getGlobalShortcutStatus();
       setPinnedCommands(settings.pinnedCommands || []);
       setRecentCommands(settings.recentCommands || []);
+      setRecentCommandLaunchCounts(
+        Object.entries(settings.recentCommandLaunchCounts || {}).reduce((acc, [commandId, launchCount]) => {
+          const normalizedCommandId = String(commandId || '').trim();
+          const normalizedLaunchCount = Math.floor(Number(launchCount));
+          if (!normalizedCommandId || !Number.isFinite(normalizedLaunchCount) || normalizedLaunchCount <= 0) {
+            return acc;
+          }
+          acc[normalizedCommandId] = normalizedLaunchCount;
+          return acc;
+        }, {} as Record<string, number>)
+      );
       setCommandAliases(
         Object.entries(settings.commandAliases || {}).reduce((acc, [commandId, alias]) => {
           const normalizedCommandId = String(commandId || '').trim();
@@ -241,6 +254,7 @@ const App: React.FC = () => {
       console.error('Failed to load launcher preferences:', e);
       setPinnedCommands([]);
       setRecentCommands([]);
+      setRecentCommandLaunchCounts({});
       setCommandAliases({});
       setLauncherShortcut('Alt+Space');
       setConfiguredEdgeTtsVoice('en-US-EricNeural');
@@ -590,10 +604,11 @@ const App: React.FC = () => {
   }, [refreshSelectedTextSnapshot]);
 
   const saveLauncherPreferences = useCallback(
-    async (next: { pinnedCommands?: string[]; recentCommands?: string[] }) => {
+    async (next: { pinnedCommands?: string[]; recentCommands?: string[]; recentCommandLaunchCounts?: Record<string, number> }) => {
       const patch: Partial<AppSettings> = {};
       if (next.pinnedCommands) patch.pinnedCommands = next.pinnedCommands;
       if (next.recentCommands) patch.recentCommands = next.recentCommands;
+      if (next.recentCommandLaunchCounts) patch.recentCommandLaunchCounts = next.recentCommandLaunchCounts;
       if (Object.keys(patch).length > 0) {
         await window.electron.saveSettings(patch);
       }
@@ -607,10 +622,18 @@ const App: React.FC = () => {
         commandId,
         ...recentCommands.filter((id) => id !== commandId),
       ].slice(0, MAX_RECENT_COMMANDS);
+      const updatedLaunchCounts = {
+        ...recentCommandLaunchCounts,
+        [commandId]: (recentCommandLaunchCounts[commandId] || 0) + 1,
+      };
       setRecentCommands(updated);
-      await saveLauncherPreferences({ recentCommands: updated });
+      setRecentCommandLaunchCounts(updatedLaunchCounts);
+      await saveLauncherPreferences({
+        recentCommands: updated,
+        recentCommandLaunchCounts: updatedLaunchCounts,
+      });
     },
-    [recentCommands, saveLauncherPreferences]
+    [recentCommands, recentCommandLaunchCounts, saveLauncherPreferences]
   );
 
   const updatePinnedCommands = useCallback(
@@ -644,13 +667,19 @@ const App: React.FC = () => {
       await window.electron.toggleCommandEnabled(command.id, false);
       await updatePinnedCommands(pinnedCommands.filter((id) => id !== command.id));
       const nextRecent = recentCommands.filter((id) => id !== command.id);
+      const { [command.id]: _removed, ...nextLaunchCounts } = recentCommandLaunchCounts;
       setRecentCommands(nextRecent);
-      await saveLauncherPreferences({ recentCommands: nextRecent });
+      setRecentCommandLaunchCounts(nextLaunchCounts);
+      await saveLauncherPreferences({
+        recentCommands: nextRecent,
+        recentCommandLaunchCounts: nextLaunchCounts,
+      });
       await fetchCommands();
     },
     [
       pinnedCommands,
       recentCommands,
+      recentCommandLaunchCounts,
       updatePinnedCommands,
       saveLauncherPreferences,
       fetchCommands,
@@ -665,13 +694,19 @@ const App: React.FC = () => {
       await window.electron.uninstallExtension(extName);
       await updatePinnedCommands(pinnedCommands.filter((id) => id !== command.id));
       const nextRecent = recentCommands.filter((id) => id !== command.id);
+      const { [command.id]: _removed, ...nextLaunchCounts } = recentCommandLaunchCounts;
       setRecentCommands(nextRecent);
-      await saveLauncherPreferences({ recentCommands: nextRecent });
+      setRecentCommandLaunchCounts(nextLaunchCounts);
+      await saveLauncherPreferences({
+        recentCommands: nextRecent,
+        recentCommandLaunchCounts: nextLaunchCounts,
+      });
       await fetchCommands();
     },
     [
       pinnedCommands,
       recentCommands,
+      recentCommandLaunchCounts,
       updatePinnedCommands,
       saveLauncherPreferences,
       fetchCommands,
@@ -832,6 +867,7 @@ const App: React.FC = () => {
       .filter((cmd): cmd is CommandInfo => Boolean(cmd) && !contextualIds.has((cmd as CommandInfo).id));
     const pinnedSet = new Set(pinned.map((c) => c.id));
 
+    const recentRecencyRank = new Map(recentCommands.map((id, index) => [id, index]));
     const recent = recentCommands
       .map((id) => sourceMap.get(id))
       .filter(
@@ -839,7 +875,15 @@ const App: React.FC = () => {
           Boolean(c) &&
           !pinnedSet.has((c as CommandInfo).id) &&
           !contextualIds.has((c as CommandInfo).id)
-      );
+      )
+      .sort((a, b) => {
+        const countA = recentCommandLaunchCounts[a.id] || 0;
+        const countB = recentCommandLaunchCounts[b.id] || 0;
+        if (countB !== countA) return countB - countA;
+        return (recentRecencyRank.get(a.id) ?? Number.MAX_SAFE_INTEGER)
+          - (recentRecencyRank.get(b.id) ?? Number.MAX_SAFE_INTEGER);
+      })
+      .slice(0, MAX_RECENT_SECTION_ITEMS);
     const recentSet = new Set(recent.map((c) => c.id));
 
     const other = visibleSourceCommands.filter(
@@ -847,7 +891,7 @@ const App: React.FC = () => {
     );
 
     return { contextual, pinned, recent, other };
-  }, [visibleSourceCommands, pinnedCommands, recentCommands, selectedTextSnapshot]);
+  }, [visibleSourceCommands, pinnedCommands, recentCommands, recentCommandLaunchCounts, selectedTextSnapshot]);
 
   const displayCommands = useMemo(
     () => [
