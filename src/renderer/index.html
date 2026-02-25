@@ -6,18 +6,25 @@
     <meta name="color-scheme" content="light dark" />
     <script>
       (function () {
+        var themeMediaQuery = '(prefers-color-scheme: dark)';
+        var prefersDarkFromSystem = !!(
+          window.matchMedia && window.matchMedia(themeMediaQuery).matches
+        );
         try {
           var key = 'sc-theme-preference';
           var stored = localStorage.getItem(key);
           var preference = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          if (stored !== preference) {
+            localStorage.setItem(key, preference);
+          }
           var prefersDark =
             preference === 'dark' ||
-            (preference === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            (preference === 'system' && prefersDarkFromSystem);
           document.documentElement.classList.toggle('dark', prefersDark);
           document.documentElement.style.colorScheme = prefersDark ? 'dark' : 'light';
         } catch {
-          document.documentElement.classList.add('dark');
-          document.documentElement.style.colorScheme = 'dark';
+          document.documentElement.classList.toggle('dark', prefersDarkFromSystem);
+          document.documentElement.style.colorScheme = prefersDarkFromSystem ? 'dark' : 'light';
         }
       })();
     </script>

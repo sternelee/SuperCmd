@@ -20,7 +20,7 @@ function normalizeThemePreference(value: string | null | undefined): ThemePrefer
 }
 
 function resolveSystemTheme(): ResolvedTheme {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'dark';
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light';
   return window.matchMedia(THEME_MEDIA_QUERY).matches ? 'dark' : 'light';
 }
 
@@ -107,7 +107,16 @@ function ensureExternalPreferenceSync(): void {
 
 export function getThemePreference(): ThemePreference {
   if (typeof window === 'undefined') return 'system';
-  return normalizeThemePreference(window.localStorage.getItem(THEME_STORAGE_KEY));
+  try {
+    const storedPreference = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const normalizedPreference = normalizeThemePreference(storedPreference);
+    if (storedPreference !== normalizedPreference) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);
+    }
+    return normalizedPreference;
+  } catch {
+    return 'system';
+  }
 }
 
 export function setThemePreference(nextPreference: ThemePreference): ResolvedTheme {

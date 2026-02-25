@@ -77,12 +77,21 @@ try {
  * (see asarUnpack in package.json), so we swap the asar path for the
  * unpacked one — child_process.spawn is not asar-aware.
  */
+function resolvePackagedUnpackedPath(candidatePath: string): string {
+  if (!app.isPackaged) return candidatePath;
+  if (!candidatePath.includes('app.asar')) return candidatePath;
+  const unpackedPath = candidatePath.replace('app.asar', 'app.asar.unpacked');
+  try {
+    if (fs.existsSync(unpackedPath)) {
+      return unpackedPath;
+    }
+  } catch {}
+  return candidatePath;
+}
+
 function getNativeBinaryPath(name: string): string {
   const base = path.join(__dirname, '..', 'native', name);
-  if (app.isPackaged) {
-    return base.replace('app.asar', 'app.asar.unpacked');
-  }
-  return base;
+  return resolvePackagedUnpackedPath(base);
 }
 
 type WindowManagementLayoutItem = {
@@ -165,7 +174,8 @@ function warnIfElectronLiquidGlassRuntimeLooksIncompatible(): void {
 }
 
 function getWindowManagerWorkerPath(): string {
-  return path.join(__dirname, 'window-manager-worker.js');
+  const workerPath = path.join(__dirname, 'window-manager-worker.js');
+  return resolvePackagedUnpackedPath(workerPath);
 }
 
 function isWindowManagerWorkerAlive(proc: ChildProcess | null): proc is ChildProcess {
@@ -1521,6 +1531,7 @@ async function executeNativeWindowAdjustByAction(
 
   const fsNative = require('fs');
   const helperPath = getNativeBinaryPath('window-adjust');
+  const nativeAdjustTimeoutMs = app.isPackaged ? 1500 : 600;
   if (nativeWindowFineTuneSupport === null && !fsNative.existsSync(helperPath)) {
     nativeWindowFineTuneSupport = false;
     return null;
@@ -1554,18 +1565,31 @@ async function executeNativeWindowAdjustByAction(
       execFile(
         helperPath,
         args,
-        { encoding: 'utf-8', timeout: 420 },
+        { encoding: 'utf-8', timeout: nativeAdjustTimeoutMs },
         (error: Error | null, stdout: string, _stderr: string) => {
           const raw = String(stdout || '').trim();
           if (!raw) {
-            if ((error as any)?.message?.includes('ENOENT')) {
+            const errorMessage = String((error as any)?.message || '');
+            if (errorMessage.includes('ENOENT')) {
               nativeWindowFineTuneSupport = false;
+            } else if (errorMessage) {
+              console.warn(`[WindowManager] Native window helper failed (${normalizedAction}):`, errorMessage);
             }
             resolve(null);
             return;
           }
           try {
-            const payload = JSON.parse(raw);
+            const payloadLine = raw
+              .split(/\r?\n/)
+              .map((line) => String(line || '').trim())
+              .filter(Boolean)
+              .reverse()
+              .find((line) => line.startsWith('{') && line.endsWith('}'));
+            if (!payloadLine) {
+              resolve(null);
+              return;
+            }
+            const payload = JSON.parse(payloadLine);
             if (typeof payload?.ok !== 'boolean') {
               resolve(null);
               return;
@@ -5912,15 +5936,12 @@ function toggleWindow(): void {
 async function openLauncherFromUserEntry(): Promise<void> {
   const settings = loadSettings();
   if (!settings.hasSeenOnboarding) {
-    // Fresh install — open launcher and bring settings to the front.
-    // Persist onboarding as seen so this setup-first behavior only happens once.
-    saveSettings({ hasSeenOnboarding: true });
-    startClipboardMonitor();
-    syncFnSpeakToggleWatcher(loadSettings().commandHotkeys);
-    syncFnCommandWatchers(loadSettings().commandHotkeys);
-    setLauncherMode('default');
-    await showWindow();
-    openSettingsWindow();
+    // Fresh install — route directly into onboarding.
+    await openLauncherAndRunSystemCommand('system-open-onboarding', {
+      showWindow: true,
+      mode: 'onboarding',
+      preserveFocusWhenHidden: false,
+    });
     return;
   }
 
