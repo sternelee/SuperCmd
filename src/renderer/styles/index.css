@@ -763,6 +763,14 @@ html {
   outline: none;
 }
 
+.sc-native-liquid-glass .launcher-search-input::placeholder {
+  color: rgba(41, 50, 67, 0.56) !important;
+}
+
+.dark.sc-native-liquid-glass .launcher-search-input::placeholder {
+  color: var(--text-muted) !important;
+}
+
 .settings-checkbox {
   appearance: none;
   width: 16px;

@@ -1971,7 +1971,7 @@ const App: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] placeholder:font-medium text-[15px] font-medium tracking-[0.005em]"
+            className="launcher-search-input flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] placeholder:font-medium text-[15px] font-medium tracking-[0.005em]"
             autoFocus
           />
           {searchQuery && aiAvailable && (
