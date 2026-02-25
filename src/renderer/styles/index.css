@@ -514,9 +514,14 @@ html {
   right: 0 !important;
   bottom: 0 !important;
   border-radius: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   border-left: none;
   border-right: none;
   border-bottom: none;
+  background: rgba(255, 255, 255, 0.01);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 /* Native liquid glass mode always uses white typography, regardless of theme preference. */
