@@ -1903,6 +1903,9 @@ const App: React.FC = () => {
   const isGlassyTheme =
     document.documentElement.classList.contains('sc-glassy') ||
     document.body.classList.contains('sc-glassy');
+  const isNativeLiquidGlass =
+    document.documentElement.classList.contains('sc-native-liquid-glass') ||
+    document.body.classList.contains('sc-native-liquid-glass');
   return (
     <>
     {alwaysMountedRunners}
@@ -2128,7 +2131,16 @@ const App: React.FC = () => {
           tabIndex={0}
           onKeyDown={handleActionsOverlayKeyDown}
           style={{
-            ...(isGlassyTheme
+            ...(isNativeLiquidGlass
+              ? {
+                  background:
+                    'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.045), rgba(var(--on-surface-rgb), 0.012)), rgba(var(--surface-base-rgb), 0.14)',
+                  backdropFilter: 'blur(44px) saturate(155%)',
+                  WebkitBackdropFilter: 'blur(44px) saturate(155%)',
+                  border: '1px solid rgba(var(--on-surface-rgb), 0.16)',
+                  boxShadow: '0 18px 38px -12px rgba(var(--backdrop-rgb), 0.26)',
+                }
+              : isGlassyTheme
               ? {
                   background:
                     'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
@@ -2156,11 +2168,11 @@ const App: React.FC = () => {
                 className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
                   idx === selectedActionIndex
                     ? action.style === 'destructive'
-                      ? 'bg-white/[0.18] text-red-400'
-                      : 'bg-white/[0.18] text-white'
+                      ? 'bg-[var(--action-menu-selected-bg)] text-[var(--status-danger-faded)]'
+                      : 'bg-[var(--action-menu-selected-bg)] text-[var(--text-primary)]'
                     : action.style === 'destructive'
-                      ? 'hover:bg-white/[0.08] text-red-400'
-                      : 'hover:bg-white/[0.08] text-white/80'
+                      ? 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--status-danger-faded)]'
+                      : 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--text-secondary)]'
                 }`}
                 style={
                   idx === selectedActionIndex
@@ -2180,7 +2192,7 @@ const App: React.FC = () => {
               >
                 <span className="flex-1 text-sm truncate">{action.title}</span>
                 {action.shortcut && (
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-white/70">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-[var(--text-muted)]">
                     {renderShortcutLabel(action.shortcut)}
                   </kbd>
                 )}
@@ -2207,7 +2219,16 @@ const App: React.FC = () => {
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 340),
             top: Math.min(contextMenu.y, window.innerHeight - 320),
-            ...(isGlassyTheme
+            ...(isNativeLiquidGlass
+              ? {
+                  background:
+                    'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.045), rgba(var(--on-surface-rgb), 0.012)), rgba(var(--surface-base-rgb), 0.14)',
+                  backdropFilter: 'blur(44px) saturate(155%)',
+                  WebkitBackdropFilter: 'blur(44px) saturate(155%)',
+                  border: '1px solid rgba(var(--on-surface-rgb), 0.16)',
+                  boxShadow: '0 18px 38px -12px rgba(var(--backdrop-rgb), 0.26)',
+                }
+              : isGlassyTheme
               ? {
                   background:
                     'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
@@ -2236,11 +2257,11 @@ const App: React.FC = () => {
                 className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
                   idx === selectedContextActionIndex
                     ? action.style === 'destructive'
-                      ? 'bg-white/[0.18] text-red-400'
-                      : 'bg-white/[0.18] text-white'
+                      ? 'bg-[var(--action-menu-selected-bg)] text-[var(--status-danger-faded)]'
+                      : 'bg-[var(--action-menu-selected-bg)] text-[var(--text-primary)]'
                     : action.style === 'destructive'
-                      ? 'hover:bg-white/[0.08] text-red-400'
-                      : 'hover:bg-white/[0.08] text-white/80'
+                      ? 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--status-danger-faded)]'
+                      : 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--text-secondary)]'
                 }`}
                 style={
                   idx === selectedContextActionIndex
@@ -2266,7 +2287,7 @@ const App: React.FC = () => {
               >
                 <span className="flex-1 text-sm truncate">{action.title}</span>
                 {action.shortcut && (
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-white/70">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-[var(--text-muted)]">
                     {renderShortcutLabel(action.shortcut)}
                   </kbd>
                 )}
