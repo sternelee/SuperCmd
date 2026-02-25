@@ -335,6 +335,43 @@ function canonicalAppTitle(name: string): string {
   return name;
 }
 
+function normalizeAppSearchText(value: string): string {
+  return String(value || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function buildAppKeywords(
+  displayName: string,
+  rawName: string,
+  bundleId?: string
+): string[] {
+  const set = new Set<string>();
+  const add = (value: string) => {
+    const normalized = normalizeAppSearchText(value);
+    if (normalized) set.add(normalized);
+  };
+
+  add(displayName);
+  add(rawName);
+  if (bundleId) add(bundleId);
+
+  const compactRaw = rawName.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (compactRaw) set.add(compactRaw);
+
+  const values = Array.from(set);
+  for (const value of values) {
+    for (const token of value.split(/\s+/g)) {
+      if (token.length >= 2) set.add(token);
+    }
+  }
+
+  return Array.from(set);
+}
+
 function collectAppBundles(rootDir: string, maxDepth = 4): string[] {
   const results: string[] = [];
   if (!rootDir || !fs.existsSync(rootDir)) return results;
@@ -623,13 +660,15 @@ async function discoverApplications(): Promise<CommandInfo[]> {
           const isAllowedType =
             !packageType || packageType === 'APPL' || packageType === 'XPC!';
           if (!isAllowedType && !isFinder) return null;
-          if (info.LSUIElement === true) return null;
-          if (info.NSUIElement === true) return null;
           if (info.LSBackgroundOnly === true) return null;
         }
 
         const rawName = path.basename(appPath, '.app');
         const name = canonicalAppTitle(rawName);
+        const bundleId =
+          typeof info?.CFBundleIdentifier === 'string'
+            ? info.CFBundleIdentifier
+            : undefined;
         const key = name.toLowerCase().replace(/\s+/g, ' ').trim();
         const slug = key.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'app';
         const idSuffix = crypto.createHash('md5').update(appPath).digest('hex').slice(0, 8);
@@ -642,7 +681,7 @@ async function discoverApplications(): Promise<CommandInfo[]> {
         return {
           id,
           title: name,
-          keywords: [key, rawName.toLowerCase()],
+          keywords: buildAppKeywords(name, rawName, bundleId),
           iconDataUrl,
           category: 'app' as const,
           path: appPath,
