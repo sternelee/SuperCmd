@@ -507,6 +507,16 @@ html {
 
 /* Native liquid glass mode always uses white typography, regardless of theme preference. */
 .sc-native-liquid-glass {
+  --command-item-hover-bg: rgba(255, 255, 255, 0.08);
+  --command-item-hover-border: transparent;
+  --command-item-selected-bg: var(--command-item-hover-bg);
+  --command-item-selected-border: rgba(255, 255, 255, 0.16);
+  --launcher-card-selected-bg: var(--command-item-hover-bg);
+  --launcher-card-selected-border: rgba(255, 255, 255, 0.16);
+  --overlay-item-active-bg: rgba(24, 34, 52, 0.34);
+  --action-menu-selected-bg: rgba(24, 34, 52, 0.36);
+  --action-menu-selected-border: transparent;
+  --action-menu-selected-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
   --text-primary: rgba(255, 255, 255, 0.96);
   --text-secondary: rgba(255, 255, 255, 0.88);
   --text-muted: rgba(255, 255, 255, 0.74);
@@ -517,6 +527,16 @@ html {
   --status-danger-soft: rgba(255, 90, 95, 0.32);
   --status-danger-text: #ff555a;
   color: var(--text-primary);
+}
+
+.dark.sc-native-liquid-glass {
+  --command-item-selected-bg: var(--command-item-hover-bg);
+  --command-item-selected-border: rgba(255, 255, 255, 0.16);
+  --launcher-card-selected-bg: var(--command-item-hover-bg);
+  --launcher-card-selected-border: rgba(255, 255, 255, 0.16);
+  --overlay-item-active-bg: rgba(255, 255, 255, 0.16);
+  --action-menu-selected-bg: rgba(255, 255, 255, 0.16);
+  --action-menu-selected-border: transparent;
 }
 
 .sc-native-liquid-glass [class*="text-white"] {
@@ -713,7 +733,7 @@ html {
 
 .command-item.selected {
   background: var(--command-item-selected-bg);
-  border-color: transparent;
+  border-color: var(--command-item-selected-border);
 }
 
 /* Search input — inline, no background */
