@@ -23,8 +23,27 @@ type PresetId =
   | 'top-right'
   | 'bottom-left'
   | 'bottom-right'
+  | 'top-left-sixth'
+  | 'top-center-sixth'
+  | 'top-right-sixth'
+  | 'bottom-left-sixth'
+  | 'bottom-center-sixth'
+  | 'bottom-right-sixth'
   | 'left'
   | 'right'
+  | 'first-third'
+  | 'center-third'
+  | 'last-third'
+  | 'first-two-thirds'
+  | 'center-two-thirds'
+  | 'last-two-thirds'
+  | 'first-fourth'
+  | 'second-fourth'
+  | 'third-fourth'
+  | 'last-fourth'
+  | 'first-three-fourths'
+  | 'center-three-fourths'
+  | 'last-three-fourths'
   | 'top'
   | 'bottom'
   | 'center'
@@ -74,6 +93,25 @@ export const WINDOW_MANAGEMENT_PRESET_COMMANDS: WindowManagementPresetCommand[] 
   { commandId: 'system-window-management-top-right', presetId: 'top-right' },
   { commandId: 'system-window-management-bottom-left', presetId: 'bottom-left' },
   { commandId: 'system-window-management-bottom-right', presetId: 'bottom-right' },
+  { commandId: 'system-window-management-first-third', presetId: 'first-third' },
+  { commandId: 'system-window-management-center-third', presetId: 'center-third' },
+  { commandId: 'system-window-management-last-third', presetId: 'last-third' },
+  { commandId: 'system-window-management-first-two-thirds', presetId: 'first-two-thirds' },
+  { commandId: 'system-window-management-center-two-thirds', presetId: 'center-two-thirds' },
+  { commandId: 'system-window-management-last-two-thirds', presetId: 'last-two-thirds' },
+  { commandId: 'system-window-management-first-fourth', presetId: 'first-fourth' },
+  { commandId: 'system-window-management-second-fourth', presetId: 'second-fourth' },
+  { commandId: 'system-window-management-third-fourth', presetId: 'third-fourth' },
+  { commandId: 'system-window-management-last-fourth', presetId: 'last-fourth' },
+  { commandId: 'system-window-management-first-three-fourths', presetId: 'first-three-fourths' },
+  { commandId: 'system-window-management-center-three-fourths', presetId: 'center-three-fourths' },
+  { commandId: 'system-window-management-last-three-fourths', presetId: 'last-three-fourths' },
+  { commandId: 'system-window-management-top-left-sixth', presetId: 'top-left-sixth' },
+  { commandId: 'system-window-management-top-center-sixth', presetId: 'top-center-sixth' },
+  { commandId: 'system-window-management-top-right-sixth', presetId: 'top-right-sixth' },
+  { commandId: 'system-window-management-bottom-left-sixth', presetId: 'bottom-left-sixth' },
+  { commandId: 'system-window-management-bottom-center-sixth', presetId: 'bottom-center-sixth' },
+  { commandId: 'system-window-management-bottom-right-sixth', presetId: 'bottom-right-sixth' },
   { commandId: 'system-window-management-auto-organize', presetId: 'auto-organize' },
   { commandId: 'system-window-management-increase-size-10', presetId: 'increase-size-10' },
   { commandId: 'system-window-management-decrease-size-10', presetId: 'decrease-size-10' },
@@ -110,6 +148,25 @@ const PRESETS: Array<{ id: PresetId; label: string; subtitle: string }> = [
   { id: 'top-right', label: 'Top Right', subtitle: 'Current window' },
   { id: 'bottom-right', label: 'Bottom Right', subtitle: 'Current window' },
   { id: 'bottom-left', label: 'Bottom Left', subtitle: 'Current window' },
+  { id: 'first-third', label: 'First Third', subtitle: 'Current window' },
+  { id: 'center-third', label: 'Center Third', subtitle: 'Current window' },
+  { id: 'last-third', label: 'Last Third', subtitle: 'Current window' },
+  { id: 'first-two-thirds', label: 'First Two Thirds', subtitle: 'Current window' },
+  { id: 'center-two-thirds', label: 'Center Two Thirds', subtitle: 'Current window' },
+  { id: 'last-two-thirds', label: 'Last Two Thirds', subtitle: 'Current window' },
+  { id: 'first-fourth', label: 'First Fourth', subtitle: 'Current window' },
+  { id: 'second-fourth', label: 'Second Fourth', subtitle: 'Current window' },
+  { id: 'third-fourth', label: 'Third Fourth', subtitle: 'Current window' },
+  { id: 'last-fourth', label: 'Last Fourth', subtitle: 'Current window' },
+  { id: 'first-three-fourths', label: 'First Three Fourths', subtitle: 'Current window' },
+  { id: 'center-three-fourths', label: 'Center Three Fourths', subtitle: 'Current window' },
+  { id: 'last-three-fourths', label: 'Last Three Fourths', subtitle: 'Current window' },
+  { id: 'top-left-sixth', label: 'Top Left Sixth', subtitle: 'Current window' },
+  { id: 'top-center-sixth', label: 'Top Center Sixth', subtitle: 'Current window' },
+  { id: 'top-right-sixth', label: 'Top Right Sixth', subtitle: 'Current window' },
+  { id: 'bottom-left-sixth', label: 'Bottom Left Sixth', subtitle: 'Current window' },
+  { id: 'bottom-center-sixth', label: 'Bottom Center Sixth', subtitle: 'Current window' },
+  { id: 'bottom-right-sixth', label: 'Bottom Right Sixth', subtitle: 'Current window' },
   { id: 'auto-organize', label: 'Auto organise', subtitle: 'All windows on this screen' },
   { id: 'increase-size-10', label: 'Increase size by 10%', subtitle: 'Current window' },
   { id: 'decrease-size-10', label: 'Decrease size by 10%', subtitle: 'Current window' },
@@ -175,11 +232,68 @@ function renderPresetIcon(id: PresetId): JSX.Element {
     case 'bottom-right':
       cells.push({ x: 10, y: 7, w: 9, h: 6 });
       break;
+    case 'top-left-sixth':
+      cells.push({ x: 1, y: 1, w: 6, h: 6 });
+      break;
+    case 'top-center-sixth':
+      cells.push({ x: 7, y: 1, w: 6, h: 6 });
+      break;
+    case 'top-right-sixth':
+      cells.push({ x: 13, y: 1, w: 6, h: 6 });
+      break;
+    case 'bottom-left-sixth':
+      cells.push({ x: 1, y: 7, w: 6, h: 6 });
+      break;
+    case 'bottom-center-sixth':
+      cells.push({ x: 7, y: 7, w: 6, h: 6 });
+      break;
+    case 'bottom-right-sixth':
+      cells.push({ x: 13, y: 7, w: 6, h: 6 });
+      break;
     case 'left':
       cells.push({ x: 1, y: 1, w: 9, h: 12 });
       break;
     case 'right':
       cells.push({ x: 10, y: 1, w: 9, h: 12 });
+      break;
+    case 'first-third':
+      cells.push({ x: 1, y: 1, w: 6, h: 12 });
+      break;
+    case 'center-third':
+      cells.push({ x: 7, y: 1, w: 6, h: 12 });
+      break;
+    case 'last-third':
+      cells.push({ x: 13, y: 1, w: 6, h: 12 });
+      break;
+    case 'first-two-thirds':
+      cells.push({ x: 1, y: 1, w: 12, h: 12 });
+      break;
+    case 'center-two-thirds':
+      cells.push({ x: 4, y: 1, w: 12, h: 12 });
+      break;
+    case 'last-two-thirds':
+      cells.push({ x: 7, y: 1, w: 12, h: 12 });
+      break;
+    case 'first-fourth':
+      cells.push({ x: 1, y: 1, w: 5, h: 12 });
+      break;
+    case 'second-fourth':
+      cells.push({ x: 6, y: 1, w: 4, h: 12 });
+      break;
+    case 'third-fourth':
+      cells.push({ x: 10, y: 1, w: 4, h: 12 });
+      break;
+    case 'last-fourth':
+      cells.push({ x: 14, y: 1, w: 5, h: 12 });
+      break;
+    case 'first-three-fourths':
+      cells.push({ x: 1, y: 1, w: 14, h: 12 });
+      break;
+    case 'center-three-fourths':
+      cells.push({ x: 3, y: 1, w: 14, h: 12 });
+      break;
+    case 'last-three-fourths':
+      cells.push({ x: 6, y: 1, w: 13, h: 12 });
       break;
     case 'top':
       cells.push({ x: 1, y: 1, w: 18, h: 6 });
@@ -681,13 +795,178 @@ function pushUpIfOverflow(rect: Rect, area: ScreenArea, window?: ManagedWindow):
 }
 
 function getPresetRegion(presetId: PresetId, area: ScreenArea): Rect | null {
+  const areaRight = area.left + area.width;
+  const areaBottom = area.top + area.height;
+  const oneThirdX = area.left + Math.floor(area.width / 3);
+  const twoThirdX = area.left + Math.floor((area.width * 2) / 3);
+  const oneFourthX = area.left + Math.floor(area.width / 4);
+  const halfX = area.left + Math.floor(area.width / 2);
+  const threeFourthX = area.left + Math.floor((area.width * 3) / 4);
+  const oneEighthX = area.left + Math.floor(area.width / 8);
+  const sevenEighthX = area.left + Math.floor((area.width * 7) / 8);
+  const oneSixthX = area.left + Math.floor(area.width / 6);
+  const fiveSixthX = area.left + Math.floor((area.width * 5) / 6);
+  const halfY = area.top + Math.floor(area.height / 2);
+
   if (presetId === 'top-left' || presetId === 'top-right' || presetId === 'bottom-left' || presetId === 'bottom-right') {
     const quadrants = splitQuadrants(area, { padding: 0, gap: 0 });
     return quadrants[presetId];
   }
+  if (presetId === 'top-left-sixth') {
+    return {
+      x: area.left,
+      y: area.top,
+      width: Math.max(1, oneThirdX - area.left),
+      height: Math.max(1, halfY - area.top),
+    };
+  }
+  if (presetId === 'top-center-sixth') {
+    return {
+      x: oneThirdX,
+      y: area.top,
+      width: Math.max(1, twoThirdX - oneThirdX),
+      height: Math.max(1, halfY - area.top),
+    };
+  }
+  if (presetId === 'top-right-sixth') {
+    return {
+      x: twoThirdX,
+      y: area.top,
+      width: Math.max(1, areaRight - twoThirdX),
+      height: Math.max(1, halfY - area.top),
+    };
+  }
+  if (presetId === 'bottom-left-sixth') {
+    return {
+      x: area.left,
+      y: halfY,
+      width: Math.max(1, oneThirdX - area.left),
+      height: Math.max(1, areaBottom - halfY),
+    };
+  }
+  if (presetId === 'bottom-center-sixth') {
+    return {
+      x: oneThirdX,
+      y: halfY,
+      width: Math.max(1, twoThirdX - oneThirdX),
+      height: Math.max(1, areaBottom - halfY),
+    };
+  }
+  if (presetId === 'bottom-right-sixth') {
+    return {
+      x: twoThirdX,
+      y: halfY,
+      width: Math.max(1, areaRight - twoThirdX),
+      height: Math.max(1, areaBottom - halfY),
+    };
+  }
   if (presetId === 'left' || presetId === 'right') {
     const split = splitVertical(area);
     return presetId === 'left' ? split.left : split.right;
+  }
+  if (presetId === 'first-third') {
+    return {
+      x: area.left,
+      y: area.top,
+      width: Math.max(1, oneThirdX - area.left),
+      height: area.height,
+    };
+  }
+  if (presetId === 'center-third') {
+    return {
+      x: oneThirdX,
+      y: area.top,
+      width: Math.max(1, twoThirdX - oneThirdX),
+      height: area.height,
+    };
+  }
+  if (presetId === 'last-third') {
+    return {
+      x: twoThirdX,
+      y: area.top,
+      width: Math.max(1, areaRight - twoThirdX),
+      height: area.height,
+    };
+  }
+  if (presetId === 'first-two-thirds') {
+    return {
+      x: area.left,
+      y: area.top,
+      width: Math.max(1, twoThirdX - area.left),
+      height: area.height,
+    };
+  }
+  if (presetId === 'center-two-thirds') {
+    return {
+      x: oneSixthX,
+      y: area.top,
+      width: Math.max(1, fiveSixthX - oneSixthX),
+      height: area.height,
+    };
+  }
+  if (presetId === 'last-two-thirds') {
+    return {
+      x: oneThirdX,
+      y: area.top,
+      width: Math.max(1, areaRight - oneThirdX),
+      height: area.height,
+    };
+  }
+  if (presetId === 'first-fourth') {
+    return {
+      x: area.left,
+      y: area.top,
+      width: Math.max(1, oneFourthX - area.left),
+      height: area.height,
+    };
+  }
+  if (presetId === 'second-fourth') {
+    return {
+      x: oneFourthX,
+      y: area.top,
+      width: Math.max(1, halfX - oneFourthX),
+      height: area.height,
+    };
+  }
+  if (presetId === 'third-fourth') {
+    return {
+      x: halfX,
+      y: area.top,
+      width: Math.max(1, threeFourthX - halfX),
+      height: area.height,
+    };
+  }
+  if (presetId === 'last-fourth') {
+    return {
+      x: threeFourthX,
+      y: area.top,
+      width: Math.max(1, areaRight - threeFourthX),
+      height: area.height,
+    };
+  }
+  if (presetId === 'first-three-fourths') {
+    return {
+      x: area.left,
+      y: area.top,
+      width: Math.max(1, threeFourthX - area.left),
+      height: area.height,
+    };
+  }
+  if (presetId === 'center-three-fourths') {
+    return {
+      x: oneEighthX,
+      y: area.top,
+      width: Math.max(1, sevenEighthX - oneEighthX),
+      height: area.height,
+    };
+  }
+  if (presetId === 'last-three-fourths') {
+    return {
+      x: oneFourthX,
+      y: area.top,
+      width: Math.max(1, areaRight - oneFourthX),
+      height: area.height,
+    };
   }
   if (presetId === 'top' || presetId === 'bottom') {
     const split = splitHorizontal(area);
