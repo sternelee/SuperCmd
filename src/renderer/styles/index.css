@@ -952,15 +952,17 @@ kbd {
   transform: translateX(-50%);
   padding: 7px 10px;
   border-radius: 10px;
-  border: 1px solid rgba(var(--on-surface-rgb), 0.18);
-  background: var(--bg-overlay);
-  color: var(--text-primary);
+  border: 1px solid rgba(196, 201, 206, 0.3);
+  background: rgba(14, 17, 22, 0.9);
+  color: rgba(236, 240, 246, 0.96);
   font-size: 11px;
   line-height: 1.35;
   letter-spacing: 0.01em;
   pointer-events: none;
   white-space: nowrap;
-  box-shadow: 0 8px 24px rgba(var(--backdrop-rgb), 0.36);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
   z-index: 2;
 }
 
@@ -1188,14 +1190,16 @@ body.sc-detached-window .whisper-shortcut-hint {
   transform: translateX(-50%);
   padding: 7px 10px;
   border-radius: 10px;
-  border: 1px solid rgba(var(--on-surface-rgb), 0.18);
-  background: var(--bg-overlay);
-  color: var(--text-primary);
+  border: 1px solid rgba(196, 201, 206, 0.3);
+  background: rgba(14, 17, 22, 0.9);
+  color: rgba(236, 240, 246, 0.96);
   font-size: 11px;
   line-height: 1.35;
   letter-spacing: 0.01em;
   pointer-events: none;
-  box-shadow: 0 8px 24px rgba(var(--backdrop-rgb), 0.36);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
   z-index: 2147483001;
 }
 
