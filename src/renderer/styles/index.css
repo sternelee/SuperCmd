@@ -472,36 +472,50 @@ html {
 
 /* Native NSGlassEffectView is active; keep renderer layer very light so it doesn't wash out glass. */
 .sc-native-liquid-glass .glass-effect {
-  background:
-    linear-gradient(180deg, rgba(var(--on-surface-rgb), 0.018), rgba(var(--on-surface-rgb), 0.006)),
-    rgba(var(--surface-base-rgb), 0.10);
+  background: rgba(255, 255, 255, 0.02);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
 .dark.sc-native-liquid-glass .glass-effect {
-  background:
-    linear-gradient(180deg, rgba(var(--on-surface-rgb), 0.024), rgba(var(--on-surface-rgb), 0.008)),
-    rgba(var(--surface-base-rgb), 0.14);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .sc-native-liquid-glass .sc-glass-footer {
-  background:
-    linear-gradient(180deg, rgba(var(--on-surface-rgb), 0.02), rgba(var(--on-surface-rgb), 0.006)),
-    rgba(var(--surface-base-rgb), 0.1);
-  -webkit-backdrop-filter: blur(34px) saturate(150%);
-  backdrop-filter: blur(34px) saturate(150%);
-  box-shadow: inset 0 1px 0 rgba(var(--on-surface-rgb), 0.14);
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.01);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
-/* Native liquid glass mode uses dark typography for readability on light/translucent surfaces. */
+.sc-native-liquid-glass .sc-glass-footer::before {
+  content: none;
+}
+
+.sc-native-liquid-glass .sc-launcher-footer {
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+}
+
+/* Native liquid glass mode always uses white typography, regardless of theme preference. */
 .sc-native-liquid-glass {
-  --on-surface-rgb: 18, 22, 28;
-  --text-primary: rgba(18, 22, 28, 0.94);
-  --text-secondary: rgba(30, 35, 42, 0.82);
-  --text-muted: rgba(38, 44, 53, 0.64);
-  --text-subtle: rgba(44, 50, 60, 0.52);
-  --text-disabled: rgba(44, 50, 60, 0.44);
+  --text-primary: rgba(255, 255, 255, 0.96);
+  --text-secondary: rgba(255, 255, 255, 0.88);
+  --text-muted: rgba(255, 255, 255, 0.74);
+  --text-subtle: rgba(255, 255, 255, 0.62);
+  --text-disabled: rgba(255, 255, 255, 0.46);
+  --status-danger: #ff5a5f;
+  --status-danger-faded: #ff6d72;
+  --status-danger-soft: rgba(255, 90, 95, 0.32);
+  --status-danger-text: #ff555a;
   color: var(--text-primary);
 }
 
