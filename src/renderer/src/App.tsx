@@ -1961,7 +1961,7 @@ const App: React.FC = () => {
     <>
     {alwaysMountedRunners}
     <div className="w-full h-full">
-      <div className="glass-effect overflow-hidden h-full flex flex-col relative">
+      <div className="glass-effect launcher-main-surface overflow-hidden h-full flex flex-col relative">
         {/* Search header - transparent background */}
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--ui-divider)]">
           <input

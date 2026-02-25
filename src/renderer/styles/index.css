@@ -472,13 +472,27 @@ html {
 
 /* Native NSGlassEffectView is active; keep renderer layer very light so it doesn't wash out glass. */
 .sc-native-liquid-glass .glass-effect {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.72);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
 .dark.sc-native-liquid-glass .glass-effect {
-  background: rgba(255, 255, 255, 0.02);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04)),
+    rgba(var(--surface-base-rgb), 0.3);
+}
+
+/* Keep launcher readable in native liquid glass by giving it the same
+   tinted panel feel used in Settings > General. */
+.sc-native-liquid-glass .launcher-main-surface {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.dark.sc-native-liquid-glass .launcher-main-surface {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04)),
+    rgba(var(--surface-base-rgb), 0.3);
 }
 
 .sc-native-liquid-glass .sc-glass-footer {
@@ -507,21 +521,24 @@ html {
 
 /* Native liquid glass mode always uses white typography, regardless of theme preference. */
 .sc-native-liquid-glass {
-  --command-item-hover-bg: rgba(255, 255, 255, 0.08);
+  --command-item-hover-bg: rgba(24, 34, 50, 0.14);
   --command-item-hover-border: transparent;
-  --command-item-selected-bg: var(--command-item-hover-bg);
-  --command-item-selected-border: rgba(255, 255, 255, 0.16);
-  --launcher-card-selected-bg: var(--command-item-hover-bg);
-  --launcher-card-selected-border: rgba(255, 255, 255, 0.16);
+  --command-item-selected-bg: rgba(24, 34, 50, 0.2);
+  --command-item-selected-border: rgba(24, 34, 50, 0.24);
+  --launcher-card-bg: rgba(24, 34, 50, 0.06);
+  --launcher-card-border: rgba(24, 34, 50, 0.12);
+  --launcher-card-hover-bg: rgba(24, 34, 50, 0.12);
+  --launcher-card-selected-bg: rgba(24, 34, 50, 0.2);
+  --launcher-card-selected-border: rgba(24, 34, 50, 0.24);
   --overlay-item-active-bg: rgba(24, 34, 52, 0.34);
   --action-menu-selected-bg: rgba(24, 34, 52, 0.36);
   --action-menu-selected-border: transparent;
   --action-menu-selected-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  --text-primary: rgba(255, 255, 255, 0.96);
-  --text-secondary: rgba(255, 255, 255, 0.88);
-  --text-muted: rgba(255, 255, 255, 0.74);
-  --text-subtle: rgba(255, 255, 255, 0.62);
-  --text-disabled: rgba(255, 255, 255, 0.46);
+  --text-primary: rgba(8, 12, 18, 0.98);
+  --text-secondary: rgba(17, 23, 32, 0.92);
+  --text-muted: rgba(28, 36, 50, 0.84);
+  --text-subtle: rgba(41, 50, 67, 0.76);
+  --text-disabled: rgba(41, 50, 67, 0.52);
   --status-danger: #ff5a5f;
   --status-danger-faded: #ff6d72;
   --status-danger-soft: rgba(255, 90, 95, 0.32);
@@ -537,6 +554,11 @@ html {
   --overlay-item-active-bg: rgba(255, 255, 255, 0.16);
   --action-menu-selected-bg: rgba(255, 255, 255, 0.16);
   --action-menu-selected-border: transparent;
+  --text-primary: rgba(255, 255, 255, 0.96);
+  --text-secondary: rgba(255, 255, 255, 0.88);
+  --text-muted: rgba(255, 255, 255, 0.74);
+  --text-subtle: rgba(255, 255, 255, 0.62);
+  --text-disabled: rgba(255, 255, 255, 0.46);
 }
 
 .sc-native-liquid-glass [class*="text-white"] {
