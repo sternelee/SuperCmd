@@ -59,9 +59,10 @@ dist/            Build output
 ### Prerequisites
 
 - macOS (required for native Swift modules)
-- Node.js 18+
+- Node.js 22+
 - npm
 - Xcode Command Line Tools (`swiftc` available)
+- brew installed
 
 ### Install
 
