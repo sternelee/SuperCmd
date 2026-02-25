@@ -173,7 +173,11 @@ export function createGridItemsRuntime(resolveIconSrc: (src: string) => string) 
             ? '0 0 0 2px rgba(var(--on-surface-rgb), 0.24), inset 0 0 0 1px rgba(var(--on-surface-rgb), 0.16)'
             : undefined,
         }}
-        onClick={onActivate}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          onActivate?.();
+        }}
         onMouseMove={onSelect}
         onContextMenu={onContextAction}
       >

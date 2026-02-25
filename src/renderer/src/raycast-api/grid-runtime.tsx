@@ -158,6 +158,16 @@ export function createGridRuntime(deps: GridRuntimeDeps) {
     );
 
     useEffect(() => {
+      if (filteredItems.length === 0) {
+        if (selectedIdx !== 0) setSelectedIdx(0);
+        return;
+      }
+      if (selectedIdx >= filteredItems.length) {
+        setSelectedIdx(filteredItems.length - 1);
+      }
+    }, [filteredItems.length, selectedIdx]);
+
+    useEffect(() => {
       gridRef.current?.querySelector(`[data-idx="${selectedIdx}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }, [selectedIdx]);
 
@@ -206,7 +216,25 @@ export function createGridRuntime(deps: GridRuntimeDeps) {
                   {group.title && <div className="px-2 pt-2 pb-1.5 text-[11px] uppercase tracking-wider text-[var(--text-subtle)] font-medium select-none">{group.title}</div>}
                   <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
                     {group.items.map(({ item, globalIdx }) => (
-                      <GridItemRenderer key={item.id} title={item.props.title} subtitle={item.props.subtitle} content={item.props.content} isSelected={globalIdx === selectedIdx} dataIdx={globalIdx} onSelect={() => setSelectedIdx(globalIdx)} onActivate={() => setSelectedIdx(globalIdx)} onContextAction={(event: React.MouseEvent<HTMLDivElement>) => { event.preventDefault(); event.stopPropagation(); setSelectedIdx(globalIdx); setShowActions(true); }} />
+                      <GridItemRenderer
+                        key={item.id}
+                        title={item.props.title}
+                        subtitle={item.props.subtitle}
+                        content={item.props.content}
+                        isSelected={globalIdx === selectedIdx}
+                        dataIdx={globalIdx}
+                        onSelect={() => setSelectedIdx(globalIdx)}
+                        onActivate={() => {
+                          setSelectedIdx(globalIdx);
+                          inputRef.current?.focus();
+                        }}
+                        onContextAction={(event: React.MouseEvent<HTMLDivElement>) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setSelectedIdx(globalIdx);
+                          setShowActions(true);
+                        }}
+                      />
                     ))}
                   </div>
                 </div>

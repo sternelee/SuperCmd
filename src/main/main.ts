@@ -1352,6 +1352,25 @@ const WINDOW_MANAGEMENT_PRESET_COMMAND_IDS = new Set<string>([
   'system-window-management-top-right',
   'system-window-management-bottom-left',
   'system-window-management-bottom-right',
+  'system-window-management-first-third',
+  'system-window-management-center-third',
+  'system-window-management-last-third',
+  'system-window-management-first-two-thirds',
+  'system-window-management-center-two-thirds',
+  'system-window-management-last-two-thirds',
+  'system-window-management-first-fourth',
+  'system-window-management-second-fourth',
+  'system-window-management-third-fourth',
+  'system-window-management-last-fourth',
+  'system-window-management-first-three-fourths',
+  'system-window-management-center-three-fourths',
+  'system-window-management-last-three-fourths',
+  'system-window-management-top-left-sixth',
+  'system-window-management-top-center-sixth',
+  'system-window-management-top-right-sixth',
+  'system-window-management-bottom-left-sixth',
+  'system-window-management-bottom-center-sixth',
+  'system-window-management-bottom-right-sixth',
   'system-window-management-auto-organize',
   'system-window-management-increase-size-10',
   'system-window-management-decrease-size-10',
@@ -1396,6 +1415,25 @@ const WINDOW_MANAGEMENT_LAYOUT_COMMAND_IDS = new Set<string>([
   'system-window-management-top-right',
   'system-window-management-bottom-left',
   'system-window-management-bottom-right',
+  'system-window-management-first-third',
+  'system-window-management-center-third',
+  'system-window-management-last-third',
+  'system-window-management-first-two-thirds',
+  'system-window-management-center-two-thirds',
+  'system-window-management-last-two-thirds',
+  'system-window-management-first-fourth',
+  'system-window-management-second-fourth',
+  'system-window-management-third-fourth',
+  'system-window-management-last-fourth',
+  'system-window-management-first-three-fourths',
+  'system-window-management-center-three-fourths',
+  'system-window-management-last-three-fourths',
+  'system-window-management-top-left-sixth',
+  'system-window-management-top-center-sixth',
+  'system-window-management-top-right-sixth',
+  'system-window-management-bottom-left-sixth',
+  'system-window-management-bottom-center-sixth',
+  'system-window-management-bottom-right-sixth',
 ]);
 const WINDOW_MANAGEMENT_FINE_TUNE_RATIO = 0.1;
 const WINDOW_MANAGEMENT_FINE_TUNE_MIN_WIDTH = 120;
@@ -1751,6 +1789,18 @@ function computeWindowManagementLayoutBounds(
   const halfWidthRight = Math.max(1, area.width - halfWidthLeft);
   const halfHeightTop = Math.max(1, Math.floor(area.height / 2));
   const halfHeightBottom = Math.max(1, area.height - halfHeightTop);
+  const areaRight = area.x + area.width;
+  const areaBottom = area.y + area.height;
+  const oneThirdX = area.x + Math.floor(area.width / 3);
+  const twoThirdX = area.x + Math.floor((area.width * 2) / 3);
+  const oneFourthX = area.x + Math.floor(area.width / 4);
+  const halfX = area.x + Math.floor(area.width / 2);
+  const threeFourthX = area.x + Math.floor((area.width * 3) / 4);
+  const oneEighthX = area.x + Math.floor(area.width / 8);
+  const sevenEighthX = area.x + Math.floor((area.width * 7) / 8);
+  const oneSixthX = area.x + Math.floor(area.width / 6);
+  const fiveSixthX = area.x + Math.floor((area.width * 5) / 6);
+  const topHalfBottom = area.y + halfHeightTop;
 
   switch (normalized) {
     case 'system-window-management-left':
@@ -1851,6 +1901,139 @@ function computeWindowManagementLayoutBounds(
         y: area.y + halfHeightTop,
         width: halfWidthRight,
         height: halfHeightBottom,
+      };
+    case 'system-window-management-first-third':
+      return {
+        x: area.x,
+        y: area.y,
+        width: Math.max(1, oneThirdX - area.x),
+        height: area.height,
+      };
+    case 'system-window-management-center-third':
+      return {
+        x: oneThirdX,
+        y: area.y,
+        width: Math.max(1, twoThirdX - oneThirdX),
+        height: area.height,
+      };
+    case 'system-window-management-last-third':
+      return {
+        x: twoThirdX,
+        y: area.y,
+        width: Math.max(1, areaRight - twoThirdX),
+        height: area.height,
+      };
+    case 'system-window-management-first-two-thirds':
+      return {
+        x: area.x,
+        y: area.y,
+        width: Math.max(1, twoThirdX - area.x),
+        height: area.height,
+      };
+    case 'system-window-management-center-two-thirds':
+      return {
+        x: oneSixthX,
+        y: area.y,
+        width: Math.max(1, fiveSixthX - oneSixthX),
+        height: area.height,
+      };
+    case 'system-window-management-last-two-thirds':
+      return {
+        x: oneThirdX,
+        y: area.y,
+        width: Math.max(1, areaRight - oneThirdX),
+        height: area.height,
+      };
+    case 'system-window-management-first-fourth':
+      return {
+        x: area.x,
+        y: area.y,
+        width: Math.max(1, oneFourthX - area.x),
+        height: area.height,
+      };
+    case 'system-window-management-second-fourth':
+      return {
+        x: oneFourthX,
+        y: area.y,
+        width: Math.max(1, halfX - oneFourthX),
+        height: area.height,
+      };
+    case 'system-window-management-third-fourth':
+      return {
+        x: halfX,
+        y: area.y,
+        width: Math.max(1, threeFourthX - halfX),
+        height: area.height,
+      };
+    case 'system-window-management-last-fourth':
+      return {
+        x: threeFourthX,
+        y: area.y,
+        width: Math.max(1, areaRight - threeFourthX),
+        height: area.height,
+      };
+    case 'system-window-management-first-three-fourths':
+      return {
+        x: area.x,
+        y: area.y,
+        width: Math.max(1, threeFourthX - area.x),
+        height: area.height,
+      };
+    case 'system-window-management-center-three-fourths':
+      return {
+        x: oneEighthX,
+        y: area.y,
+        width: Math.max(1, sevenEighthX - oneEighthX),
+        height: area.height,
+      };
+    case 'system-window-management-last-three-fourths':
+      return {
+        x: oneFourthX,
+        y: area.y,
+        width: Math.max(1, areaRight - oneFourthX),
+        height: area.height,
+      };
+    case 'system-window-management-top-left-sixth':
+      return {
+        x: area.x,
+        y: area.y,
+        width: Math.max(1, oneThirdX - area.x),
+        height: Math.max(1, topHalfBottom - area.y),
+      };
+    case 'system-window-management-top-center-sixth':
+      return {
+        x: oneThirdX,
+        y: area.y,
+        width: Math.max(1, twoThirdX - oneThirdX),
+        height: Math.max(1, topHalfBottom - area.y),
+      };
+    case 'system-window-management-top-right-sixth':
+      return {
+        x: twoThirdX,
+        y: area.y,
+        width: Math.max(1, areaRight - twoThirdX),
+        height: Math.max(1, topHalfBottom - area.y),
+      };
+    case 'system-window-management-bottom-left-sixth':
+      return {
+        x: area.x,
+        y: topHalfBottom,
+        width: Math.max(1, oneThirdX - area.x),
+        height: Math.max(1, areaBottom - topHalfBottom),
+      };
+    case 'system-window-management-bottom-center-sixth':
+      return {
+        x: oneThirdX,
+        y: topHalfBottom,
+        width: Math.max(1, twoThirdX - oneThirdX),
+        height: Math.max(1, areaBottom - topHalfBottom),
+      };
+    case 'system-window-management-bottom-right-sixth':
+      return {
+        x: twoThirdX,
+        y: topHalfBottom,
+        width: Math.max(1, areaRight - twoThirdX),
+        height: Math.max(1, areaBottom - topHalfBottom),
       };
     default:
       return null;

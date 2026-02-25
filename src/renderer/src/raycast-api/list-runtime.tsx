@@ -236,7 +236,26 @@ export function createListRuntime(deps: ListRuntimeDeps) {
               <div className="px-2 pb-1 grid gap-2" style={{ gridTemplateColumns: `repeat(8, 1fr)` }}>
                 {group.items.map(({ item, globalIdx }) => {
                   const title = typeof item.props.title === 'string' ? item.props.title : (item.props.title as any)?.value || '';
-                  return <ListEmojiGridItemRenderer key={item.id} icon={item.props.icon} title={title} isSelected={globalIdx === selectedIdx} dataIdx={globalIdx} onSelect={() => setSelectedIdx(globalIdx)} onActivate={() => setSelectedIdx(globalIdx)} onContextAction={(event: React.MouseEvent<HTMLDivElement>) => { event.preventDefault(); event.stopPropagation(); setSelectedIdx(globalIdx); setShowActions(true); }} />;
+                  return (
+                    <ListEmojiGridItemRenderer
+                      key={item.id}
+                      icon={item.props.icon}
+                      title={title}
+                      isSelected={globalIdx === selectedIdx}
+                      dataIdx={globalIdx}
+                      onSelect={() => setSelectedIdx(globalIdx)}
+                      onActivate={() => {
+                        setSelectedIdx(globalIdx);
+                        inputRef.current?.focus();
+                      }}
+                      onContextAction={(event: React.MouseEvent<HTMLDivElement>) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setSelectedIdx(globalIdx);
+                        setShowActions(true);
+                      }}
+                    />
+                  );
                 })}
               </div>
             </div>

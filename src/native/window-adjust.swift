@@ -14,6 +14,25 @@ private enum AdjustAction: String {
   case topRight = "top-right"
   case bottomLeft = "bottom-left"
   case bottomRight = "bottom-right"
+  case firstThird = "first-third"
+  case centerThird = "center-third"
+  case lastThird = "last-third"
+  case firstTwoThirds = "first-two-thirds"
+  case centerTwoThirds = "center-two-thirds"
+  case lastTwoThirds = "last-two-thirds"
+  case firstFourth = "first-fourth"
+  case secondFourth = "second-fourth"
+  case thirdFourth = "third-fourth"
+  case lastFourth = "last-fourth"
+  case firstThreeFourths = "first-three-fourths"
+  case centerThreeFourths = "center-three-fourths"
+  case lastThreeFourths = "last-three-fourths"
+  case topLeftSixth = "top-left-sixth"
+  case topCenterSixth = "top-center-sixth"
+  case topRightSixth = "top-right-sixth"
+  case bottomLeftSixth = "bottom-left-sixth"
+  case bottomCenterSixth = "bottom-center-sixth"
+  case bottomRightSixth = "bottom-right-sixth"
   case increaseSize10 = "increase-size-10"
   case decreaseSize10 = "decrease-size-10"
   case increaseLeft10 = "increase-left-10"
@@ -490,6 +509,218 @@ private func adjustedFrame(_ base: WindowFrame, action: AdjustAction, forcedArea
         y: area.origin.y + area.height - height,
         width: width,
         height: height
+      )
+    }
+  case .firstThird:
+    if let area {
+      let oneThirdX = area.origin.x + floor(area.width / 3)
+      next = WindowFrame(
+        x: area.origin.x,
+        y: area.origin.y,
+        width: max(minWidth, oneThirdX - area.origin.x),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .centerThird:
+    if let area {
+      let oneThirdX = area.origin.x + floor(area.width / 3)
+      let twoThirdX = area.origin.x + floor((area.width * 2) / 3)
+      next = WindowFrame(
+        x: oneThirdX,
+        y: area.origin.y,
+        width: max(minWidth, twoThirdX - oneThirdX),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .lastThird:
+    if let area {
+      let twoThirdX = area.origin.x + floor((area.width * 2) / 3)
+      let areaRight = area.origin.x + area.width
+      next = WindowFrame(
+        x: twoThirdX,
+        y: area.origin.y,
+        width: max(minWidth, areaRight - twoThirdX),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .firstTwoThirds:
+    if let area {
+      let twoThirdX = area.origin.x + floor((area.width * 2) / 3)
+      next = WindowFrame(
+        x: area.origin.x,
+        y: area.origin.y,
+        width: max(minWidth, twoThirdX - area.origin.x),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .centerTwoThirds:
+    if let area {
+      let oneSixthX = area.origin.x + floor(area.width / 6)
+      let fiveSixthX = area.origin.x + floor((area.width * 5) / 6)
+      next = WindowFrame(
+        x: oneSixthX,
+        y: area.origin.y,
+        width: max(minWidth, fiveSixthX - oneSixthX),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .lastTwoThirds:
+    if let area {
+      let oneThirdX = area.origin.x + floor(area.width / 3)
+      let areaRight = area.origin.x + area.width
+      next = WindowFrame(
+        x: oneThirdX,
+        y: area.origin.y,
+        width: max(minWidth, areaRight - oneThirdX),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .firstFourth:
+    if let area {
+      let oneFourthX = area.origin.x + floor(area.width / 4)
+      next = WindowFrame(
+        x: area.origin.x,
+        y: area.origin.y,
+        width: max(minWidth, oneFourthX - area.origin.x),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .secondFourth:
+    if let area {
+      let oneFourthX = area.origin.x + floor(area.width / 4)
+      let halfX = area.origin.x + floor(area.width / 2)
+      next = WindowFrame(
+        x: oneFourthX,
+        y: area.origin.y,
+        width: max(minWidth, halfX - oneFourthX),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .thirdFourth:
+    if let area {
+      let halfX = area.origin.x + floor(area.width / 2)
+      let threeFourthX = area.origin.x + floor((area.width * 3) / 4)
+      next = WindowFrame(
+        x: halfX,
+        y: area.origin.y,
+        width: max(minWidth, threeFourthX - halfX),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .lastFourth:
+    if let area {
+      let threeFourthX = area.origin.x + floor((area.width * 3) / 4)
+      let areaRight = area.origin.x + area.width
+      next = WindowFrame(
+        x: threeFourthX,
+        y: area.origin.y,
+        width: max(minWidth, areaRight - threeFourthX),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .firstThreeFourths:
+    if let area {
+      let threeFourthX = area.origin.x + floor((area.width * 3) / 4)
+      next = WindowFrame(
+        x: area.origin.x,
+        y: area.origin.y,
+        width: max(minWidth, threeFourthX - area.origin.x),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .centerThreeFourths:
+    if let area {
+      let oneEighthX = area.origin.x + floor(area.width / 8)
+      let sevenEighthX = area.origin.x + floor((area.width * 7) / 8)
+      next = WindowFrame(
+        x: oneEighthX,
+        y: area.origin.y,
+        width: max(minWidth, sevenEighthX - oneEighthX),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .lastThreeFourths:
+    if let area {
+      let oneFourthX = area.origin.x + floor(area.width / 4)
+      let areaRight = area.origin.x + area.width
+      next = WindowFrame(
+        x: oneFourthX,
+        y: area.origin.y,
+        width: max(minWidth, areaRight - oneFourthX),
+        height: max(minHeight, round(area.height))
+      )
+    }
+  case .topLeftSixth:
+    if let area {
+      let oneThirdX = area.origin.x + floor(area.width / 3)
+      let halfBottomY = area.origin.y + floor(area.height / 2)
+      next = WindowFrame(
+        x: area.origin.x,
+        y: area.origin.y,
+        width: max(minWidth, oneThirdX - area.origin.x),
+        height: max(minHeight, halfBottomY - area.origin.y)
+      )
+    }
+  case .topCenterSixth:
+    if let area {
+      let oneThirdX = area.origin.x + floor(area.width / 3)
+      let twoThirdX = area.origin.x + floor((area.width * 2) / 3)
+      let halfBottomY = area.origin.y + floor(area.height / 2)
+      next = WindowFrame(
+        x: oneThirdX,
+        y: area.origin.y,
+        width: max(minWidth, twoThirdX - oneThirdX),
+        height: max(minHeight, halfBottomY - area.origin.y)
+      )
+    }
+  case .topRightSixth:
+    if let area {
+      let twoThirdX = area.origin.x + floor((area.width * 2) / 3)
+      let areaRight = area.origin.x + area.width
+      let halfBottomY = area.origin.y + floor(area.height / 2)
+      next = WindowFrame(
+        x: twoThirdX,
+        y: area.origin.y,
+        width: max(minWidth, areaRight - twoThirdX),
+        height: max(minHeight, halfBottomY - area.origin.y)
+      )
+    }
+  case .bottomLeftSixth:
+    if let area {
+      let oneThirdX = area.origin.x + floor(area.width / 3)
+      let halfBottomY = area.origin.y + floor(area.height / 2)
+      let areaBottom = area.origin.y + area.height
+      next = WindowFrame(
+        x: area.origin.x,
+        y: halfBottomY,
+        width: max(minWidth, oneThirdX - area.origin.x),
+        height: max(minHeight, areaBottom - halfBottomY)
+      )
+    }
+  case .bottomCenterSixth:
+    if let area {
+      let oneThirdX = area.origin.x + floor(area.width / 3)
+      let twoThirdX = area.origin.x + floor((area.width * 2) / 3)
+      let halfBottomY = area.origin.y + floor(area.height / 2)
+      let areaBottom = area.origin.y + area.height
+      next = WindowFrame(
+        x: oneThirdX,
+        y: halfBottomY,
+        width: max(minWidth, twoThirdX - oneThirdX),
+        height: max(minHeight, areaBottom - halfBottomY)
+      )
+    }
+  case .bottomRightSixth:
+    if let area {
+      let twoThirdX = area.origin.x + floor((area.width * 2) / 3)
+      let areaRight = area.origin.x + area.width
+      let halfBottomY = area.origin.y + floor(area.height / 2)
+      let areaBottom = area.origin.y + area.height
+      next = WindowFrame(
+        x: twoThirdX,
+        y: halfBottomY,
+        width: max(minWidth, areaRight - twoThirdX),
+        height: max(minHeight, areaBottom - halfBottomY)
       )
     }
   case .increaseSize10:
