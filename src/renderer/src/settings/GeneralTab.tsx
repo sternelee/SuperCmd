@@ -60,8 +60,8 @@ const SettingsRow: React.FC<SettingsRowProps> = ({
     <div className="flex items-start gap-2.5">
       <div className="mt-0.5 text-[var(--text-muted)] shrink-0">{icon}</div>
       <div className="min-w-0">
-        <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">{title}</h3>
-        <p className="mt-0.5 text-[12px] text-[var(--text-muted)] leading-snug">{description}</p>
+        <h3 className="text-[0.8125rem] font-semibold text-[var(--text-primary)]">{title}</h3>
+        <p className="mt-0.5 text-[0.75rem] text-[var(--text-muted)] leading-snug">{description}</p>
       </div>
     </div>
     <div className="flex items-center min-h-[32px]">{children}</div>
@@ -232,14 +232,14 @@ const GeneralTab: React.FC = () => {
   };
 
   if (!settings) {
-    return <div className="p-6 text-[var(--text-muted)] text-[12px]">Loading settings...</div>;
+    return <div className="p-6 text-[var(--text-muted)] text-[0.75rem]">Loading settings...</div>;
   }
 
   const selectedFontSize = settings.fontSize || getDefaultAppFontSize();
 
   return (
     <div className="w-full max-w-[980px] mx-auto space-y-3">
-      <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">General</h2>
+      <h2 className="text-[0.9375rem] font-semibold text-[var(--text-primary)]">General</h2>
 
       <div className="overflow-hidden rounded-xl border border-[var(--ui-panel-border)] bg-[var(--settings-panel-bg)]">
         <SettingsRow
@@ -249,9 +249,9 @@ const GeneralTab: React.FC = () => {
         >
           <div className="flex flex-wrap items-center gap-4">
             <HotkeyRecorder value={settings.globalShortcut} onChange={handleShortcutChange} large />
-            {shortcutStatus === 'success' && <span className="text-[12px] text-green-400">Shortcut updated</span>}
+            {shortcutStatus === 'success' && <span className="text-[0.75rem] text-green-400">Shortcut updated</span>}
             {shortcutStatus === 'error' && (
-              <span className="text-[12px] text-red-400">Failed. Shortcut may be used by another app.</span>
+              <span className="text-[0.75rem] text-red-400">Failed. Shortcut may be used by another app.</span>
             )}
           </div>
         </SettingsRow>
@@ -269,7 +269,7 @@ const GeneralTab: React.FC = () => {
                   key={option.id}
                   type="button"
                   onClick={() => void handleFontSizeChange(option.id)}
-                  className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+                  className={`px-3 py-1.5 rounded-md text-[0.75rem] font-semibold transition-colors ${
                     active
                       ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)]'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
@@ -299,7 +299,7 @@ const GeneralTab: React.FC = () => {
                   key={option.id}
                   type="button"
                   onClick={() => handleThemePreferenceChange(option.id)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[0.75rem] font-semibold transition-colors ${
                     active
                       ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)]'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
@@ -329,7 +329,7 @@ const GeneralTab: React.FC = () => {
                   key={option.id}
                   type="button"
                   onClick={() => void handleUiStyleChange(option.id)}
-                  className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+                  className={`px-3 py-1.5 rounded-md text-[0.75rem] font-semibold transition-colors ${
                     active
                       ? 'bg-[var(--ui-segment-active-bg)] text-[var(--text-primary)]'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)]'
@@ -349,10 +349,10 @@ const GeneralTab: React.FC = () => {
         >
           <div className="w-full space-y-2">
             <div>
-              <p className="text-[13px] font-semibold text-[var(--text-primary)] leading-snug">
+              <p className="text-[0.8125rem] font-semibold text-[var(--text-primary)] leading-snug">
                 {updaterPrimaryMessage}
               </p>
-              <p className="text-[12px] text-[var(--text-subtle)] mt-0.5 leading-tight">
+              <p className="text-[0.75rem] text-[var(--text-subtle)] mt-0.5 leading-tight">
                 Current version: v{currentVersion}
                 {updaterStatus?.latestVersion ? ` · Latest: v${updaterStatus.latestVersion}` : ''}
               </p>
@@ -366,14 +366,14 @@ const GeneralTab: React.FC = () => {
                     style={{ width: `${updaterProgress}%` }}
                   />
                 </div>
-                <p className="mt-0.5 text-[12px] text-[var(--text-subtle)]">
+                <p className="mt-0.5 text-[0.75rem] text-[var(--text-subtle)]">
                   {updaterProgress.toFixed(0)}% · {formatBytes(updaterStatus?.transferredBytes)} / {formatBytes(updaterStatus?.totalBytes)}
                 </p>
               </div>
             )}
 
             {(updaterActionError || updaterState === 'error') && (
-              <p className="text-[12px] text-red-400">
+              <p className="text-[0.75rem] text-red-400">
                 {updaterActionError || updaterStatus?.message || 'Update failed.'}
               </p>
             )}
@@ -383,7 +383,7 @@ const GeneralTab: React.FC = () => {
                 type="button"
                 onClick={handleCheckForUpdates}
                 disabled={!updaterSupported || updaterState === 'checking' || updaterState === 'downloading'}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] border border-[var(--ui-divider)] text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[0.75rem] border border-[var(--ui-divider)] text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${updaterState === 'checking' ? 'animate-spin' : ''}`} />
                 Check for Updates
@@ -393,7 +393,7 @@ const GeneralTab: React.FC = () => {
                 type="button"
                 onClick={handleDownloadUpdate}
                 disabled={!updaterSupported || (updaterState !== 'available' && updaterState !== 'downloading')}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] border border-cyan-400/40 text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[0.75rem] border border-cyan-400/40 text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Download className={`w-3.5 h-3.5 ${updaterState === 'downloading' ? 'animate-pulse' : ''}`} />
                 {updaterState === 'downloading' ? 'Downloading...' : 'Download Update'}
@@ -403,7 +403,7 @@ const GeneralTab: React.FC = () => {
                 type="button"
                 onClick={handleRestartToInstall}
                 disabled={!updaterSupported || updaterState !== 'downloaded'}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[12px] border border-emerald-400/40 text-emerald-200 hover:bg-emerald-400/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[0.75rem] border border-emerald-400/40 text-emerald-200 hover:bg-emerald-400/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 Restart to Install
@@ -418,7 +418,7 @@ const GeneralTab: React.FC = () => {
           description="Version information."
           withBorder={false}
         >
-          <p className="text-[13px] font-semibold text-[var(--text-primary)] leading-snug">
+          <p className="text-[0.8125rem] font-semibold text-[var(--text-primary)] leading-snug">
             SuperCmd v{currentVersion}
           </p>
         </SettingsRow>
