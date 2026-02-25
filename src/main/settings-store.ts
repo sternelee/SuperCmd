@@ -153,7 +153,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ai: { ...DEFAULT_AI_SETTINGS },
   debugMode: false,
   fontSize: 'medium',
-  uiStyle: 'default',
+  uiStyle: 'glassy',
   baseColor: '#101113',
   appUpdaterLastCheckedAt: 0,
   hyperKeySource: 'none',
