@@ -907,7 +907,7 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
     {
       id: 'system-open-ai-settings',
       title: 'SuperCmd AI',
-      keywords: ['ai', 'model', 'provider', 'openai', 'anthropic', 'ollama', 'supercmd'],
+      keywords: ['ai', 'model', 'provider', 'openai', 'anthropic', 'gemini', 'ollama', 'supercmd'],
       category: 'system',
     },
     {

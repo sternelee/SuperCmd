@@ -11,6 +11,7 @@
  */
 
 import * as path from 'path';
+import * as fs from 'fs';
 import { fork, type ChildProcess } from 'child_process';
 import { getAvailableCommands, executeCommand, invalidateCache } from './commands';
 import { loadSettings, saveSettings, setOAuthToken, getOAuthToken, removeOAuthToken } from './settings-store';
@@ -135,6 +136,8 @@ let windowManagerWorker: ChildProcess | null = null;
 let windowManagerWorkerReqSeq = 0;
 let windowManagerWorkerRestartTimer: ReturnType<typeof setTimeout> | null = null;
 let windowManagerWorkerCrashTimestamps: number[] = [];
+let appInstallWatchers: fs.FSWatcher[] = [];
+let appInstallChangeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const windowManagerWorkerPending = new Map<number, {
   resolve: (value: any) => void;
   reject: (reason?: any) => void;
@@ -5632,12 +5635,15 @@ function toggleWindow(): void {
 async function openLauncherFromUserEntry(): Promise<void> {
   const settings = loadSettings();
   if (!settings.hasSeenOnboarding) {
-    // Fresh install — show onboarding. Keep dock visible so the user can see
-    // the app is running and can click the dock icon to get back if needed.
-    await openLauncherAndRunSystemCommand('system-open-onboarding', {
-      showWindow: true,
-      mode: 'onboarding',
-    });
+    // Fresh install — open launcher and bring settings to the front.
+    // Persist onboarding as seen so this setup-first behavior only happens once.
+    saveSettings({ hasSeenOnboarding: true });
+    startClipboardMonitor();
+    syncFnSpeakToggleWatcher(loadSettings().commandHotkeys);
+    syncFnCommandWatchers(loadSettings().commandHotkeys);
+    setLauncherMode('default');
+    await showWindow();
+    openSettingsWindow();
     return;
   }
 
@@ -6934,7 +6940,7 @@ function openSettingsWindow(payload?: SettingsNavigationPayload): void {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
-  registerCloseWindowShortcut(settingsWindow);
+  registerCloseWindowShortcut(settingsWindow, { closeOnEscape: true });
 
   const hash = buildSettingsHash(payload);
   loadWindowUrl(settingsWindow, hash);
@@ -7066,6 +7072,71 @@ function broadcastExtensionsUpdated(): void {
     try {
       window.webContents.send('extensions-updated');
     } catch {}
+  }
+}
+
+function broadcastCommandsUpdated(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed()) continue;
+    try {
+      window.webContents.send('commands-updated');
+    } catch {}
+  }
+}
+
+function scheduleInstalledAppsRefresh(reason: string): void {
+  if (appInstallChangeDebounceTimer) {
+    clearTimeout(appInstallChangeDebounceTimer);
+  }
+  appInstallChangeDebounceTimer = setTimeout(() => {
+    appInstallChangeDebounceTimer = null;
+    console.log(`[Commands] Invalidating cache due to app change: ${reason}`);
+    invalidateCache();
+    broadcastCommandsUpdated();
+  }, 1200);
+}
+
+function startInstalledAppsWatchers(): void {
+  const appDirs = [
+    '/Applications',
+    '/Applications/Utilities',
+    '/System/Applications',
+    '/System/Applications/Utilities',
+    path.join(process.env.HOME || '', 'Applications'),
+  ]
+    .filter((dir) => Boolean(dir))
+    .filter((dir, idx, all) => all.indexOf(dir) === idx);
+
+  for (const dir of appDirs) {
+    if (!dir) continue;
+    if (!fs.existsSync(dir)) continue;
+    try {
+      const watcher = fs.watch(dir, { persistent: false }, (_eventType, filename) => {
+        const changedName = String(filename || '').toLowerCase();
+        if (!changedName || changedName.endsWith('.app') || changedName.includes('.app/')) {
+          scheduleInstalledAppsRefresh(`filesystem event in ${dir}`);
+        }
+      });
+      watcher.on('error', (error) => {
+        console.warn(`[Commands] App watcher error on ${dir}:`, error);
+      });
+      appInstallWatchers.push(watcher);
+    } catch (error) {
+      console.warn(`[Commands] Failed to watch ${dir}:`, error);
+    }
+  }
+}
+
+function stopInstalledAppsWatchers(): void {
+  for (const watcher of appInstallWatchers) {
+    try {
+      watcher.close();
+    } catch {}
+  }
+  appInstallWatchers = [];
+  if (appInstallChangeDebounceTimer) {
+    clearTimeout(appInstallChangeDebounceTimer);
+    appInstallChangeDebounceTimer = null;
   }
 }
 
@@ -10984,6 +11055,7 @@ if let tiff = image?.tiffRepresentation {
   // ─── Window + Shortcuts ─────────────────────────────────────────
 
   createWindow();
+  startInstalledAppsWatchers();
   schedulePromptWindowPrewarm();
   registerGlobalShortcut(settings.globalShortcut);
   registerCommandHotkeys(settings.commandHotkeys);
@@ -11058,6 +11130,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  stopInstalledAppsWatchers();
   globalShortcut.unregisterAll();
   if (windowManagerWorkerRestartTimer) {
     clearTimeout(windowManagerWorkerRestartTimer);

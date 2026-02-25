@@ -1042,6 +1042,9 @@ const AIModel = {
   'Anthropic_Claude_Opus': 'anthropic-claude-opus',
   'Anthropic_Claude_Sonnet': 'anthropic-claude-sonnet',
   'Anthropic_Claude_Haiku': 'anthropic-claude-haiku',
+  'Google_Gemini_2_5_Pro': 'gemini-gemini-2.5-pro',
+  'Google_Gemini_2_5_Flash': 'gemini-gemini-2.5-flash',
+  'Google_Gemini_2_5_Flash_Lite': 'gemini-gemini-2.5-flash-lite',
 } as const;
 
 let _requestIdCounter = 0;

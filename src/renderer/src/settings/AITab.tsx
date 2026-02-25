@@ -32,6 +32,7 @@ import {
 const PROVIDER_OPTIONS = [
   { id: 'openai' as const, label: 'OpenAI', description: 'GPT family models' },
   { id: 'anthropic' as const, label: 'Claude', description: 'Anthropic Claude models' },
+  { id: 'gemini' as const, label: 'Gemini', description: 'Google Gemini models' },
   { id: 'ollama' as const, label: 'Ollama', description: 'Local models' },
   { id: 'openai-compatible' as const, label: 'Custom (OpenAI-compatible)', description: 'Any OpenAI-compatible API (OpenRouter, Together, etc.)' },
 ];
@@ -48,6 +49,11 @@ const MODELS_BY_PROVIDER: Record<string, { id: string; label: string }[]> = {
     { id: 'anthropic-claude-opus', label: 'Claude Opus' },
     { id: 'anthropic-claude-sonnet', label: 'Claude Sonnet' },
     { id: 'anthropic-claude-haiku', label: 'Claude Haiku' },
+  ],
+  gemini: [
+    { id: 'gemini-gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { id: 'gemini-gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { id: 'gemini-gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
   ],
 };
 
@@ -171,6 +177,7 @@ const AITab: React.FC = () => {
 
   const [showOpenAIKey, setShowOpenAIKey] = useState(false);
   const [showAnthropicKey, setShowAnthropicKey] = useState(false);
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showElevenLabsKey, setShowElevenLabsKey] = useState(false);
   const [showSupermemoryKey, setShowSupermemoryKey] = useState(false);
   const [showOpenAICompatibleKey, setShowOpenAICompatibleKey] = useState(false);
@@ -637,6 +644,25 @@ const AITab: React.FC = () => {
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                     >
                       {showAnthropicKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[12px] text-[var(--text-secondary)] mb-1 block">Gemini (Google) API Key</label>
+                  <div className="relative">
+                    <input
+                      type={showGeminiKey ? 'text' : 'password'}
+                      value={ai.geminiApiKey || ''}
+                      onChange={(e) => updateAI({ geminiApiKey: e.target.value.trim() })}
+                      placeholder="AIza..."
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 pr-9 text-sm text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] focus:outline-none focus:border-blue-500/50"
+                    />
+                    <button
+                      onClick={() => setShowGeminiKey(!showGeminiKey)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                    >
+                      {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>

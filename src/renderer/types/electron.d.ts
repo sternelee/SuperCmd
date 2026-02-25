@@ -95,9 +95,10 @@ export interface ExtensionBundle {
 }
 
 export interface AISettings {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'openai-compatible';
+  provider: 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'openai-compatible';
   openaiApiKey: string;
   anthropicApiKey: string;
+  geminiApiKey: string;
   elevenlabsApiKey: string;
   supermemoryApiKey: string;
   supermemoryClient: string;
@@ -162,6 +163,7 @@ export interface AppSettings {
   commandAliases: Record<string, string>;
   pinnedCommands: string[];
   recentCommands: string[];
+  recentCommandLaunchCounts: Record<string, number>;
   hasSeenOnboarding: boolean;
   hasSeenWhisperOnboarding: boolean;
   ai: AISettings;
@@ -268,6 +270,7 @@ export interface ElectronAPI {
   onWindowShown: (callback: (payload?: { mode?: 'default' | 'onboarding' | 'whisper' | 'speak' | 'prompt'; systemCommandId?: string; selectedTextSnapshot?: string }) => void) => (() => void);
   onSelectionSnapshotUpdated: (callback: (payload?: { selectedTextSnapshot?: string }) => void) => (() => void);
   onWindowHidden: (callback: () => void) => (() => void);
+  onCommandsUpdated: (callback: () => void) => (() => void);
   onRunSystemCommand: (callback: (commandId: string) => void) => (() => void);
   onOnboardingHotkeyPressed: (callback: () => void) => (() => void);
   setDetachedOverlayState: (overlay: 'whisper' | 'speak', visible: boolean) => void;
