@@ -512,6 +512,10 @@ html {
   --text-muted: rgba(255, 255, 255, 0.74);
   --text-subtle: rgba(255, 255, 255, 0.62);
   --text-disabled: rgba(255, 255, 255, 0.46);
+  --status-danger: #ff5a5f;
+  --status-danger-faded: #ff6d72;
+  --status-danger-soft: rgba(255, 90, 95, 0.32);
+  --status-danger-text: #ff555a;
   color: var(--text-primary);
 }
 

@@ -254,6 +254,11 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
                           className={`w-4 h-4 flex-shrink-0 flex items-center justify-center text-xs ${
                             idx === selectedIdx ? 'text-white' : 'text-white/50'
                           }`}
+                          style={
+                            isNativeLiquidGlass && action.style === 'destructive'
+                              ? { color: 'var(--status-danger-faded)' }
+                              : undefined
+                          }
                         >
                           {renderIcon(action.icon, 'w-4 h-4')}
                         </span>
@@ -268,6 +273,11 @@ export function createActionOverlayRuntime(deps: OverlayDeps) {
                               ? 'text-white'
                               : 'text-white/80'
                         }`}
+                        style={
+                          isNativeLiquidGlass && action.style === 'destructive'
+                            ? { color: 'var(--status-danger-faded)' }
+                            : undefined
+                        }
                       >
                         {action.title}
                       </span>
