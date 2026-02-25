@@ -103,6 +103,7 @@ type NodeWindowInfo = {
 
 let cachedElectronLiquidGlassApi: any | null | undefined = undefined;
 let hasLoggedLiquidGlassRuntimeIncompatibility = false;
+const liquidGlassAppliedWindowIds = new Set<number>();
 let windowManagerAccessRequested = false;
 let windowManagementTargetWindowId: string | null = null;
 let windowManagementTargetWorkArea: { x: number; y: number; width: number; height: number } | null = null;
@@ -370,11 +371,14 @@ function getElectronLiquidGlassApi(): any | null {
   }
 }
 
-function applyNativeWindowManagerGlassFallback(win: any): void {
+function applyNativeWindowGlassFallback(
+  win: any,
+  fallbackVibrancy: 'under-window' | 'hud' | 'fullscreen-ui' = 'under-window'
+): void {
   if (process.platform !== 'darwin') return;
   try {
     if (typeof win?.setVibrancy === 'function') {
-      win.setVibrancy('under-window');
+      win.setVibrancy(fallbackVibrancy);
     }
   } catch {}
   try {
@@ -384,11 +388,30 @@ function applyNativeWindowManagerGlassFallback(win: any): void {
   } catch {}
 }
 
-function applyLiquidGlassToWindowManagerPopup(win: any): void {
+function applyLiquidGlassToWindow(
+  win: any,
+  options?: {
+    cornerRadius?: number;
+    fallbackVibrancy?: 'under-window' | 'hud' | 'fullscreen-ui';
+    darkTint?: string;
+    lightTint?: string;
+    subdued?: 0 | 1;
+  }
+): void {
   if (process.platform !== 'darwin') return;
+  if (!win || typeof win.isDestroyed !== 'function' || win.isDestroyed()) return;
+  const windowId = Number(win.id);
+  if (Number.isFinite(windowId) && liquidGlassAppliedWindowIds.has(windowId)) return;
+
+  const fallbackVibrancy = options?.fallbackVibrancy || 'under-window';
+  const cornerRadius = Number.isFinite(Number(options?.cornerRadius)) ? Number(options?.cornerRadius) : 16;
+  const darkTint = String(options?.darkTint || '#10131a42');
+  const lightTint = String(options?.lightTint || '#f8fbff26');
+  const subdued = options?.subdued ?? 0;
+
   const liquidGlass = getElectronLiquidGlassApi();
   if (!liquidGlass || typeof liquidGlass.addView !== 'function') {
-    applyNativeWindowManagerGlassFallback(win);
+    applyNativeWindowGlassFallback(win, fallbackVibrancy);
     return;
   }
 
@@ -413,17 +436,33 @@ function applyLiquidGlassToWindowManagerPopup(win: any): void {
       } catch {}
 
       const glassId = liquidGlass.addView(win.getNativeWindowHandle(), {
-        cornerRadius: 20,
+        cornerRadius,
         opaque: false,
         // Keep native liquid glass in sync with the app theme (not just macOS appearance).
-        tintColor: isDarkTheme ? '#16181fd0' : '#f4f6f8b0',
+        tintColor: isDarkTheme ? darkTint : lightTint,
       });
+      if (typeof glassId === 'number' && glassId >= 0 && Number.isFinite(windowId)) {
+        liquidGlassAppliedWindowIds.add(windowId);
+        try {
+          if (win?.webContents && !win.webContents.isDestroyed() && typeof win.webContents.executeJavaScript === 'function') {
+            void win.webContents.executeJavaScript(
+              `(() => {
+                try {
+                  document.documentElement.classList.add('sc-native-liquid-glass');
+                  document.body.classList.add('sc-native-liquid-glass');
+                } catch {}
+              })()`,
+              true
+            );
+          }
+        } catch {}
+      }
       if (typeof glassId === 'number' && glassId >= 0 && typeof liquidGlass.unstable_setSubdued === 'function') {
-        try { liquidGlass.unstable_setSubdued(glassId, 0); } catch {}
+        try { liquidGlass.unstable_setSubdued(glassId, subdued); } catch {}
       }
     } catch (error) {
-      console.warn('[LiquidGlass] Failed to apply liquid glass to window manager popup:', error);
-      applyNativeWindowManagerGlassFallback(win);
+      console.warn('[LiquidGlass] Failed to apply liquid glass to window:', error);
+      applyNativeWindowGlassFallback(win, fallbackVibrancy);
     }
   };
 
@@ -434,11 +473,28 @@ function applyLiquidGlassToWindowManagerPopup(win: any): void {
       } else {
         win.webContents.once('did-finish-load', () => { void applyEffect(); });
       }
-      return;
+    } else {
+      void applyEffect();
     }
-  } catch {}
+  } catch {
+    void applyEffect();
+  }
 
-  void applyEffect();
+  if (typeof win?.once === 'function' && Number.isFinite(windowId)) {
+    win.once('closed', () => {
+      liquidGlassAppliedWindowIds.delete(windowId);
+    });
+  }
+}
+
+function applyLiquidGlassToWindowManagerPopup(win: any): void {
+  applyLiquidGlassToWindow(win, {
+    cornerRadius: 20,
+    fallbackVibrancy: 'under-window',
+    darkTint: '#16181fd0',
+    lightTint: '#f4f6f8b0',
+    subdued: 0,
+  });
 }
 
 async function ensureWindowManagerAccess(): Promise<void> {
@@ -4334,6 +4390,10 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+  applyLiquidGlassToWindow(mainWindow, {
+    cornerRadius: 16,
+    fallbackVibrancy: 'under-window',
+  });
 
   // Allow renderer getUserMedia requests so Chromium can surface native prompts.
   mainWindow.webContents.session.setPermissionRequestHandler((_wc: any, permission: any, callback: any) => {
@@ -4695,6 +4755,7 @@ function getDefaultPromptWindowBounds(): { x: number; y: number; width: number; 
 
 function createPromptWindow(initialBounds?: { x: number; y: number; width: number; height: number }): void {
   if (promptWindow && !promptWindow.isDestroyed()) return;
+  const useNativeLiquidGlass = process.platform === 'darwin' && !!getElectronLiquidGlassApi();
   const bounds = initialBounds || getDefaultPromptWindowBounds();
   promptWindow = new BrowserWindow({
     width: bounds.width,
@@ -4711,7 +4772,7 @@ function createPromptWindow(initialBounds?: { x: number; y: number; width: numbe
     show: false,
     transparent: true,
     backgroundColor: '#10101400',
-    vibrancy: 'fullscreen-ui',
+    vibrancy: useNativeLiquidGlass ? false : 'fullscreen-ui',
     visualEffectState: 'active',
     webPreferences: {
       nodeIntegration: false,
@@ -4722,6 +4783,10 @@ function createPromptWindow(initialBounds?: { x: number; y: number; width: numbe
   if (process.platform === 'darwin') {
     try { promptWindow.setWindowButtonVisibility(false); } catch {}
   }
+  applyLiquidGlassToWindow(promptWindow, {
+    cornerRadius: 16,
+    fallbackVibrancy: 'fullscreen-ui',
+  });
   promptWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   loadWindowUrl(promptWindow, '/prompt');
   promptWindow.on('blur', () => {
@@ -6912,6 +6977,7 @@ function openSettingsWindow(payload?: SettingsNavigationPayload): void {
   const settingsHeight = Math.max(720, Math.min(860, displayHeight - 96));
   const settingsX = displayX + Math.floor((displayWidth - settingsWidth) / 2);
   const settingsY = displayY + Math.floor((displayHeight - settingsHeight) / 2);
+  const useNativeLiquidGlass = process.platform === 'darwin' && !!getElectronLiquidGlassApi();
 
   settingsWindow = new BrowserWindow({
     width: settingsWidth,
@@ -6924,7 +6990,7 @@ function openSettingsWindow(payload?: SettingsNavigationPayload): void {
     trafficLightPosition: { x: 16, y: 16 },
     transparent: true,
     backgroundColor: '#00000000',
-    vibrancy: 'hud',
+    vibrancy: useNativeLiquidGlass ? false : 'hud',
     visualEffectState: 'active',
     hasShadow: false,
     show: false,
@@ -6933,6 +6999,10 @@ function openSettingsWindow(payload?: SettingsNavigationPayload): void {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
+  });
+  applyLiquidGlassToWindow(settingsWindow, {
+    cornerRadius: 14,
+    fallbackVibrancy: 'hud',
   });
   registerCloseWindowShortcut(settingsWindow);
 
@@ -6981,6 +7051,7 @@ function openExtensionStoreWindow(): void {
   const storeHeight = 700;
   const storeX = displayX + Math.floor((displayWidth - storeWidth) / 2);
   const storeY = displayY + Math.floor((displayHeight - storeHeight) / 2);
+  const useNativeLiquidGlass = process.platform === 'darwin' && !!getElectronLiquidGlassApi();
 
   extensionStoreWindow = new BrowserWindow({
     width: storeWidth,
@@ -6993,7 +7064,7 @@ function openExtensionStoreWindow(): void {
     trafficLightPosition: { x: 16, y: 16 },
     transparent: true,
     backgroundColor: '#00000000',
-    vibrancy: 'hud',
+    vibrancy: useNativeLiquidGlass ? false : 'hud',
     visualEffectState: 'active',
     hasShadow: false,
     show: false,
@@ -7002,6 +7073,10 @@ function openExtensionStoreWindow(): void {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
+  });
+  applyLiquidGlassToWindow(extensionStoreWindow, {
+    cornerRadius: 14,
+    fallbackVibrancy: 'hud',
   });
   registerCloseWindowShortcut(extensionStoreWindow, { closeOnEscape: true });
 
