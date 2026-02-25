@@ -1983,7 +1983,7 @@ const App: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="launcher-search-input flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] placeholder:font-medium text-[15px] font-medium tracking-[0.005em]"
+            className="launcher-search-input flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] placeholder:font-medium text-[0.9375rem] font-medium tracking-[0.005em]"
             autoFocus
           />
           {searchQuery && aiAvailable && (
@@ -1992,8 +1992,8 @@ const App: React.FC = () => {
               className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--soft-pill-bg)] hover:bg-[var(--soft-pill-hover-bg)] transition-colors flex-shrink-0 group"
             >
               <Sparkles className="w-3 h-3 text-white/30 group-hover:text-purple-400 transition-colors" />
-              <span className="text-[11px] text-white/30 group-hover:text-white/50 transition-colors">Ask AI</span>
-              <kbd className="text-[10px] text-white/20 bg-[var(--soft-pill-bg)] px-1 py-0.5 rounded font-mono leading-none">Tab</kbd>
+              <span className="text-[0.6875rem] text-white/30 group-hover:text-white/50 transition-colors">Ask AI</span>
+              <kbd className="text-[0.625rem] text-white/20 bg-[var(--soft-pill-bg)] px-1 py-0.5 rounded font-mono leading-none">Tab</kbd>
             </button>
           )}
           {searchQuery && (
@@ -2063,7 +2063,7 @@ const App: React.FC = () => {
                     acc.nodes.push(
                       <div
                         key={`section-${section.title}`}
-                        className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wider text-[var(--text-subtle)] font-medium"
+                        className="px-3 pt-2 pb-1 text-[0.6875rem] uppercase tracking-wider text-[var(--text-subtle)] font-medium"
                       >
                         {section.title}
                       </div>
@@ -2102,20 +2102,20 @@ const App: React.FC = () => {
                             </div>
 
                             <div className="min-w-0 flex-1 flex items-center gap-2">
-                              <div className="text-[var(--text-primary)] text-[13px] font-medium truncate tracking-[0.004em]">
+                              <div className="text-[var(--text-primary)] text-[0.8125rem] font-medium truncate tracking-[0.004em]">
                                 {getCommandDisplayTitle(command)}
                               </div>
                               {accessoryLabel ? (
-                                <div className="text-[var(--text-muted)] text-[12px] font-medium truncate">
+                                <div className="text-[var(--text-muted)] text-[0.75rem] font-medium truncate">
                                   {accessoryLabel}
                                 </div>
                               ) : (
-                                <div className="text-[var(--text-muted)] text-[11px] font-medium truncate">
+                                <div className="text-[var(--text-muted)] text-[0.6875rem] font-medium truncate">
                                   {fallbackCategory}
                                 </div>
                               )}
                               {aliasMatchesSearch ? (
-                                <div className="inline-flex items-center h-5 rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-1.5 text-[10px] font-mono text-[var(--text-subtle)] leading-none flex-shrink-0">
+                                <div className="inline-flex items-center h-5 rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-1.5 text-[0.625rem] font-mono text-[var(--text-subtle)] leading-none flex-shrink-0">
                                   {commandAlias}
                                 </div>
                               ) : null}
@@ -2161,7 +2161,7 @@ const App: React.FC = () => {
                   {selectedActions[0].title}
                 </button>
                 {selectedActions[0].shortcut && (
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[0.6875rem] text-[var(--text-subtle)] font-medium">
                     {renderShortcutLabel(selectedActions[0].shortcut)}
                   </kbd>
                 )}
@@ -2175,8 +2175,8 @@ const App: React.FC = () => {
               className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
             >
               <span className="text-xs font-normal">Actions</span>
-              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">⌘</kbd>
-              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">K</kbd>
+              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[0.6875rem] text-[var(--text-subtle)] font-medium">⌘</kbd>
+              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[0.6875rem] text-[var(--text-subtle)] font-medium">K</kbd>
             </button>
           </div>
         )}
@@ -2254,7 +2254,7 @@ const App: React.FC = () => {
               >
                 <span className="flex-1 text-sm truncate">{action.title}</span>
                 {action.shortcut && (
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-[var(--text-muted)]">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[0.6875rem] font-medium text-[var(--text-muted)]">
                     {renderShortcutLabel(action.shortcut)}
                   </kbd>
                 )}
@@ -2348,7 +2348,7 @@ const App: React.FC = () => {
               >
                 <span className="flex-1 text-sm truncate">{action.title}</span>
                 {action.shortcut && (
-                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-[var(--text-muted)]">
+                  <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[0.6875rem] font-medium text-[var(--text-muted)]">
                     {renderShortcutLabel(action.shortcut)}
                   </kbd>
                 )}
