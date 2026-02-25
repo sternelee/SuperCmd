@@ -440,6 +440,8 @@ function applyLiquidGlassToWindow(
     darkTint?: string;
     lightTint?: string;
     subdued?: 0 | 1;
+    forceDarkTheme?: boolean;
+    forceReapply?: boolean;
   }
 ): void {
   if (process.platform !== 'darwin') return;
@@ -449,7 +451,7 @@ function applyLiquidGlassToWindow(
     return;
   }
   const windowId = Number(win.id);
-  if (Number.isFinite(windowId) && liquidGlassAppliedWindowIds.has(windowId)) {
+  if (Number.isFinite(windowId) && liquidGlassAppliedWindowIds.has(windowId) && !options?.forceReapply) {
     syncNativeLiquidGlassClassOnWindow(win, true);
     return;
   }
@@ -459,6 +461,7 @@ function applyLiquidGlassToWindow(
   const darkTint = String(options?.darkTint || '#10131a42');
   const lightTint = String(options?.lightTint || '#f8fbff26');
   const subdued = options?.subdued ?? 0;
+  const forceDarkTheme = options?.forceDarkTheme === true;
 
   const liquidGlass = getElectronLiquidGlassApi();
   if (!liquidGlass || typeof liquidGlass.addView !== 'function') {
@@ -469,23 +472,26 @@ function applyLiquidGlassToWindow(
 
   const applyEffect = async () => {
     try {
-      let isDarkTheme = true;
-      try {
-        if (win?.webContents && !win.webContents.isDestroyed() && typeof win.webContents.executeJavaScript === 'function') {
-          const result = await win.webContents.executeJavaScript(
-            `(() => {
-              try {
-                const pref = String(window.localStorage.getItem('sc-theme-preference') || '').trim().toLowerCase();
-                if (pref === 'dark') return true;
-                if (pref === 'light') return false;
-              } catch {}
-              return document.documentElement.classList.contains('dark') || document.body.classList.contains('dark');
-            })()`,
-            true
-          );
-          isDarkTheme = Boolean(result);
-        }
-      } catch {}
+      let isDarkTheme = forceDarkTheme;
+      if (!forceDarkTheme) {
+        isDarkTheme = true;
+        try {
+          if (win?.webContents && !win.webContents.isDestroyed() && typeof win.webContents.executeJavaScript === 'function') {
+            const result = await win.webContents.executeJavaScript(
+              `(() => {
+                try {
+                  const pref = String(window.localStorage.getItem('sc-theme-preference') || '').trim().toLowerCase();
+                  if (pref === 'dark') return true;
+                  if (pref === 'light') return false;
+                } catch {}
+                return document.documentElement.classList.contains('dark') || document.body.classList.contains('dark');
+              })()`,
+              true
+            );
+            isDarkTheme = Boolean(result);
+          }
+        } catch {}
+      }
 
       const glassId = liquidGlass.addView(win.getNativeWindowHandle(), {
         cornerRadius,
@@ -5342,6 +5348,13 @@ function setLauncherMode(mode: LauncherMode): void {
         mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
       }
     } catch {}
+    const onboardingTintChanged = (prevMode === 'onboarding') !== (mode === 'onboarding');
+    applyLiquidGlassToWindow(mainWindow, {
+      cornerRadius: 16,
+      fallbackVibrancy: 'under-window',
+      forceDarkTheme: mode === 'onboarding',
+      forceReapply: onboardingTintChanged,
+    });
   }
   if (mainWindow && isVisible && prevMode !== mode) {
     applyLauncherBounds(mode);
