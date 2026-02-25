@@ -50,7 +50,6 @@
     "react-dom": "^18.2.0"
   },
   "build": {
-    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "appId": "com.supercmd.app",
     "productName": "SuperCmd",
     "publish": [
