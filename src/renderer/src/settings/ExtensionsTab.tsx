@@ -923,16 +923,18 @@ const ExtensionsTab: React.FC<{
                   </div>
                 ) : null}
               </div>
+              {hotkeyStatus.type !== 'idle' ? (
+                <p
+                  className={`text-xs whitespace-nowrap ${
+                    hotkeyStatus.type === 'error'
+                      ? 'text-red-300/90'
+                      : 'extensions-hotkey-status-success text-emerald-300/90'
+                  }`}
+                >
+                  {hotkeyStatus.text}
+                </p>
+              ) : null}
             </div>
-            {hotkeyStatus.type !== 'idle' ? (
-              <p
-                className={`mt-2 text-xs ${
-                  hotkeyStatus.type === 'error' ? 'text-red-300/90' : 'text-emerald-300/90'
-                }`}
-              >
-                {hotkeyStatus.text}
-              </p>
-            ) : null}
             {extensionActionStatus.type !== 'idle' ? (
               <p
                 className={`mt-1 text-xs ${

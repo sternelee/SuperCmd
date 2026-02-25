@@ -1259,6 +1259,11 @@ body.sc-detached-window .speak-widget-shell {
   flex-shrink: 0;
 }
 
+.sc-glassy:not(.dark) .extensions-hotkey-status-success,
+.sc-native-liquid-glass .extensions-hotkey-status-success {
+  color: rgba(22, 110, 48, 0.94) !important;
+}
+
 .speak-widget-shell::after {
   content: '';
   position: absolute;
