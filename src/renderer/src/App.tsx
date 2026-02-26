@@ -13,7 +13,6 @@ import type {
   ExtensionBundle,
   AppSettings,
   IndexedFileSearchResult,
-  FileSearchIndexStatus,
 } from '../types/electron';
 import ExtensionView from './ExtensionView';
 import ClipboardManager from './ClipboardManager';
@@ -104,7 +103,6 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [launcherFileResults, setLauncherFileResults] = useState<IndexedFileSearchResult[]>([]);
   const [launcherFileIcons, setLauncherFileIcons] = useState<Record<string, string>>({});
-  const [fileSearchIndexStatus, setFileSearchIndexStatus] = useState<FileSearchIndexStatus | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const homeDir = String((window.electron as any).homeDir || '');
@@ -840,26 +838,6 @@ const App: React.FC = () => {
     !showWhisperOnboarding;
 
   useEffect(() => {
-    let cancelled = false;
-    const syncIndexStatus = async () => {
-      try {
-        const status = await window.electron.getFileSearchIndexStatus();
-        if (!cancelled) setFileSearchIndexStatus(status);
-      } catch {
-        if (!cancelled) setFileSearchIndexStatus(null);
-      }
-    };
-    void syncIndexStatus();
-    const intervalId = window.setInterval(() => {
-      void syncIndexStatus();
-    }, 10000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, []);
-
-  useEffect(() => {
     fileSearchRequestSeqRef.current += 1;
     const requestSeq = fileSearchRequestSeqRef.current;
     const trimmed = searchQuery.trim();
@@ -990,6 +968,7 @@ const App: React.FC = () => {
     () => sourceCommands.filter((cmd) => !hiddenListOnlyCommandIds.has(cmd.id)),
     [sourceCommands, hiddenListOnlyCommandIds]
   );
+  const hasSearchQuery = searchQuery.trim().length > 0;
 
   const fileResultCommands = useMemo<CommandInfo[]>(
     () =>
@@ -1009,6 +988,16 @@ const App: React.FC = () => {
   );
 
   const groupedCommands = useMemo(() => {
+    if (hasSearchQuery) {
+      return {
+        contextual: [] as CommandInfo[],
+        pinned: [] as CommandInfo[],
+        recent: [] as CommandInfo[],
+        other: visibleSourceCommands,
+        files: fileResultCommands,
+      };
+    }
+
     const sourceMap = new Map(visibleSourceCommands.map((cmd) => [cmd.id, cmd]));
     const hasSelection = selectedTextSnapshot.trim().length > 0;
     const contextual = hasSelection
@@ -1045,15 +1034,15 @@ const App: React.FC = () => {
     );
 
     return { contextual, pinned, recent, files: fileResultCommands, other };
-  }, [visibleSourceCommands, pinnedCommands, recentCommands, recentCommandLaunchCounts, selectedTextSnapshot, fileResultCommands]);
+  }, [hasSearchQuery, visibleSourceCommands, pinnedCommands, recentCommands, recentCommandLaunchCounts, selectedTextSnapshot, fileResultCommands]);
 
   const displayCommands = useMemo(
     () => [
       ...groupedCommands.contextual,
       ...groupedCommands.pinned,
       ...groupedCommands.recent,
-      ...groupedCommands.files,
       ...groupedCommands.other,
+      ...groupedCommands.files,
     ],
     [groupedCommands]
   );
@@ -2238,11 +2227,7 @@ const App: React.FC = () => {
             </div>
           ) : displayCommands.length === 0 && !calcResult ? (
             <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
-              <p className="text-sm">
-                {searchQuery.trim() && fileSearchIndexStatus?.indexing
-                  ? 'Indexing home files. Results will appear shortly.'
-                  : 'No matching results'}
-              </p>
+              <p className="text-sm">No matching results</p>
             </div>
           ) : (
             <div className="space-y-0.5">
@@ -2278,8 +2263,8 @@ const App: React.FC = () => {
                 { title: 'Selected Text', items: groupedCommands.contextual },
                 { title: 'Pinned', items: groupedCommands.pinned },
                 { title: 'Recent', items: groupedCommands.recent },
-                { title: 'Files', items: groupedCommands.files },
                 { title: 'Other', items: groupedCommands.other },
+                { title: 'Files', items: groupedCommands.files },
               ]
                 .filter((section) => section.items.length > 0)
                 .map((section) => section)
