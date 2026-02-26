@@ -269,6 +269,14 @@ export function getCommandAccessoryLabel(command: CommandInfo): string {
   return '';
 }
 
+export function getCommandTypeBadgeLabel(command: CommandInfo): string {
+  const commandId = String(command.id || '').trim();
+  if (commandId.startsWith('quicklink-')) {
+    return 'Quick Link';
+  }
+  return '';
+}
+
 export function formatShortcutLabel(shortcut: string): string {
   return formatShortcutForDisplay(shortcut).replace(/ \+ /g, ' ');
 }

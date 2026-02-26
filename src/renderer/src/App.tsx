@@ -38,6 +38,7 @@ import {
   filterCommands, formatShortcutLabel, getCategoryLabel,
   renderCommandIcon, getCommandDisplayTitle,
   getCommandAccessoryLabel,
+  getCommandTypeBadgeLabel,
   renderShortcutLabel,
 } from './utils/command-helpers';
 import {
@@ -2250,6 +2251,7 @@ const App: React.FC = () => {
                     section.items.forEach((command, i) => {
                       const flatIndex = startIndex + i;
                       const accessoryLabel = getCommandAccessoryLabel(command);
+                      const typeBadgeLabel = getCommandTypeBadgeLabel(command);
                       const fallbackCategory = getCategoryLabel(command.category);
                       const commandAlias = String(commandAliases[command.id] || '').trim();
                       const aliasMatchesSearch =
@@ -2299,6 +2301,11 @@ const App: React.FC = () => {
                                 </div>
                               ) : null}
                             </div>
+                            {typeBadgeLabel ? (
+                              <div className="text-[var(--text-muted)] text-[0.6875rem] font-medium leading-none flex-shrink-0 truncate">
+                                {typeBadgeLabel}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       );

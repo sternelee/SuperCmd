@@ -5,6 +5,8 @@ import {
   Bolt,
   Calendar,
   CalendarClock,
+  Check,
+  ChevronDown,
   Clipboard,
   Clock,
   ExternalLink,
@@ -155,16 +157,26 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   const [saving, setSaving] = useState(false);
   const [showPlaceholderMenu, setShowPlaceholderMenu] = useState(false);
   const [placeholderQuery, setPlaceholderQuery] = useState('');
+  const [showApplicationMenu, setShowApplicationMenu] = useState(false);
+  const [applicationIcons, setApplicationIcons] = useState<Record<string, string>>({});
+  const appIconFetchAttemptedRef = useRef<Set<string>>(new Set());
   const [placeholderMenuPos, setPlaceholderMenuPos] = useState<{ top: number; left: number; width: number; maxHeight: number }>({
     top: 0,
     left: 0,
     width: 280,
     maxHeight: 260,
   });
+  const [applicationMenuPos, setApplicationMenuPos] = useState<{ top: number; left: number; width: number; maxHeight: number }>({
+    top: 0,
+    left: 0,
+    width: 340,
+    maxHeight: 280,
+  });
 
   const nameRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
   const placeholderButtonRef = useRef<HTMLButtonElement>(null);
+  const applicationButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -188,6 +200,16 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
         .sort((a, b) => getApplicationSortKey(a).localeCompare(getApplicationSortKey(b)));
 
       setApplications(apps);
+      setApplicationIcons((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const app of apps) {
+          if (!app.iconDataUrl || next[app.path]) continue;
+          next[app.path] = app.iconDataUrl;
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
       setSnippets(Array.isArray(snippetsRaw) ? snippetsRaw : []);
 
       if (!selectedAppPath && !quickLink?.applicationPath) {
@@ -206,6 +228,48 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   }, [loadContextData]);
 
   useEffect(() => {
+    const pending = applications.filter((app) => {
+      if (!app.path) return false;
+      if (applicationIcons[app.path]) return false;
+      if (appIconFetchAttemptedRef.current.has(app.path)) return false;
+      return true;
+    });
+    if (pending.length === 0) return;
+
+    let alive = true;
+    for (const app of pending) {
+      appIconFetchAttemptedRef.current.add(app.path);
+    }
+
+    void Promise.all(
+      pending.map(async (app) => {
+        try {
+          const dataUrl = await window.electron.getFileIconDataUrl(app.path, 20);
+          return [app.path, dataUrl] as const;
+        } catch {
+          return [app.path, null] as const;
+        }
+      })
+    ).then((entries) => {
+      if (!alive) return;
+      setApplicationIcons((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const [appPath, iconDataUrl] of entries) {
+          if (!iconDataUrl || next[appPath]) continue;
+          next[appPath] = iconDataUrl;
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
+    });
+
+    return () => {
+      alive = false;
+    };
+  }, [applicationIcons, applications]);
+
+  useEffect(() => {
     let alive = true;
 
     const selectedApp = applications.find((app) => app.path === selectedAppPath);
@@ -216,24 +280,28 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       return;
     }
 
-    if (selectedApp.iconDataUrl) {
-      setAppIconDataUrl(selectedApp.iconDataUrl);
+    const knownIconDataUrl = applicationIcons[selectedApp.path] || selectedApp.iconDataUrl;
+    if (knownIconDataUrl) {
+      setAppIconDataUrl(knownIconDataUrl);
     }
 
     void window.electron.getFileIconDataUrl(selectedApp.path, 32)
       .then((iconDataUrl) => {
         if (!alive) return;
-        setAppIconDataUrl(iconDataUrl || selectedApp.iconDataUrl || quickLink?.appIconDataUrl || undefined);
+        if (iconDataUrl) {
+          setApplicationIcons((prev) => (prev[selectedApp.path] ? prev : { ...prev, [selectedApp.path]: iconDataUrl }));
+        }
+        setAppIconDataUrl(iconDataUrl || knownIconDataUrl || quickLink?.appIconDataUrl || undefined);
       })
       .catch(() => {
         if (!alive) return;
-        setAppIconDataUrl(selectedApp.iconDataUrl || quickLink?.appIconDataUrl || undefined);
+        setAppIconDataUrl(knownIconDataUrl || quickLink?.appIconDataUrl || undefined);
       });
 
     return () => {
       alive = false;
     };
-  }, [applications, quickLink?.appIconDataUrl, selectedAppPath]);
+  }, [applicationIcons, applications, quickLink?.appIconDataUrl, selectedAppPath]);
 
   const refreshPlaceholderMenuPos = useCallback(() => {
     const rect = placeholderButtonRef.current?.getBoundingClientRect();
@@ -259,6 +327,31 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     });
   }, []);
 
+  const refreshApplicationMenuPos = useCallback(() => {
+    const rect = applicationButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const viewportPadding = 10;
+    const desiredWidth = Math.max(300, rect.width);
+    const estimatedMenuHeight = 280;
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+    const openAbove = spaceBelow < 240 && spaceAbove > 160;
+    const top = openAbove ? Math.max(viewportPadding, rect.top - estimatedMenuHeight - 8) : rect.bottom + 8;
+    const maxHeight = Math.max(140, Math.floor((openAbove ? spaceAbove : spaceBelow) - 12));
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, window.innerWidth - desiredWidth - viewportPadding)
+    );
+
+    setApplicationMenuPos({
+      top,
+      left,
+      width: desiredWidth,
+      maxHeight,
+    });
+  }, []);
+
   useEffect(() => {
     if (!showPlaceholderMenu) return;
     refreshPlaceholderMenuPos();
@@ -273,6 +366,19 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   }, [refreshPlaceholderMenuPos, showPlaceholderMenu]);
 
   useEffect(() => {
+    if (!showApplicationMenu) return;
+    refreshApplicationMenuPos();
+    const onResize = () => refreshApplicationMenuPos();
+    const onScroll = () => refreshApplicationMenuPos();
+    window.addEventListener('resize', onResize);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [refreshApplicationMenuPos, showApplicationMenu]);
+
+  useEffect(() => {
     if (!showPlaceholderMenu) return;
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
@@ -285,6 +391,20 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     document.addEventListener('mousedown', onPointerDown, true);
     return () => document.removeEventListener('mousedown', onPointerDown, true);
   }, [showPlaceholderMenu]);
+
+  useEffect(() => {
+    if (!showApplicationMenu) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      const menu = document.getElementById('quicklink-application-menu');
+      if (menu?.contains(target)) return;
+      if (applicationButtonRef.current?.contains(target)) return;
+      setShowApplicationMenu(false);
+    };
+    document.addEventListener('mousedown', onPointerDown, true);
+    return () => document.removeEventListener('mousedown', onPointerDown, true);
+  }, [showApplicationMenu]);
 
   const placeholderGroups = useMemo(() => {
     const snippetItems: PlaceholderGroupItem[] = snippets.map((snippet) => ({
@@ -317,6 +437,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     () => applications.find((app) => app.path === selectedAppPath) || null,
     [applications, selectedAppPath]
   );
+  const selectedAppName = selectedApp?.name || 'Default Browser';
 
   const insertPlaceholder = (placeholder: string) => {
     const input = urlRef.current;
@@ -381,6 +502,14 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     }
     if (event.key === 'Escape') {
       event.preventDefault();
+      if (showPlaceholderMenu) {
+        setShowPlaceholderMenu(false);
+        return;
+      }
+      if (showApplicationMenu) {
+        setShowApplicationMenu(false);
+        return;
+      }
       onCancel();
       return;
     }
@@ -470,18 +599,27 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
               <div className="w-8 h-8 rounded-md border border-[var(--snippet-divider)] bg-white/[0.04] flex items-center justify-center overflow-hidden">
                 <QuickLinkIconPreview icon="default" appIconDataUrl={appIconDataUrl} />
               </div>
-              <select
-                value={selectedAppPath}
-                onChange={(event) => setSelectedAppPath(event.target.value)}
-                className="flex-1 bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] outline-none focus:border-[var(--snippet-divider-strong)] transition-colors"
+              <button
+                ref={applicationButtonRef}
+                type="button"
+                onClick={() => {
+                  refreshApplicationMenuPos();
+                  setShowApplicationMenu((prev) => !prev);
+                }}
+                className="flex-1 bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] outline-none hover:border-[var(--snippet-divider-strong)] transition-colors text-left flex items-center justify-between gap-2"
               >
-                <option value="" className="text-black">Default Browser</option>
-                {applications.map((app) => (
-                  <option key={app.path} value={app.path} className="text-black">
-                    {app.name}
-                  </option>
-                ))}
-              </select>
+                <span className="min-w-0 flex items-center gap-2">
+                  <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {selectedAppPath && appIconDataUrl ? (
+                      <img src={appIconDataUrl} alt="" className="w-4 h-4 object-contain" draggable={false} />
+                    ) : (
+                      <Globe className="w-3.5 h-3.5 text-white/65" />
+                    )}
+                  </span>
+                  <span className="truncate">{selectedAppName}</span>
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-white/55 flex-shrink-0" />
+              </button>
             </div>
           </div>
         </div>
@@ -523,6 +661,64 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
           <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-muted)] font-medium">↩</kbd>
         </button>
       </div>
+
+      {showApplicationMenu && createPortal(
+        <div
+          id="quicklink-application-menu"
+          className="fixed z-[120] rounded-lg overflow-hidden border border-[var(--snippet-divider)]"
+          style={{
+            top: applicationMenuPos.top,
+            left: applicationMenuPos.left,
+            width: applicationMenuPos.width,
+            background: 'var(--bg-overlay-strong)',
+            backdropFilter: 'blur(18px)',
+            boxShadow: '0 12px 28px rgba(var(--backdrop-rgb), 0.45)',
+          }}
+        >
+          <div className="overflow-y-auto py-1" style={{ maxHeight: applicationMenuPos.maxHeight }}>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedAppPath('');
+                setShowApplicationMenu(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 hover:bg-white/[0.07] transition-colors flex items-center gap-2"
+            >
+              <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
+                <Globe className="w-3.5 h-3.5 text-white/65" />
+              </span>
+              <span className="min-w-0 flex-1 truncate">Default Browser</span>
+              {!selectedAppPath ? <Check className="w-3.5 h-3.5 text-white/65 flex-shrink-0" /> : null}
+            </button>
+            {applications.map((app) => {
+              const iconDataUrl = applicationIcons[app.path] || app.iconDataUrl;
+              const isSelected = selectedAppPath === app.path;
+              return (
+                <button
+                  key={app.path}
+                  type="button"
+                  onClick={() => {
+                    setSelectedAppPath(app.path);
+                    setShowApplicationMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 hover:bg-white/[0.07] transition-colors flex items-center gap-2"
+                >
+                  <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {iconDataUrl ? (
+                      <img src={iconDataUrl} alt="" className="w-4 h-4 object-contain" draggable={false} />
+                    ) : (
+                      <Globe className="w-3.5 h-3.5 text-white/55" />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{app.name}</span>
+                  {isSelected ? <Check className="w-3.5 h-3.5 text-white/65 flex-shrink-0" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body
+      )}
 
       {showPlaceholderMenu && createPortal(
         <div
