@@ -90,6 +90,14 @@ export interface ExtensionCommandInfo {
   disabledByDefault?: boolean;
   keywords: string[];
   iconDataUrl?: string;
+  commandArgumentDefinitions?: Array<{
+    name: string;
+    required?: boolean;
+    type?: string;
+    placeholder?: string;
+    title?: string;
+    data?: Array<{ title?: string; value?: string }>;
+  }>;
 }
 
 // ─── Paths ──────────────────────────────────────────────────────────
@@ -298,6 +306,18 @@ export function discoverInstalledExtensionCommands(): ExtensionCommandInfo[] {
           mode: cmd.mode || 'view',
           interval: typeof cmd.interval === 'string' ? cmd.interval : undefined,
           disabledByDefault: Boolean(cmd.disabledByDefault),
+          commandArgumentDefinitions: Array.isArray(cmd.arguments)
+            ? cmd.arguments
+                .filter((arg: any) => arg && arg.name)
+                .map((arg: any) => ({
+                  name: String(arg.name),
+                  required: Boolean(arg.required),
+                  type: arg.type,
+                  placeholder: arg.placeholder,
+                  title: arg.title,
+                  data: Array.isArray(arg.data) ? arg.data : undefined,
+                }))
+            : [],
           keywords: [
             extName,
             pkg.title || '',

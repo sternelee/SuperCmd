@@ -1369,6 +1369,7 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
       mode: ext.mode,
       interval: ext.interval,
       disabledByDefault: ext.disabledByDefault,
+      commandArgumentDefinitions: ext.commandArgumentDefinitions || [],
     }));
   } catch (e) {
     console.error('Failed to discover installed extensions:', e);
@@ -1404,18 +1405,32 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
 
   let quickLinkCommands: CommandInfo[] = [];
   try {
-    quickLinkCommands = getAllQuickLinks().map((quickLink) => {
-      const resolvedIconName = resolveQuickLinkIconName(quickLink.icon);
-      return {
-        id: getQuickLinkCommandId(quickLink.id),
-        title: quickLink.name,
-        subtitle: quickLink.applicationName || 'Quick Link',
-        keywords: buildQuickLinkKeywords(quickLink),
-        iconDataUrl: resolveQuickLinkIconDataUrl(quickLink, resolvedIconName),
-        iconName: resolvedIconName,
-        category: 'system' as const,
-      };
-    });
+    const quickLinks = getAllQuickLinks();
+    quickLinkCommands = await Promise.all(
+      quickLinks.map(async (quickLink) => {
+        const resolvedIconName = resolveQuickLinkIconName(quickLink.icon);
+        let iconDataUrl = resolveQuickLinkIconDataUrl(quickLink, resolvedIconName);
+
+        // Prefer real app icon for default quick-link icons so launcher search
+        // reflects the target application even when stored icon data is stale.
+        if (!resolvedIconName && quickLink.applicationPath) {
+          const resolvedAppIconDataUrl = await getIconDataUrl(quickLink.applicationPath);
+          if (resolvedAppIconDataUrl) {
+            iconDataUrl = resolvedAppIconDataUrl;
+          }
+        }
+
+        return {
+          id: getQuickLinkCommandId(quickLink.id),
+          title: quickLink.name,
+          subtitle: quickLink.applicationName || 'Quick Link',
+          keywords: buildQuickLinkKeywords(quickLink),
+          iconDataUrl,
+          iconName: iconDataUrl ? undefined : resolvedIconName,
+          category: 'system' as const,
+        };
+      })
+    );
   } catch (e) {
     console.error('Failed to discover quick links:', e);
   }

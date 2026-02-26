@@ -18,8 +18,10 @@ import {
   Variable,
   X,
 } from 'lucide-react';
-import type { QuickLink, QuickLinkIcon } from '../types/electron';
+import type { QuickLink, QuickLinkDynamicField, QuickLinkIcon } from '../types/electron';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
+import { useInlineArgumentAnchor } from './hooks/useInlineArgumentAnchor';
+import InlineArgumentField, { InlineArgumentLeadingIcon, InlineArgumentOverflowBadge } from './components/InlineArgumentField';
 import {
   getQuickLinkIconLabel,
   getQuickLinkIconOption,
@@ -64,8 +66,8 @@ type PlaceholderGroup = {
   items: PlaceholderGroupItem[];
 };
 
-const QUICK_LINK_COMMAND_PREFIX = 'quicklink-';
 const MAX_VISIBLE_ICON_RESULTS = 4;
+const MAX_INLINE_QUICK_LINK_ARGUMENTS = 3;
 
 const BASE_PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
   {
@@ -105,10 +107,6 @@ function formatDate(ts: number): string {
   });
 }
 
-function getQuickLinkCommandId(id: string): string {
-  return `${QUICK_LINK_COMMAND_PREFIX}${id}`;
-}
-
 function getApplicationSortKey(app: ApplicationOption): string {
   return String(app.name || '').trim().toLowerCase();
 }
@@ -143,6 +141,119 @@ function toFileUrl(pathValue: string): string {
   return `file://${encodeURI(withLeadingSlash)}`;
 }
 
+function normalizeMatchToken(value: string): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function buildApplicationMatchTokens(app: ApplicationOption): string[] {
+  const set = new Set<string>();
+  const add = (value: string | undefined) => {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return;
+    const parts = raw.split(/[^a-z0-9]+/g).filter((part) => part.length >= 2);
+    for (const part of parts) set.add(part);
+    const compact = normalizeMatchToken(raw);
+    if (compact.length >= 2) set.add(compact);
+  };
+
+  add(app.name);
+  add(app.bundleId);
+
+  const pathParts = String(app.path || '').split('/');
+  const appNameFromPath = String(pathParts[pathParts.length - 1] || '')
+    .replace(/\.app$/i, '')
+    .trim();
+  add(appNameFromPath);
+
+  return Array.from(set);
+}
+
+function extractQuickLinkTemplateTokens(urlTemplate: string): string[] {
+  const normalized = String(urlTemplate || '').trim();
+  if (!normalized) return [];
+
+  const candidate = normalized.replace(/\{[^}]+\}/g, 'placeholder');
+  try {
+    const parsed = new URL(candidate);
+    const tokens = new Set<string>();
+
+    const protocol = String(parsed.protocol || '').replace(':', '').trim().toLowerCase();
+    if (protocol && !['http', 'https', 'file'].includes(protocol)) {
+      tokens.add(protocol);
+    }
+
+    const host = String(parsed.hostname || '').trim().toLowerCase();
+    if (host) {
+      const hostParts = host.split('.').filter(Boolean);
+      const ignored = new Set(['www', 'com', 'net', 'org', 'io', 'co', 'app', 'dev', 'ai', 'gg']);
+      for (const part of hostParts) {
+        if (part.length < 2) continue;
+        if (ignored.has(part)) continue;
+        tokens.add(part);
+      }
+      const compactHost = normalizeMatchToken(host);
+      if (compactHost.length >= 3) tokens.add(compactHost);
+    }
+
+    return Array.from(tokens);
+  } catch {
+    return [];
+  }
+}
+
+function findBestApplicationForPastedQuickLink(
+  urlTemplate: string,
+  applications: ApplicationOption[]
+): ApplicationOption | null {
+  const templateTokens = extractQuickLinkTemplateTokens(urlTemplate);
+  if (templateTokens.length === 0) return null;
+
+  let bestMatch: ApplicationOption | null = null;
+  let bestScore = 0;
+
+  for (const app of applications) {
+    const appTokens = buildApplicationMatchTokens(app);
+    if (appTokens.length === 0) continue;
+
+    let score = 0;
+    for (const token of templateTokens) {
+      if (appTokens.includes(token)) {
+        score += 4;
+        continue;
+      }
+      if (appTokens.some((appToken) => appToken.includes(token) || token.includes(appToken))) {
+        score += 2;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = app;
+    }
+  }
+
+  return bestScore >= 4 ? bestMatch : null;
+}
+
+function normalizeQuickLinkDynamicFields(fields: QuickLinkDynamicField[]): QuickLinkDynamicField[] {
+  const map = new Map<string, QuickLinkDynamicField>();
+  for (const field of fields || []) {
+    const key = String(field?.key || field?.name || '').trim();
+    if (!key) continue;
+    const normalizedKey = key.toLowerCase();
+    if (map.has(normalizedKey)) continue;
+    map.set(normalizedKey, {
+      key,
+      name: String(field?.name || key),
+      defaultValue: field?.defaultValue,
+    });
+  }
+  return Array.from(map.values());
+}
+
 const QuickLinkIconPreview: React.FC<{
   icon: QuickLinkIcon;
   appIconDataUrl?: string;
@@ -172,8 +283,11 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   const [showPlaceholderMenu, setShowPlaceholderMenu] = useState(false);
   const [showApplicationMenu, setShowApplicationMenu] = useState(false);
   const [showIconMenu, setShowIconMenu] = useState(false);
+  const [selectedPlaceholderIndex, setSelectedPlaceholderIndex] = useState(-1);
+  const [applicationQuery, setApplicationQuery] = useState('');
   const [iconQuery, setIconQuery] = useState('');
   const [applicationIcons, setApplicationIcons] = useState<Record<string, string>>({});
+  const [shouldAutoSelectAppFromPaste, setShouldAutoSelectAppFromPaste] = useState(false);
   const appIconFetchAttemptedRef = useRef<Set<string>>(new Set());
   const [placeholderMenuPos, setPlaceholderMenuPos] = useState<{ top: number; left: number; width: number; maxHeight: number }>({
     top: 0,
@@ -197,6 +311,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   const nameRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
   const placeholderButtonRef = useRef<HTMLButtonElement>(null);
+  const placeholderItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const applicationButtonRef = useRef<HTMLButtonElement>(null);
   const iconButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -444,6 +559,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       if (menu?.contains(target)) return;
       if (placeholderButtonRef.current?.contains(target)) return;
       setShowPlaceholderMenu(false);
+      setSelectedPlaceholderIndex(-1);
     };
     document.addEventListener('mousedown', onPointerDown, true);
     return () => document.removeEventListener('mousedown', onPointerDown, true);
@@ -478,6 +594,17 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   }, [showIconMenu]);
 
   const placeholderGroups = useMemo(() => BASE_PLACEHOLDER_GROUPS, []);
+  const indexedPlaceholderGroups = useMemo(() => {
+    let index = 0;
+    return placeholderGroups.map((group) => ({
+      title: group.title,
+      items: group.items.map((item) => ({ item, index: index++ })),
+    }));
+  }, [placeholderGroups]);
+  const placeholderMenuItems = useMemo(
+    () => indexedPlaceholderGroups.flatMap((group) => group.items.map((entry) => entry.item)),
+    [indexedPlaceholderGroups]
+  );
 
   const selectedApp = useMemo(
     () => applications.find((app) => app.path === selectedAppPath) || null,
@@ -489,6 +616,16 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       ? applicationIcons[selectedAppPath] || selectedApp?.iconDataUrl || appIconDataUrl
       : undefined) || undefined;
   const selectedIconOption = getQuickLinkIconOption(icon) || QUICK_LINK_ICON_OPTIONS[0];
+  const filteredApplications = useMemo(() => {
+    const query = applicationQuery.trim().toLowerCase();
+    if (!query) return applications;
+    return applications.filter((app) => {
+      const name = String(app.name || '').toLowerCase();
+      const bundleId = String(app.bundleId || '').toLowerCase();
+      const appPath = String(app.path || '').toLowerCase();
+      return name.includes(query) || bundleId.includes(query) || appPath.includes(query);
+    });
+  }, [applicationQuery, applications]);
   const filteredIconOptions = useMemo(() => {
     const query = iconQuery.trim().toLowerCase();
     if (!query) return QUICK_LINK_ICON_OPTIONS;
@@ -516,26 +653,77 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     return list;
   }, [filteredIconOptions, iconQuery, selectedIconOption]);
 
+  useEffect(() => {
+    placeholderItemRefs.current = placeholderItemRefs.current.slice(0, placeholderMenuItems.length);
+  }, [placeholderMenuItems.length]);
+
+  useEffect(() => {
+    if (!showPlaceholderMenu) return;
+    if (placeholderMenuItems.length === 0) return;
+
+    const boundedIndex = Math.min(
+      Math.max(selectedPlaceholderIndex >= 0 ? selectedPlaceholderIndex : 0, 0),
+      placeholderMenuItems.length - 1
+    );
+
+    if (boundedIndex !== selectedPlaceholderIndex) {
+      setSelectedPlaceholderIndex(boundedIndex);
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const target = placeholderItemRefs.current[boundedIndex];
+      if (!target) return;
+      if (document.activeElement !== target) {
+        target.focus();
+      }
+      target.scrollIntoView({ block: 'nearest' });
+    });
+  }, [placeholderMenuItems.length, selectedPlaceholderIndex, showPlaceholderMenu]);
+
   const insertPlaceholder = useCallback((placeholder: string) => {
     const input = urlRef.current;
     if (!input) return;
 
     const start = input.selectionStart ?? urlTemplate.length;
     const end = input.selectionEnd ?? urlTemplate.length;
-    const next = `${urlTemplate.slice(0, start)}${placeholder}${urlTemplate.slice(end)}`;
+    const hasOpeningBraceBeforeCursor = start > 0 && urlTemplate[start - 1] === '{';
+    let insertion = placeholder;
+    if (hasOpeningBraceBeforeCursor && insertion.startsWith('{')) {
+      insertion = insertion.slice(1);
+    } else if (!hasOpeningBraceBeforeCursor && !insertion.startsWith('{')) {
+      insertion = `{${insertion}`;
+    }
+    if (!insertion.endsWith('}')) {
+      insertion = `${insertion}}`;
+    }
+
+    const next = `${urlTemplate.slice(0, start)}${insertion}${urlTemplate.slice(end)}`;
     setUrlTemplate(next);
 
     requestAnimationFrame(() => {
       input.focus();
-      const nextPos = start + placeholder.length;
+      const nextPos = start + insertion.length;
       input.setSelectionRange(nextPos, nextPos);
     });
   }, [urlTemplate]);
+
+  useEffect(() => {
+    if (!shouldAutoSelectAppFromPaste) return;
+    if (!applications.length) return;
+
+    const matchedApplication = findBestApplicationForPastedQuickLink(urlTemplate, applications);
+    if (matchedApplication?.path) {
+      setSelectedAppPath(matchedApplication.path);
+    }
+    setShouldAutoSelectAppFromPaste(false);
+  }, [applications, shouldAutoSelectAppFromPaste, urlTemplate]);
 
   const handlePlaceholderSelection = useCallback(async (item: PlaceholderGroupItem) => {
     if (!item.pickerType) {
       insertPlaceholder(item.value);
       setShowPlaceholderMenu(false);
+      setSelectedPlaceholderIndex(-1);
       return;
     }
 
@@ -580,8 +768,47 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       console.error('Failed to pick file/folder:', error);
     } finally {
       setShowPlaceholderMenu(false);
+      setSelectedPlaceholderIndex(-1);
     }
   }, [applications, insertPlaceholder]);
+
+  const handlePlaceholderMenuKeyDown = useCallback((event: React.KeyboardEvent) => {
+    if (!showPlaceholderMenu) return;
+    if (placeholderMenuItems.length === 0) return;
+
+    const currentIndex = selectedPlaceholderIndex >= 0 ? selectedPlaceholderIndex : 0;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      event.stopPropagation();
+      setSelectedPlaceholderIndex((prev) => Math.min((prev >= 0 ? prev : 0) + 1, placeholderMenuItems.length - 1));
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      setSelectedPlaceholderIndex((prev) => Math.max((prev >= 0 ? prev : 0) - 1, 0));
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      const selectedItem = placeholderMenuItems[currentIndex];
+      if (selectedItem) {
+        void handlePlaceholderSelection(selectedItem);
+      }
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      setShowPlaceholderMenu(false);
+      setSelectedPlaceholderIndex(-1);
+      requestAnimationFrame(() => {
+        urlRef.current?.focus();
+      });
+    }
+  }, [handlePlaceholderSelection, placeholderMenuItems, selectedPlaceholderIndex, showPlaceholderMenu]);
 
   const submit = async () => {
     const nextErrors: Record<string, string> = {};
@@ -632,6 +859,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       event.preventDefault();
       if (showPlaceholderMenu) {
         setShowPlaceholderMenu(false);
+        setSelectedPlaceholderIndex(-1);
         return;
       }
       if (showApplicationMenu) {
@@ -693,10 +921,18 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                   setUrlTemplate(event.target.value);
                   setErrors((prev) => ({ ...prev, urlTemplate: '' }));
                 }}
+                onPaste={() => {
+                  setShouldAutoSelectAppFromPaste(true);
+                }}
                 onKeyDown={(event) => {
+                  if (showPlaceholderMenu) {
+                    handlePlaceholderMenuKeyDown(event);
+                    if (event.defaultPrevented) return;
+                  }
                   if (event.key === '{' && !event.metaKey && !event.ctrlKey && !event.altKey) {
                     requestAnimationFrame(() => {
                       refreshPlaceholderMenuPos();
+                      setSelectedPlaceholderIndex(0);
                       setShowPlaceholderMenu(true);
                     });
                   }
@@ -709,7 +945,13 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                 type="button"
                 onClick={() => {
                   refreshPlaceholderMenuPos();
-                  setShowPlaceholderMenu((prev) => !prev);
+                  if (showPlaceholderMenu) {
+                    setShowPlaceholderMenu(false);
+                    setSelectedPlaceholderIndex(-1);
+                    return;
+                  }
+                  setSelectedPlaceholderIndex(0);
+                  setShowPlaceholderMenu(true);
                 }}
                 className="absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 rounded-md border border-[rgba(124,136,154,0.24)] bg-white/[0.04] text-white/60 hover:text-white/80 hover:bg-white/[0.08] transition-colors"
                 title="Add dynamic placeholder"
@@ -736,6 +978,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                 type="button"
                 onClick={() => {
                   refreshApplicationMenuPos();
+                  setApplicationQuery('');
                   setShowApplicationMenu((prev) => !prev);
                 }}
                 className="flex-1 bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] outline-none hover:border-[var(--snippet-divider-strong)] transition-colors text-left flex items-center justify-between gap-2"
@@ -810,7 +1053,17 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
             width: applicationMenuPos.width,
           }}
         >
-          <div className="overflow-y-auto py-1" style={{ maxHeight: Math.min(applicationMenuPos.maxHeight, 136) }}>
+          <div className="px-2 py-1.5 border-b sc-dropdown-divider">
+            <input
+              type="text"
+              value={applicationQuery}
+              onChange={(event) => setApplicationQuery(event.target.value)}
+              placeholder="Search applications..."
+              className="w-full px-1.5 py-1 bg-transparent text-[13px] text-white/75 placeholder:text-[color:var(--text-subtle)] outline-none"
+              autoFocus
+            />
+          </div>
+          <div className="overflow-y-auto py-1" style={{ maxHeight: Math.min(applicationMenuPos.maxHeight, 180) }}>
             <button
               type="button"
               onClick={() => {
@@ -826,7 +1079,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
               <span className="min-w-0 flex-1 truncate">Default Browser</span>
               {!selectedAppPath ? <Check className="w-3.5 h-3.5 text-white/65 flex-shrink-0" /> : null}
             </button>
-            {applications.map((app) => {
+            {filteredApplications.map((app) => {
               const iconDataUrl = applicationIcons[app.path] || app.iconDataUrl;
               const isSelected = selectedAppPath === app.path;
               return (
@@ -852,6 +1105,9 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                 </button>
               );
             })}
+            {filteredApplications.length === 0 ? (
+              <div className="px-2.5 py-2 text-xs text-white/35">No applications found</div>
+            ) : null}
           </div>
         </div>,
         document.body
@@ -918,6 +1174,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
         <div
           id="quicklink-placeholder-menu"
           className="fixed z-[120] rounded-lg overflow-hidden sc-dropdown-surface"
+          onKeyDown={handlePlaceholderMenuKeyDown}
           style={{
             top: placeholderMenuPos.top,
             left: placeholderMenuPos.left,
@@ -925,17 +1182,26 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
           }}
         >
           <div className="overflow-y-auto py-1" style={{ maxHeight: Math.min(placeholderMenuPos.maxHeight, 136) }}>
-            {placeholderGroups.map((group) => (
+            {indexedPlaceholderGroups.map((group) => (
               <div key={group.title} className="mb-1">
                 <div className="px-2.5 py-1 text-[11px] uppercase tracking-wider text-white/30">{group.title}</div>
-                {group.items.map((item) => {
+                {group.items.map(({ item, index }) => {
                   const Icon = item.icon;
+                  const isSelected = selectedPlaceholderIndex === index;
                   return (
                     <button
-                      key={`${group.title}-${item.value}`}
+                      key={`${group.title}-${index}-${item.value}`}
                       type="button"
+                      ref={(el) => {
+                        placeholderItemRefs.current[index] = el;
+                      }}
+                      tabIndex={isSelected ? 0 : -1}
+                      aria-selected={isSelected}
+                      onFocus={() => setSelectedPlaceholderIndex(index)}
                       onClick={() => void handlePlaceholderSelection(item)}
-                      className="sc-dropdown-item w-full text-left px-2.5 py-1 text-[13px] text-white/80"
+                      className={`sc-dropdown-item w-full text-left px-2.5 py-1 text-[13px] outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 ${
+                        isSelected ? 'text-white/90' : 'text-white/80'
+                      }`}
                     >
                       <span className="flex items-center gap-2">
                         {Icon ? <Icon className="w-3.5 h-3.5 text-white/45" /> : null}
@@ -965,13 +1231,26 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
   const [quickLinks, setQuickLinks] = useState<QuickLink[]>([]);
   const [filteredQuickLinks, setFilteredQuickLinks] = useState<QuickLink[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [quickLinkDynamicFieldsById, setQuickLinkDynamicFieldsById] = useState<Record<string, QuickLinkDynamicField[]>>({});
+  const [inlineDynamicValuesByQuickLinkId, setInlineDynamicValuesByQuickLinkId] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showActions, setShowActions] = useState(false);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
   const [editingQuickLink, setEditingQuickLink] = useState<QuickLink | undefined>(undefined);
+  const [dynamicPrompt, setDynamicPrompt] = useState<{
+    quickLink: QuickLink;
+    fields: QuickLinkDynamicField[];
+    values: Record<string, string>;
+  } | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const inlineArgumentLaneRef = useRef<HTMLDivElement>(null);
+  const inlineArgumentClusterRef = useRef<HTMLDivElement>(null);
+  const inlineDynamicInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const firstDynamicInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -1052,16 +1331,156 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
   }, [scrollToSelected]);
 
   const selectedQuickLink = filteredQuickLinks[selectedIndex];
+  const selectedQuickLinkDynamicFields = selectedQuickLink
+    ? quickLinkDynamicFieldsById[selectedQuickLink.id] || []
+    : [];
+  const selectedInlineDynamicFields = selectedQuickLinkDynamicFields.slice(0, MAX_INLINE_QUICK_LINK_ARGUMENTS);
+  const hasInlineDynamicFields = selectedInlineDynamicFields.length > 0;
+  const selectedHasOverflowDynamicFields = selectedQuickLinkDynamicFields.length > selectedInlineDynamicFields.length;
+  const selectedInlineDynamicValues = selectedQuickLink
+    ? inlineDynamicValuesByQuickLinkId[selectedQuickLink.id] || {}
+    : {};
+  const selectedInlineLeadingIcon = useMemo(() => {
+    if (!hasInlineDynamicFields || !selectedQuickLink) return null;
+    return (
+      <QuickLinkIconPreview
+        icon={selectedQuickLink.icon}
+        appIconDataUrl={selectedQuickLink.appIconDataUrl}
+      />
+    );
+  }, [hasInlineDynamicFields, selectedQuickLink]);
+  const inlineArgumentStartPx = useInlineArgumentAnchor({
+    enabled: hasInlineDynamicFields,
+    query: searchQuery,
+    searchInputRef: inputRef,
+    laneRef: inlineArgumentLaneRef,
+    inlineRef: inlineArgumentClusterRef,
+    minStartRatio: 0.3,
+  });
+
+  const getDynamicFieldsForQuickLink = useCallback(
+    async (quickLinkId: string): Promise<QuickLinkDynamicField[]> => {
+      const normalizedId = String(quickLinkId || '').trim();
+      if (!normalizedId) return [];
+      const cached = quickLinkDynamicFieldsById[normalizedId];
+      if (cached) return cached;
+      try {
+        const fetched = await window.electron.quickLinkGetDynamicFields(normalizedId);
+        const normalizedFields = normalizeQuickLinkDynamicFields(Array.isArray(fetched) ? fetched : []);
+        setQuickLinkDynamicFieldsById((prev) => ({
+          ...prev,
+          [normalizedId]: normalizedFields,
+        }));
+        return normalizedFields;
+      } catch (error) {
+        console.error('Failed to load quick link dynamic fields:', error);
+        return [];
+      }
+    },
+    [quickLinkDynamicFieldsById]
+  );
+
+  const getResolvedDynamicValues = useCallback(
+    (quickLink: QuickLink, fields: QuickLinkDynamicField[]) => {
+      const values = inlineDynamicValuesByQuickLinkId[quickLink.id] || {};
+      return fields.reduce((acc, field) => {
+        const key = String(field.key || '').trim();
+        if (!key) return acc;
+        acc[key] = String(values[key] ?? field.defaultValue ?? '');
+        return acc;
+      }, {} as Record<string, string>);
+    },
+    [inlineDynamicValuesByQuickLinkId]
+  );
+
+  useEffect(() => {
+    if (!selectedQuickLink) return;
+    void getDynamicFieldsForQuickLink(selectedQuickLink.id);
+  }, [getDynamicFieldsForQuickLink, selectedQuickLink]);
+
+  useEffect(() => {
+    if (!selectedQuickLink || selectedQuickLinkDynamicFields.length === 0) return;
+    setInlineDynamicValuesByQuickLinkId((prev) => {
+      const existing = prev[selectedQuickLink.id] || {};
+      let changed = !prev[selectedQuickLink.id];
+      const nextValues = { ...existing };
+      for (const field of selectedQuickLinkDynamicFields) {
+        const key = String(field.key || '').trim();
+        if (!key || nextValues[key] !== undefined) continue;
+        nextValues[key] = String(field.defaultValue || '');
+        changed = true;
+      }
+      if (!changed) return prev;
+      return {
+        ...prev,
+        [selectedQuickLink.id]: nextValues,
+      };
+    });
+  }, [selectedQuickLink, selectedQuickLinkDynamicFields]);
+
+  useEffect(() => {
+    inlineDynamicInputRefs.current = inlineDynamicInputRefs.current.slice(0, selectedInlineDynamicFields.length);
+  }, [selectedInlineDynamicFields.length]);
+
+  useEffect(() => {
+    if (!dynamicPrompt) return;
+    const timer = window.setTimeout(() => {
+      firstDynamicInputRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [dynamicPrompt?.quickLink.id]);
+
+  const handleConfirmDynamicPrompt = useCallback(async () => {
+    if (!dynamicPrompt) return;
+    try {
+      const opened = await window.electron.quickLinkOpen(dynamicPrompt.quickLink.id, dynamicPrompt.values);
+      if (opened) {
+        setDynamicPrompt(null);
+        await window.electron.hideWindow();
+      }
+    } catch (error) {
+      console.error('Failed to open quick link with dynamic values:', error);
+    }
+  }, [dynamicPrompt]);
 
   const handleOpen = useCallback(async (quickLink?: QuickLink) => {
     const target = quickLink || selectedQuickLink;
     if (!target) return;
     try {
-      await window.electron.executeCommand(getQuickLinkCommandId(target.id));
+      const fields = await getDynamicFieldsForQuickLink(target.id);
+      if (fields.length > 0) {
+        const resolvedValues = getResolvedDynamicValues(target, fields);
+        if (selectedQuickLink && selectedQuickLink.id === target.id && selectedInlineDynamicFields.length > 0) {
+          selectedInlineDynamicFields.forEach((field, index) => {
+            const liveValue = inlineDynamicInputRefs.current[index]?.value;
+            if (liveValue !== undefined) {
+              resolvedValues[field.key] = liveValue;
+            }
+          });
+        }
+        if (fields.length <= MAX_INLINE_QUICK_LINK_ARGUMENTS) {
+          const opened = await window.electron.quickLinkOpen(target.id, resolvedValues);
+          if (opened) {
+            await window.electron.hideWindow();
+          }
+          return;
+        }
+        setDynamicPrompt({
+          quickLink: target,
+          fields,
+          values: resolvedValues,
+        });
+        return;
+      }
+
+      const opened = await window.electron.quickLinkOpen(target.id);
+      if (opened) {
+        await window.electron.hideWindow();
+      }
     } catch (error) {
       console.error('Failed to open quick link:', error);
     }
-  }, [selectedQuickLink]);
+  }, [getDynamicFieldsForQuickLink, getResolvedDynamicValues, selectedInlineDynamicFields, selectedQuickLink]);
 
   const handleEdit = useCallback(() => {
     if (!selectedQuickLink) return;
@@ -1165,6 +1584,25 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
       return;
     }
 
+    if (dynamicPrompt) {
+      const plainEnter =
+        (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter') &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setDynamicPrompt(null);
+        return;
+      }
+      if (plainEnter || (event.key === 'Enter' && event.metaKey)) {
+        event.preventDefault();
+        void handleConfirmDynamicPrompt();
+        return;
+      }
+    }
+
     if (showActions) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -1239,7 +1677,7 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
         onClose();
         break;
     }
-  }, [actions, filteredQuickLinks.length, handleDelete, handleDuplicate, handleEdit, handleOpen, onClose, selectedActionIndex, showActions]);
+  }, [actions, dynamicPrompt, filteredQuickLinks.length, handleConfirmDynamicPrompt, handleDelete, handleDuplicate, handleEdit, handleOpen, onClose, selectedActionIndex, showActions]);
 
   if (view === 'create' || view === 'edit') {
     return (
@@ -1257,7 +1695,7 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
 
   return (
     <div className="snippet-view w-full h-full flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
-      <div className="snippet-header flex items-center gap-3 px-5 py-3.5">
+      <div className="snippet-header flex h-16 items-center gap-2 px-4">
         <button
           onClick={onClose}
           className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
@@ -1265,34 +1703,120 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Search quick links..."
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          className="flex-1 bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
-          autoFocus
-        />
-        {searchQuery ? (
+        <div ref={inlineArgumentLaneRef} className="relative min-w-0 flex-1">
+          <div className="flex h-full items-center">
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Search quick links..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Tab' && hasInlineDynamicFields) {
+                  event.preventDefault();
+                  const targetIndex = event.shiftKey ? selectedInlineDynamicFields.length - 1 : 0;
+                  inlineDynamicInputRefs.current[targetIndex]?.focus();
+                }
+              }}
+              className="min-w-0 w-full bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
+              autoFocus
+            />
+          </div>
+          {hasInlineDynamicFields ? (
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-x-hidden overflow-y-visible">
+              <div
+                ref={inlineArgumentClusterRef}
+                className="pointer-events-auto inline-flex min-w-0 items-center gap-1"
+                style={{ marginLeft: inlineArgumentStartPx != null ? `${inlineArgumentStartPx}px` : '30%' }}
+              >
+                {selectedInlineLeadingIcon ? (
+                  <InlineArgumentLeadingIcon>{selectedInlineLeadingIcon}</InlineArgumentLeadingIcon>
+                ) : null}
+                {selectedInlineDynamicFields.map((field, index) => (
+                  <InlineArgumentField
+                    key={`quicklink-inline-arg-${selectedQuickLink?.id || 'none'}-${field.key}`}
+                    inputRef={(el) => {
+                      inlineDynamicInputRefs.current[index] = el;
+                    }}
+                    value={selectedInlineDynamicValues[field.key] || ''}
+                    onChange={(nextValue) => {
+                      if (!selectedQuickLink) return;
+                      setInlineDynamicValuesByQuickLinkId((prev) => ({
+                        ...prev,
+                        [selectedQuickLink.id]: {
+                          ...(prev[selectedQuickLink.id] || {}),
+                          [field.key]: nextValue,
+                        },
+                      }));
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Tab') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const total = selectedInlineDynamicFields.length;
+                        const nextIndex = event.shiftKey ? index - 1 : index + 1;
+                        if (nextIndex >= 0 && nextIndex < total) {
+                          inlineDynamicInputRefs.current[nextIndex]?.focus();
+                        } else {
+                          inputRef.current?.focus();
+                        }
+                        return;
+                      }
+                      if (
+                        (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter') &&
+                        !event.metaKey &&
+                        !event.ctrlKey &&
+                        !event.altKey &&
+                        !event.shiftKey
+                      ) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void handleOpen();
+                        return;
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        inputRef.current?.focus();
+                        return;
+                      }
+                      if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+                        event.stopPropagation();
+                      }
+                    }}
+                    placeholder={field.defaultValue || field.name}
+                  />
+                ))}
+                {selectedHasOverflowDynamicFields ? (
+                  <InlineArgumentOverflowBadge
+                    count={selectedQuickLinkDynamicFields.length - selectedInlineDynamicFields.length}
+                  />
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          {searchQuery ? (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+              aria-label="Clear"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          ) : null}
           <button
-            onClick={() => setSearchQuery('')}
-            className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
-            aria-label="Clear"
+            onClick={() => {
+              setEditingQuickLink(undefined);
+              setView('create');
+            }}
+            className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
+            title="Create Quick Link"
           >
-            <X className="w-4 h-4" />
+            <Plus className="w-4 h-4" />
           </button>
-        ) : null}
-        <button
-          onClick={() => {
-            setEditingQuickLink(undefined);
-            setView('create');
-          }}
-          className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
-          title="Create Quick Link"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        </div>
       </div>
 
       <div className="flex-1 flex min-h-0">
@@ -1417,6 +1941,76 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
           shortcut: ['⌘', 'K'],
         }}
       />
+
+      {dynamicPrompt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(var(--backdrop-rgb), 0.25)' }}>
+          <div
+            className="w-[520px] max-w-[92vw] rounded-xl overflow-hidden"
+            style={
+              isGlassyTheme
+                ? {
+                    background: 'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+                    backdropFilter: 'blur(96px) saturate(190%)',
+                    WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+                    border: '1px solid rgba(var(--on-surface-rgb), 0.08)',
+                  }
+                : {
+                    background: 'var(--bg-overlay-strong)',
+                    backdropFilter: 'blur(28px)',
+                    WebkitBackdropFilter: 'blur(28px)',
+                    border: '1px solid var(--snippet-divider)',
+                  }
+            }
+          >
+            <div className="px-4 py-3 border-b border-[var(--snippet-divider)] text-white/85 text-sm font-medium">
+              Fill Dynamic Values
+            </div>
+            <div className="p-4 space-y-3">
+              {dynamicPrompt.fields.map((field, index) => (
+                <div key={field.key}>
+                  <label className="block text-xs text-white/45 mb-1.5">{field.name}</label>
+                  <input
+                    ref={index === 0 ? firstDynamicInputRef : undefined}
+                    type="text"
+                    value={dynamicPrompt.values[field.key] || ''}
+                    onChange={(event) =>
+                      setDynamicPrompt((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              values: {
+                                ...prev.values,
+                                [field.key]: event.target.value,
+                              },
+                            }
+                          : prev
+                      )
+                    }
+                    placeholder={field.defaultValue || ''}
+                    className="w-full bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-[13px] text-white/85 placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-3 border-t border-[var(--snippet-divider)] flex items-center justify-end gap-2">
+              <button
+                onClick={() => setDynamicPrompt(null)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--snippet-divider)] bg-white/[0.03] text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-white/[0.08] transition-colors"
+              >
+                <span>Cancel</span>
+                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-muted)] font-medium">Esc</kbd>
+              </button>
+              <button
+                onClick={() => void handleConfirmDynamicPrompt()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--snippet-divider-strong)] bg-white/[0.14] text-xs text-[var(--text-primary)] hover:bg-white/[0.2] transition-colors"
+              >
+                <span>Open</span>
+                <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-muted)] font-medium">↩</kbd>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showActions ? (
         <div

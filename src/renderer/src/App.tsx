@@ -8,11 +8,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, ArrowRight } from 'lucide-react';
-import type { CommandInfo, ExtensionBundle, AppSettings, QuickLinkDynamicField } from '../types/electron';
 import type {
   CommandInfo,
   ExtensionBundle,
   AppSettings,
+  QuickLinkDynamicField,
   IndexedFileSearchResult,
 } from '../types/electron';
 import ExtensionView from './ExtensionView';
@@ -36,6 +36,7 @@ import { useMenuBarExtensions } from './hooks/useMenuBarExtensions';
 import { useBackgroundRefresh } from './hooks/useBackgroundRefresh';
 import { useSpeakManager } from './hooks/useSpeakManager';
 import { useWhisperManager } from './hooks/useWhisperManager';
+import { useInlineArgumentAnchor } from './hooks/useInlineArgumentAnchor';
 import { LAST_EXT_KEY, MAX_RECENT_COMMANDS } from './utils/constants';
 import { applyBaseColor } from './utils/base-color';
 import { resetAccessToken } from './raycast-api';
@@ -49,6 +50,7 @@ import {
 } from './utils/command-helpers';
 import {
   readJsonObject, writeJsonObject,
+  getCmdArgsKey,
   getScriptCmdArgsKey,
   hydrateExtensionBundlePreferences,
   shouldOpenCommandSetup,
@@ -62,6 +64,7 @@ import ScriptCommandOutputView from './views/ScriptCommandOutputView';
 import ExtensionPreferenceSetupView from './views/ExtensionPreferenceSetupView';
 import AiChatView from './views/AiChatView';
 import CursorPromptView from './views/CursorPromptView';
+import InlineArgumentField, { InlineArgumentLeadingIcon, InlineArgumentOverflowBadge } from './components/InlineArgumentField';
 
 const STALE_OVERLAY_RESET_MS = 60_000;
 const MAX_RECENT_SECTION_ITEMS = 5;
@@ -78,6 +81,7 @@ const FILE_RESULT_COMMAND_PREFIX = 'system-file-result:';
 const MAX_LAUNCHER_FILE_RESULTS = 30;
 const MAX_LAUNCHER_FILE_RESULT_ICONS = MAX_LAUNCHER_FILE_RESULTS;
 const MIN_LAUNCHER_FILE_QUERY_LENGTH = 2;
+const MAX_INLINE_EXTENSION_ARGUMENTS = 3;
 
 function asTildePath(filePath: string, homeDir: string): string {
   if (!homeDir) return filePath;
@@ -106,6 +110,29 @@ function getFileResultPathFromCommand(command: CommandInfo | null | undefined): 
   return null;
 }
 
+function getExtensionIdentityFromCommand(
+  command: CommandInfo | null | undefined
+): { extName: string; cmdName: string } | null {
+  if (!command || command.category !== 'extension' || !command.path) return null;
+  const [extNameRaw, cmdNameRaw] = String(command.path).split('/');
+  const extName = String(extNameRaw || '').trim();
+  const cmdName = String(cmdNameRaw || '').trim();
+  if (!extName || !cmdName) return null;
+  return { extName, cmdName };
+}
+
+function isEditableElement(element: Element | null): boolean {
+  const target = element as HTMLElement | null;
+  if (!target) return false;
+  const tagName = String(target.tagName || '').toUpperCase();
+  return (
+    target.isContentEditable ||
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT'
+  );
+}
+
 const App: React.FC = () => {
   const [commands, setCommands] = useState<CommandInfo[]>([]);
   const [commandAliases, setCommandAliases] = useState<Record<string, string>>({});
@@ -113,6 +140,15 @@ const App: React.FC = () => {
   const [recentCommands, setRecentCommands] = useState<string[]>([]);
   const [recentCommandLaunchCounts, setRecentCommandLaunchCounts] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [inlineExtensionArgumentValues, setInlineExtensionArgumentValues] = useState<
+    Record<string, Record<string, string>>
+  >({});
+  const [inlineQuickLinkDynamicFieldsById, setInlineQuickLinkDynamicFieldsById] = useState<
+    Record<string, QuickLinkDynamicField[]>
+  >({});
+  const [inlineQuickLinkDynamicValuesById, setInlineQuickLinkDynamicValuesById] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [launcherFileResults, setLauncherFileResults] = useState<IndexedFileSearchResult[]>([]);
   const [launcherFileIcons, setLauncherFileIcons] = useState<Record<string, string>>({});
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -176,6 +212,10 @@ const App: React.FC = () => {
   const [memoryActionLoading, setMemoryActionLoading] = useState(false);
   const memoryFeedbackTimerRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inlineArgumentLaneRef = useRef<HTMLDivElement>(null);
+  const inlineArgumentClusterRef = useRef<HTMLDivElement>(null);
+  const inlineArgumentInputRefs = useRef<Array<HTMLInputElement | HTMLSelectElement | null>>([]);
+  const inlineQuickLinkInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const fileSearchRequestSeqRef = useRef(0);
   const commandsRef = useRef<CommandInfo[]>([]);
   commandsRef.current = commands;
@@ -223,6 +263,7 @@ const App: React.FC = () => {
   const windowPresetCommandQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastWindowHiddenAtRef = useRef<number>(0);
   const calcRequestSeqRef = useRef(0);
+  const isLauncherModeActiveRef = useRef(false);
   const pinnedCommandsRef = useRef<string[]>([]);
   const extensionViewRef = useRef<ExtensionBundle | null>(null);
   extensionViewRef.current = extensionView;
@@ -875,6 +916,10 @@ const App: React.FC = () => {
     !showWhisperOnboarding;
 
   useEffect(() => {
+    isLauncherModeActiveRef.current = isLauncherModeActive;
+  }, [isLauncherModeActive]);
+
+  useEffect(() => {
     fileSearchRequestSeqRef.current += 1;
     const requestSeq = fileSearchRequestSeqRef.current;
     const trimmed = searchQuery.trim();
@@ -1121,9 +1166,184 @@ const App: React.FC = () => {
     selectedIndex >= calcOffset
       ? displayCommands[selectedIndex - calcOffset]
       : null;
+  const selectedExtensionArgumentDefinitions = useMemo(
+    () =>
+      selectedCommand?.category === 'extension'
+        ? (selectedCommand.commandArgumentDefinitions || []).filter((definition) => definition?.name)
+        : [],
+    [selectedCommand]
+  );
+  const selectedInlineExtensionArgumentDefinitions = useMemo(
+    () => selectedExtensionArgumentDefinitions.slice(0, MAX_INLINE_EXTENSION_ARGUMENTS),
+    [selectedExtensionArgumentDefinitions]
+  );
+  const selectedInlineExtensionArgumentValues = useMemo(
+    () => (selectedCommand ? inlineExtensionArgumentValues[selectedCommand.id] || {} : {}),
+    [inlineExtensionArgumentValues, selectedCommand]
+  );
+  const hasSelectedExtensionOverflowArguments =
+    selectedExtensionArgumentDefinitions.length > selectedInlineExtensionArgumentDefinitions.length;
+  const selectedQuickLinkId = useMemo(
+    () => (selectedCommand ? getQuickLinkIdFromCommandId(selectedCommand.id) : null),
+    [selectedCommand]
+  );
+  const selectedQuickLinkDynamicFields = useMemo(
+    () => (selectedQuickLinkId ? inlineQuickLinkDynamicFieldsById[selectedQuickLinkId] || [] : []),
+    [inlineQuickLinkDynamicFieldsById, selectedQuickLinkId]
+  );
+  const selectedInlineQuickLinkDynamicFields = useMemo(
+    () => selectedQuickLinkDynamicFields.slice(0, MAX_INLINE_EXTENSION_ARGUMENTS),
+    [selectedQuickLinkDynamicFields]
+  );
+  const selectedInlineQuickLinkDynamicValues = useMemo(
+    () => (selectedQuickLinkId ? inlineQuickLinkDynamicValuesById[selectedQuickLinkId] || {} : {}),
+    [inlineQuickLinkDynamicValuesById, selectedQuickLinkId]
+  );
+  const hasSelectedQuickLinkOverflowDynamicFields =
+    selectedQuickLinkDynamicFields.length > selectedInlineQuickLinkDynamicFields.length;
+  const isShowingInlineArgumentInputs =
+    selectedInlineExtensionArgumentDefinitions.length > 0 || selectedInlineQuickLinkDynamicFields.length > 0;
+  const shouldHideAskAi = Boolean(selectedQuickLinkId) || isShowingInlineArgumentInputs;
+  const selectedInlineArgumentLeadingIcon = useMemo(() => {
+    if (!isShowingInlineArgumentInputs || !selectedCommand) return null;
+    return renderCommandIcon(selectedCommand);
+  }, [isShowingInlineArgumentInputs, selectedCommand]);
+  const inlineArgumentStartPx = useInlineArgumentAnchor({
+    enabled: isShowingInlineArgumentInputs,
+    query: searchQuery,
+    searchInputRef: inputRef,
+    laneRef: inlineArgumentLaneRef,
+    inlineRef: inlineArgumentClusterRef,
+    minStartRatio: 0.3,
+  });
   const selectedFileResultPath = useMemo(
     () => getFileResultPathFromCommand(selectedCommand),
     [selectedCommand]
+  );
+  const getDynamicFieldsForQuickLink = useCallback(
+    async (quickLinkId: string): Promise<QuickLinkDynamicField[]> => {
+      const normalizedId = String(quickLinkId || '').trim();
+      if (!normalizedId) return [];
+      const cached = inlineQuickLinkDynamicFieldsById[normalizedId];
+      if (cached) return cached;
+      try {
+        const fetched = await window.electron.quickLinkGetDynamicFields(normalizedId);
+        const normalizedFields = (Array.isArray(fetched) ? fetched : []).filter((field) => field?.key);
+        setInlineQuickLinkDynamicFieldsById((prev) => ({
+          ...prev,
+          [normalizedId]: normalizedFields,
+        }));
+        return normalizedFields;
+      } catch (error) {
+        console.error('Failed to load quick link dynamic fields for launcher inline input:', error);
+        return [];
+      }
+    },
+    [inlineQuickLinkDynamicFieldsById]
+  );
+
+  useEffect(() => {
+    inlineArgumentInputRefs.current = inlineArgumentInputRefs.current.slice(
+      0,
+      selectedInlineExtensionArgumentDefinitions.length
+    );
+  }, [selectedInlineExtensionArgumentDefinitions.length]);
+
+  useEffect(() => {
+    inlineQuickLinkInputRefs.current = inlineQuickLinkInputRefs.current.slice(
+      0,
+      selectedInlineQuickLinkDynamicFields.length
+    );
+  }, [selectedInlineQuickLinkDynamicFields.length]);
+
+  useEffect(() => {
+    if (!isLauncherModeActive) return;
+    const extensionIdentity = getExtensionIdentityFromCommand(selectedCommand);
+    if (!selectedCommand || !extensionIdentity || selectedExtensionArgumentDefinitions.length === 0) return;
+
+    setInlineExtensionArgumentValues((prev) => {
+      if (prev[selectedCommand.id]) return prev;
+      const storedValues = readJsonObject(getCmdArgsKey(extensionIdentity.extName, extensionIdentity.cmdName));
+      const initialValues = selectedExtensionArgumentDefinitions.reduce((acc, definition) => {
+        acc[definition.name] = String(storedValues[definition.name] ?? '');
+        return acc;
+      }, {} as Record<string, string>);
+      return {
+        ...prev,
+        [selectedCommand.id]: initialValues,
+      };
+    });
+  }, [isLauncherModeActive, selectedCommand, selectedExtensionArgumentDefinitions]);
+
+  useEffect(() => {
+    if (!isLauncherModeActive || !selectedQuickLinkId) return;
+    void getDynamicFieldsForQuickLink(selectedQuickLinkId);
+  }, [getDynamicFieldsForQuickLink, isLauncherModeActive, selectedQuickLinkId]);
+
+  useEffect(() => {
+    if (!selectedQuickLinkId || selectedQuickLinkDynamicFields.length === 0) return;
+    setInlineQuickLinkDynamicValuesById((prev) => {
+      const existing = prev[selectedQuickLinkId] || {};
+      let changed = !prev[selectedQuickLinkId];
+      const nextValues = { ...existing };
+      for (const field of selectedQuickLinkDynamicFields) {
+        const key = String(field.key || '').trim();
+        if (!key || nextValues[key] !== undefined) continue;
+        nextValues[key] = String(field.defaultValue || '');
+        changed = true;
+      }
+      if (!changed) return prev;
+      return {
+        ...prev,
+        [selectedQuickLinkId]: nextValues,
+      };
+    });
+  }, [selectedQuickLinkDynamicFields, selectedQuickLinkId]);
+
+  useEffect(() => {
+    if (!isLauncherModeActive) return;
+    const timer = window.setTimeout(() => {
+      if (document.activeElement !== inputRef.current) {
+        inputRef.current?.focus();
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isLauncherModeActive, selectedCommand?.id, selectedInlineExtensionArgumentDefinitions.length, selectedInlineQuickLinkDynamicFields.length]);
+
+  const updateInlineExtensionArgumentValue = useCallback(
+    (command: CommandInfo, argumentName: string, value: string) => {
+      const extensionIdentity = getExtensionIdentityFromCommand(command);
+      setInlineExtensionArgumentValues((prev) => {
+        const nextCommandValues = {
+          ...(prev[command.id] || {}),
+          [argumentName]: value,
+        };
+        if (extensionIdentity) {
+          writeJsonObject(getCmdArgsKey(extensionIdentity.extName, extensionIdentity.cmdName), nextCommandValues);
+        }
+        return {
+          ...prev,
+          [command.id]: nextCommandValues,
+        };
+      });
+    },
+    []
+  );
+
+  const updateInlineQuickLinkDynamicValue = useCallback(
+    (quickLinkId: string, key: string, value: string) => {
+      const normalizedId = String(quickLinkId || '').trim();
+      const normalizedKey = String(key || '').trim();
+      if (!normalizedId || !normalizedKey) return;
+      setInlineQuickLinkDynamicValuesById((prev) => ({
+        ...prev,
+        [normalizedId]: {
+          ...(prev[normalizedId] || {}),
+          [normalizedKey]: value,
+        },
+      }));
+    },
+    []
   );
 
   const openFileResultByPath = useCallback(async (targetPath: string) => {
@@ -1193,11 +1413,24 @@ const App: React.FC = () => {
     [displayCommands.length, calcOffset]
   );
 
+  const handleLauncherSearchBlur = useCallback(() => {
+    if (!isLauncherModeActiveRef.current) return;
+    requestAnimationFrame(() => {
+      if (!isLauncherModeActiveRef.current) return;
+      const activeElement = document.activeElement;
+      if (activeElement === inputRef.current) return;
+      if (isEditableElement(activeElement)) return;
+      inputRef.current?.focus();
+    });
+  }, []);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (quickLinkDynamicPrompt) {
         return;
       }
+      const target = e.target as HTMLElement | null;
+      const isSearchInputTarget = target === inputRef.current;
 
       if (e.metaKey && (e.key === 'k' || e.key === 'K') && !e.repeat) {
         e.preventDefault();
@@ -1268,7 +1501,24 @@ const App: React.FC = () => {
 
       switch (e.key) {
         case 'Tab':
-          if (searchQuery.trim() && aiAvailable) {
+          if (isSearchInputTarget && isShowingInlineArgumentInputs) {
+            e.preventDefault();
+            if (selectedInlineExtensionArgumentDefinitions.length > 0) {
+              const targetIndex = e.shiftKey
+                ? selectedInlineExtensionArgumentDefinitions.length - 1
+                : 0;
+              inlineArgumentInputRefs.current[targetIndex]?.focus();
+              return;
+            }
+            if (selectedInlineQuickLinkDynamicFields.length > 0) {
+              const targetIndex = e.shiftKey
+                ? selectedInlineQuickLinkDynamicFields.length - 1
+                : 0;
+              inlineQuickLinkInputRefs.current[targetIndex]?.focus();
+              return;
+            }
+          }
+          if (isSearchInputTarget && searchQuery.trim() && aiAvailable && !shouldHideAskAi) {
             e.preventDefault();
             startAiChat(searchQuery);
           }
@@ -1309,8 +1559,11 @@ const App: React.FC = () => {
             setShowActions(false);
             return;
           }
-          setSearchQuery('');
-          setSelectedIndex(0);
+          if (searchQuery.length > 0) {
+            setSearchQuery('');
+            setSelectedIndex(0);
+            return;
+          }
           window.electron.hideWindow();
           break;
       }
@@ -1321,6 +1574,10 @@ const App: React.FC = () => {
       selectedIndex,
       searchQuery,
       aiAvailable,
+      isShowingInlineArgumentInputs,
+      selectedInlineExtensionArgumentDefinitions.length,
+      selectedInlineQuickLinkDynamicFields.length,
+      shouldHideAskAi,
       startAiChat,
       calcResult,
       calcOffset,
@@ -1585,14 +1842,34 @@ const App: React.FC = () => {
       const quickLinkId = getQuickLinkIdFromCommandId(command.id);
       if (!quickLinkId) return false;
 
+      const fields = await getDynamicFieldsForQuickLink(quickLinkId);
+      const inlineValues = { ...(inlineQuickLinkDynamicValuesById[quickLinkId] || {}) };
+      if (selectedQuickLinkId === quickLinkId && selectedInlineQuickLinkDynamicFields.length > 0) {
+        selectedInlineQuickLinkDynamicFields.forEach((field, index) => {
+          const liveValue = inlineQuickLinkInputRefs.current[index]?.value;
+          if (liveValue !== undefined) {
+            inlineValues[field.key] = liveValue;
+          }
+        });
+      }
+      const resolvedValuesFromInline = fields.reduce((acc, field) => {
+        const key = String(field.key || '').trim();
+        if (!key) return acc;
+        acc[key] = String(options?.dynamicValues?.[key] ?? inlineValues[key] ?? field.defaultValue ?? '');
+        return acc;
+      }, {} as Record<string, string>);
+
       if (!options?.skipPrompt) {
-        const fields = await window.electron.quickLinkGetDynamicFields(quickLinkId);
         if (fields.length > 0) {
-          const initialValues: Record<string, string> = {};
-          for (const field of fields) {
-            const key = String(field.key || '').trim();
-            if (!key) continue;
-            initialValues[key] = String(options?.dynamicValues?.[key] ?? field.defaultValue ?? '');
+          if (fields.length <= MAX_INLINE_EXTENSION_ARGUMENTS) {
+            const openedInline = await window.electron.quickLinkOpen(quickLinkId, resolvedValuesFromInline);
+            if (!openedInline) return false;
+            setQuickLinkDynamicPrompt(null);
+            await updateRecentCommands(command.id);
+            setSearchQuery('');
+            setSelectedIndex(0);
+            await window.electron.hideWindow();
+            return true;
           }
           setShowActions(false);
           setContextMenu(null);
@@ -1601,13 +1878,19 @@ const App: React.FC = () => {
             command,
             quickLinkId,
             fields,
-            values: initialValues,
+            values: resolvedValuesFromInline,
           });
           return true;
         }
       }
 
-      const opened = await window.electron.quickLinkOpen(quickLinkId, options?.dynamicValues);
+      const dynamicValues =
+        options?.dynamicValues !== undefined
+          ? options.dynamicValues
+          : fields.length > 0
+            ? resolvedValuesFromInline
+            : undefined;
+      const opened = await window.electron.quickLinkOpen(quickLinkId, dynamicValues);
       if (!opened) return false;
 
       setQuickLinkDynamicPrompt(null);
@@ -1617,7 +1900,13 @@ const App: React.FC = () => {
       await window.electron.hideWindow();
       return true;
     },
-    [updateRecentCommands]
+    [
+      getDynamicFieldsForQuickLink,
+      inlineQuickLinkDynamicValuesById,
+      selectedQuickLinkId,
+      selectedInlineQuickLinkDynamicFields,
+      updateRecentCommands,
+    ]
   );
 
   const cancelQuickLinkDynamicPrompt = useCallback(() => {
@@ -1693,27 +1982,45 @@ const App: React.FC = () => {
 
       if (command.category === 'extension' && command.path) {
         // Extension command — build and show extension view
-        const [extName, cmdName] = command.path.split('/');
+        const extensionIdentity = getExtensionIdentityFromCommand(command);
+        if (!extensionIdentity) return;
+        const { extName, cmdName } = extensionIdentity;
         const result = await window.electron.runExtension(extName, cmdName);
         if (result && result.code) {
           const hydrated = hydrateExtensionBundlePreferences(result);
-          if (shouldOpenCommandSetup(hydrated)) {
+          const inlineArguments = inlineExtensionArgumentValues[command.id] || {};
+          const hydratedWithInlineArguments: ExtensionBundle = {
+            ...hydrated,
+            launchArguments: {
+              ...((hydrated as any).launchArguments || {}),
+              ...inlineArguments,
+            } as any,
+          };
+
+          if (Object.keys(inlineArguments).length > 0) {
+            writeJsonObject(
+              getCmdArgsKey(extName, cmdName),
+              { ...((hydratedWithInlineArguments as any).launchArguments || {}) }
+            );
+          }
+
+          if (shouldOpenCommandSetup(hydratedWithInlineArguments)) {
             setShowFileSearch(false);
             setExtensionPreferenceSetup({
-              bundle: hydrated,
-              values: { ...(hydrated.preferences || {}) },
-              argumentValues: { ...((hydrated as any).launchArguments || {}) },
+              bundle: hydratedWithInlineArguments,
+              values: { ...(hydratedWithInlineArguments.preferences || {}) },
+              argumentValues: { ...((hydratedWithInlineArguments as any).launchArguments || {}) },
             });
             return;
           }
 
           // Menu-bar commands run in the hidden tray runners, not in the overlay.
           // Toggle behavior matches Raycast: running the same menu-bar command again hides it.
-          if (hydrated.mode === 'menu-bar') {
-            if (isMenuBarExtensionMounted(hydrated)) {
-              hideMenuBarExtension(hydrated);
+          if (hydratedWithInlineArguments.mode === 'menu-bar') {
+            if (isMenuBarExtensionMounted(hydratedWithInlineArguments)) {
+              hideMenuBarExtension(hydratedWithInlineArguments);
             } else {
-              upsertMenuBarExtension(hydrated);
+              upsertMenuBarExtension(hydratedWithInlineArguments);
             }
             window.electron.hideWindow();
             setSearchQuery('');
@@ -1722,8 +2029,8 @@ const App: React.FC = () => {
             return;
           }
           setShowFileSearch(false);
-          setExtensionView(hydrated);
-          if (hydrated.mode === 'view') {
+          setExtensionView(hydratedWithInlineArguments);
+          if (hydratedWithInlineArguments.mode === 'view') {
             localStorage.setItem(LAST_EXT_KEY, JSON.stringify({ extName, cmdName }));
           } else {
             localStorage.removeItem(LAST_EXT_KEY);
@@ -2361,35 +2668,142 @@ const App: React.FC = () => {
     <div className="w-full h-full">
       <div className="glass-effect launcher-main-surface overflow-hidden h-full flex flex-col relative">
         {/* Search header - transparent background */}
-        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--ui-divider)]">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Search apps and settings..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="launcher-search-input flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] placeholder:font-medium text-[0.9375rem] font-medium tracking-[0.005em]"
-            autoFocus
-          />
-          {searchQuery && aiAvailable && (
-            <button
-              onClick={() => startAiChat(searchQuery)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--soft-pill-bg)] hover:bg-[var(--soft-pill-hover-bg)] transition-colors flex-shrink-0 group"
-            >
-              <Sparkles className="w-3 h-3 text-white/30 group-hover:text-purple-400 transition-colors" />
-              <span className="text-[0.6875rem] text-white/30 group-hover:text-white/50 transition-colors">Ask AI</span>
-              <kbd className="text-[0.625rem] text-white/20 bg-[var(--soft-pill-bg)] px-1 py-0.5 rounded font-mono leading-none">Tab</kbd>
-            </button>
-          )}
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+        <div className="flex h-[60px] items-center gap-2 px-4 border-b border-[var(--ui-divider)]">
+          <div ref={inlineArgumentLaneRef} className="relative min-w-0 flex-1">
+            <div className="flex h-full items-center">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Search apps and settings..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onBlur={handleLauncherSearchBlur}
+                onKeyDown={handleKeyDown}
+                className="launcher-search-input min-w-0 w-full bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] placeholder:font-medium text-[0.9375rem] font-medium tracking-[0.005em]"
+                autoFocus
+              />
+            </div>
+            {selectedInlineExtensionArgumentDefinitions.length > 0 ? (
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-x-hidden overflow-y-visible">
+                <div
+                  ref={inlineArgumentClusterRef}
+                  className="pointer-events-auto inline-flex min-w-0 items-center gap-1"
+                  style={{ marginLeft: inlineArgumentStartPx != null ? `${inlineArgumentStartPx}px` : '30%' }}
+                >
+                  {selectedInlineArgumentLeadingIcon ? (
+                    <InlineArgumentLeadingIcon>{selectedInlineArgumentLeadingIcon}</InlineArgumentLeadingIcon>
+                  ) : null}
+                  {selectedInlineExtensionArgumentDefinitions.map((definition, index) => {
+                    const value = selectedInlineExtensionArgumentValues[definition.name] || '';
+                    const placeholder = definition.placeholder || definition.title || definition.name;
+                    return (
+                      <InlineArgumentField
+                        key={`inline-arg-${definition.name}`}
+                        inputRef={(el) => {
+                          inlineArgumentInputRefs.current[index] = el;
+                        }}
+                        value={value}
+                        placeholder={placeholder}
+                        type={definition.type === 'dropdown' ? 'select' : definition.type === 'password' ? 'password' : 'text'}
+                        options={(definition.data || []).map((option) => ({
+                          value: String(option?.value || ''),
+                          label: String(option?.title || option?.value || ''),
+                        }))}
+                        onChange={(nextValue) => {
+                          if (!selectedCommand) return;
+                          updateInlineExtensionArgumentValue(selectedCommand, definition.name, nextValue);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Tab') {
+                            event.preventDefault();
+                            const total = selectedInlineExtensionArgumentDefinitions.length;
+                            const nextIndex = event.shiftKey ? index - 1 : index + 1;
+                            if (nextIndex >= 0 && nextIndex < total) {
+                              inlineArgumentInputRefs.current[nextIndex]?.focus();
+                            } else {
+                              inputRef.current?.focus();
+                            }
+                            return;
+                          }
+                          handleKeyDown(event);
+                        }}
+                      />
+                    );
+                  })}
+                  {hasSelectedExtensionOverflowArguments ? (
+                    <InlineArgumentOverflowBadge
+                      count={selectedExtensionArgumentDefinitions.length - selectedInlineExtensionArgumentDefinitions.length}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            ) : selectedInlineQuickLinkDynamicFields.length > 0 ? (
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-x-hidden overflow-y-visible">
+                <div
+                  ref={inlineArgumentClusterRef}
+                  className="pointer-events-auto inline-flex min-w-0 items-center gap-1"
+                  style={{ marginLeft: inlineArgumentStartPx != null ? `${inlineArgumentStartPx}px` : '30%' }}
+                >
+                  {selectedInlineArgumentLeadingIcon ? (
+                    <InlineArgumentLeadingIcon>{selectedInlineArgumentLeadingIcon}</InlineArgumentLeadingIcon>
+                  ) : null}
+                  {selectedInlineQuickLinkDynamicFields.map((field, index) => (
+                    <InlineArgumentField
+                      key={`inline-quicklink-${selectedQuickLinkId || 'none'}-${field.key}`}
+                      inputRef={(el) => {
+                        inlineQuickLinkInputRefs.current[index] = el;
+                      }}
+                      value={selectedInlineQuickLinkDynamicValues[field.key] || ''}
+                      placeholder={field.defaultValue || field.name}
+                      onChange={(nextValue) => {
+                        if (!selectedQuickLinkId) return;
+                        updateInlineQuickLinkDynamicValue(selectedQuickLinkId, field.key, nextValue);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Tab') {
+                          event.preventDefault();
+                          const total = selectedInlineQuickLinkDynamicFields.length;
+                          const nextIndex = event.shiftKey ? index - 1 : index + 1;
+                          if (nextIndex >= 0 && nextIndex < total) {
+                            inlineQuickLinkInputRefs.current[nextIndex]?.focus();
+                          } else {
+                            inputRef.current?.focus();
+                          }
+                          return;
+                        }
+                        handleKeyDown(event);
+                      }}
+                    />
+                  ))}
+                  {hasSelectedQuickLinkOverflowDynamicFields ? (
+                    <InlineArgumentOverflowBadge
+                      count={selectedQuickLinkDynamicFields.length - selectedInlineQuickLinkDynamicFields.length}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {searchQuery && aiAvailable && !shouldHideAskAi && (
+              <button
+                onClick={() => startAiChat(searchQuery)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--soft-pill-bg)] hover:bg-[var(--soft-pill-hover-bg)] transition-colors flex-shrink-0 group"
+              >
+                <Sparkles className="w-3 h-3 text-white/30 group-hover:text-purple-400 transition-colors" />
+                <span className="text-[0.6875rem] text-white/30 group-hover:text-white/50 transition-colors">Ask AI</span>
+                <kbd className="text-[0.625rem] text-white/20 bg-[var(--soft-pill-bg)] px-1 py-0.5 rounded font-mono leading-none">Tab</kbd>
+              </button>
+            )}
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Command list */}

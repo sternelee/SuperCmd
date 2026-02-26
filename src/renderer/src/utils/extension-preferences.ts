@@ -127,17 +127,9 @@ export function shouldOpenCommandSetup(bundle: ExtensionBundle): boolean {
   const missingPrefs = getMissingRequiredPreferences(bundle);
   if (missingPrefs.length > 0) return true;
 
-  const args = bundle.commandArgumentDefinitions || [];
-  const hasArgs = args.length > 0;
   const missingArgs = getMissingRequiredArguments(bundle);
-
-  if (bundle.mode === 'no-view') {
-    // no-view commands have no UI to collect launch arguments at runtime.
-    if (hasArgs) return true;
-    return missingArgs.length > 0;
-  }
-
-  // View/menu-bar commands can collect optional inputs in their own UI.
+  // Any required argument that is still missing blocks launch.
+  // Optional arguments are handled inline at launch time.
   return missingArgs.length > 0;
 }
 
