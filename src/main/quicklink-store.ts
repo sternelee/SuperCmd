@@ -16,7 +16,7 @@ import {
   resolveSnippetPlaceholders,
 } from './snippet-store';
 
-export type QuickLinkIcon = 'default' | 'link' | 'globe' | 'search' | 'bolt';
+export type QuickLinkIcon = string;
 
 export interface QuickLink {
   id: string;
@@ -42,12 +42,17 @@ export const QUICK_LINK_COMMAND_PREFIX = 'quicklink-';
 let quickLinksCache: QuickLink[] | null = null;
 
 function normalizeQuickLinkIcon(value: unknown): QuickLinkIcon {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'link') return 'link';
-  if (normalized === 'globe') return 'globe';
-  if (normalized === 'search') return 'search';
-  if (normalized === 'bolt') return 'bolt';
-  return 'default';
+  const normalized = String(value || '').trim();
+  if (!normalized) return 'default';
+
+  const legacy = normalized.toLowerCase();
+  if (legacy === 'default') return 'default';
+  if (legacy === 'link') return 'Link';
+  if (legacy === 'globe') return 'Globe';
+  if (legacy === 'search') return 'Search';
+  if (legacy === 'bolt') return 'Bolt';
+
+  return normalized.slice(0, 80);
 }
 
 function normalizeDataUrl(value: unknown): string | undefined {

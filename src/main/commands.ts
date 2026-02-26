@@ -31,6 +31,7 @@ export interface CommandInfo {
   keywords?: string[];
   iconDataUrl?: string;
   iconEmoji?: string;
+  iconName?: string;
   category: 'app' | 'settings' | 'system' | 'extension' | 'script';
   /** .app path for apps, bundle identifier for settings */
   path?: string;
@@ -465,32 +466,23 @@ function splitSearchKeywords(value: string): string[] {
     .filter((term) => term.length >= 2);
 }
 
-function buildQuickLinkGlyphDataUrl(icon: QuickLinkIcon): string | undefined {
-  if (icon === 'default') return undefined;
+function resolveQuickLinkIconName(icon: QuickLinkIcon): string | undefined {
+  const raw = String(icon || '').trim();
+  if (!raw) return undefined;
 
-  const glyphByIcon: Record<Exclude<QuickLinkIcon, 'default'>, string> = {
-    link: '<path d="M7.8 12.2l4.4-4.4M6.6 9.2l-1.2 1.2a2 2 0 0 0 2.8 2.8l1.4-1.4M13.4 10.8l1.2-1.2a2 2 0 1 0-2.8-2.8l-1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />',
-    globe: '<circle cx="10" cy="10" r="5.6" stroke="currentColor" stroke-width="1.4"/><path d="M4.6 10h10.8M10 4.4a9.2 9.2 0 0 1 0 11.2M10 4.4a9.2 9.2 0 0 0 0 11.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
-    search: '<circle cx="8.6" cy="8.6" r="3.7" stroke="currentColor" stroke-width="1.5"/><path d="M11.5 11.5l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-    bolt: '<path d="M10.7 4.2L6.2 10h3l-1.1 5.8L13.8 9h-3.1l0-4.8z" fill="currentColor" />',
-  };
+  const normalized = raw.toLowerCase();
+  if (normalized === 'default') return undefined;
+  if (normalized === 'link') return 'Link';
+  if (normalized === 'globe') return 'Globe';
+  if (normalized === 'search') return 'Search';
+  if (normalized === 'bolt') return 'Bolt';
 
-  const svg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none">',
-    '<rect x="1.5" y="1.5" width="17" height="17" rx="4.5" fill="#0f172acc" stroke="#94a3b833" />',
-    '<g style="color:#e2e8f0">',
-    glyphByIcon[icon],
-    '</g>',
-    '</svg>',
-  ].join('');
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  return raw.slice(0, 80);
 }
 
-function resolveQuickLinkIconDataUrl(quickLink: QuickLink): string | undefined {
-  if (quickLink.icon === 'default') {
-    return quickLink.appIconDataUrl;
-  }
-  return buildQuickLinkGlyphDataUrl(quickLink.icon) || quickLink.appIconDataUrl;
+function resolveQuickLinkIconDataUrl(quickLink: QuickLink, iconName?: string): string | undefined {
+  if (iconName) return undefined;
+  return quickLink.appIconDataUrl;
 }
 
 function buildQuickLinkKeywords(quickLink: QuickLink): string[] {
@@ -1412,14 +1404,18 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
 
   let quickLinkCommands: CommandInfo[] = [];
   try {
-    quickLinkCommands = getAllQuickLinks().map((quickLink) => ({
-      id: getQuickLinkCommandId(quickLink.id),
-      title: quickLink.name,
-      subtitle: quickLink.applicationName || 'Quick Link',
-      keywords: buildQuickLinkKeywords(quickLink),
-      iconDataUrl: resolveQuickLinkIconDataUrl(quickLink),
-      category: 'system' as const,
-    }));
+    quickLinkCommands = getAllQuickLinks().map((quickLink) => {
+      const resolvedIconName = resolveQuickLinkIconName(quickLink.icon);
+      return {
+        id: getQuickLinkCommandId(quickLink.id),
+        title: quickLink.name,
+        subtitle: quickLink.applicationName || 'Quick Link',
+        keywords: buildQuickLinkKeywords(quickLink),
+        iconDataUrl: resolveQuickLinkIconDataUrl(quickLink, resolvedIconName),
+        iconName: resolvedIconName,
+        category: 'system' as const,
+      };
+    });
   } catch (e) {
     console.error('Failed to discover quick links:', e);
   }

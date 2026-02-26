@@ -9,6 +9,7 @@ export interface CommandInfo {
   keywords?: string[];
   iconDataUrl?: string;
   iconEmoji?: string;
+  iconName?: string;
   category: 'app' | 'settings' | 'system' | 'extension' | 'script';
   path?: string;
   mode?: string;
@@ -247,7 +248,7 @@ export interface SnippetDynamicField {
   defaultValue?: string;
 }
 
-export type QuickLinkIcon = 'default' | 'link' | 'globe' | 'search' | 'bolt';
+export type QuickLinkIcon = string;
 
 export interface QuickLink {
   id: string;

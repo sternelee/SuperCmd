@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
-  Bolt,
   Calendar,
   CalendarClock,
   Check,
@@ -15,13 +14,20 @@ import {
   Link2,
   Pencil,
   Plus,
-  Search,
   Trash2,
   Variable,
   X,
 } from 'lucide-react';
 import type { QuickLink, QuickLinkIcon, Snippet } from '../types/electron';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
+import {
+  getQuickLinkIconLabel,
+  getQuickLinkIconOption,
+  normalizeQuickLinkIconValue,
+  QUICK_LINK_DEFAULT_ICON,
+  QUICK_LINK_ICON_OPTIONS,
+  renderQuickLinkIconGlyph,
+} from './utils/quicklink-icons';
 
 interface QuickLinkManagerProps {
   onClose: () => void;
@@ -58,18 +64,7 @@ type PlaceholderGroup = {
 };
 
 const QUICK_LINK_COMMAND_PREFIX = 'quicklink-';
-
-const QUICK_LINK_ICON_OPTIONS: Array<{
-  value: QuickLinkIcon;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-}> = [
-  { value: 'default', label: 'Default App Icon', icon: Link2 },
-  { value: 'link', label: 'Link', icon: Link2 },
-  { value: 'globe', label: 'Globe', icon: Globe },
-  { value: 'search', label: 'Search', icon: Search },
-  { value: 'bolt', label: 'Bolt', icon: Bolt },
-];
+const MAX_VISIBLE_ICON_RESULTS = 5;
 
 const BASE_PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
   {
@@ -131,12 +126,11 @@ const QuickLinkIconPreview: React.FC<{
   icon: QuickLinkIcon;
   appIconDataUrl?: string;
 }> = ({ icon, appIconDataUrl }) => {
-  const selected = QUICK_LINK_ICON_OPTIONS.find((item) => item.value === icon) || QUICK_LINK_ICON_OPTIONS[0];
-  if (icon === 'default' && appIconDataUrl) {
+  const normalizedIcon = normalizeQuickLinkIconValue(icon);
+  if (normalizedIcon === QUICK_LINK_DEFAULT_ICON && appIconDataUrl) {
     return <img src={appIconDataUrl} alt="" className="w-4 h-4 object-contain" draggable={false} />;
   }
-  const Icon = selected.icon;
-  return <Icon className="w-4 h-4 text-white/70" />;
+  return <>{renderQuickLinkIconGlyph(normalizedIcon, 'w-4 h-4 text-white/70')}</>;
 };
 
 interface QuickLinkFormProps {
@@ -148,7 +142,7 @@ interface QuickLinkFormProps {
 const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCancel }) => {
   const [name, setName] = useState(quickLink?.name || '');
   const [urlTemplate, setUrlTemplate] = useState(quickLink?.urlTemplate || '');
-  const [icon, setIcon] = useState<QuickLinkIcon>(quickLink?.icon || 'default');
+  const [icon, setIcon] = useState<QuickLinkIcon>(normalizeQuickLinkIconValue(quickLink?.icon || QUICK_LINK_DEFAULT_ICON));
   const [applications, setApplications] = useState<ApplicationOption[]>([]);
   const [selectedAppPath, setSelectedAppPath] = useState(quickLink?.applicationPath || '');
   const [appIconDataUrl, setAppIconDataUrl] = useState<string | undefined>(quickLink?.appIconDataUrl);
@@ -158,6 +152,8 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   const [showPlaceholderMenu, setShowPlaceholderMenu] = useState(false);
   const [placeholderQuery, setPlaceholderQuery] = useState('');
   const [showApplicationMenu, setShowApplicationMenu] = useState(false);
+  const [showIconMenu, setShowIconMenu] = useState(false);
+  const [iconQuery, setIconQuery] = useState('');
   const [applicationIcons, setApplicationIcons] = useState<Record<string, string>>({});
   const appIconFetchAttemptedRef = useRef<Set<string>>(new Set());
   const [placeholderMenuPos, setPlaceholderMenuPos] = useState<{ top: number; left: number; width: number; maxHeight: number }>({
@@ -172,11 +168,18 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     width: 340,
     maxHeight: 280,
   });
+  const [iconMenuPos, setIconMenuPos] = useState<{ top: number; left: number; width: number; maxHeight: number }>({
+    top: 0,
+    left: 0,
+    width: 300,
+    maxHeight: 260,
+  });
 
   const nameRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
   const placeholderButtonRef = useRef<HTMLButtonElement>(null);
   const applicationButtonRef = useRef<HTMLButtonElement>(null);
+  const iconButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -291,7 +294,8 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
         if (iconDataUrl) {
           setApplicationIcons((prev) => (prev[selectedApp.path] ? prev : { ...prev, [selectedApp.path]: iconDataUrl }));
         }
-        setAppIconDataUrl(iconDataUrl || knownIconDataUrl || quickLink?.appIconDataUrl || undefined);
+        // Prefer cached/discovered app icons so we don't downgrade to generic file icons.
+        setAppIconDataUrl(knownIconDataUrl || iconDataUrl || quickLink?.appIconDataUrl || undefined);
       })
       .catch(() => {
         if (!alive) return;
@@ -352,6 +356,32 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     });
   }, []);
 
+  const refreshIconMenuPos = useCallback((anchorRect?: DOMRect) => {
+    const rect = anchorRect || iconButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const viewportPadding = 10;
+    const desiredWidth = Math.max(260, rect.width);
+    const estimatedMenuHeight = 300;
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+    // Prefer opening below; only open above when below space is really constrained.
+    const openAbove = spaceBelow < 140 && spaceAbove > 170;
+    const top = openAbove ? Math.max(viewportPadding, rect.top - estimatedMenuHeight - 8) : rect.bottom + 8;
+    const maxHeight = Math.max(130, Math.floor((openAbove ? spaceAbove : spaceBelow) - 12));
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, window.innerWidth - desiredWidth - viewportPadding)
+    );
+
+    setIconMenuPos({
+      top,
+      left,
+      width: desiredWidth,
+      maxHeight,
+    });
+  }, []);
+
   useEffect(() => {
     if (!showPlaceholderMenu) return;
     refreshPlaceholderMenuPos();
@@ -377,6 +407,19 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       window.removeEventListener('scroll', onScroll, true);
     };
   }, [refreshApplicationMenuPos, showApplicationMenu]);
+
+  useEffect(() => {
+    if (!showIconMenu) return;
+    refreshIconMenuPos();
+    const onResize = () => refreshIconMenuPos();
+    const onScroll = () => refreshIconMenuPos();
+    window.addEventListener('resize', onResize);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [refreshIconMenuPos, showIconMenu]);
 
   useEffect(() => {
     if (!showPlaceholderMenu) return;
@@ -405,6 +448,20 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     document.addEventListener('mousedown', onPointerDown, true);
     return () => document.removeEventListener('mousedown', onPointerDown, true);
   }, [showApplicationMenu]);
+
+  useEffect(() => {
+    if (!showIconMenu) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      const menu = document.getElementById('quicklink-icon-menu');
+      if (menu?.contains(target)) return;
+      if (iconButtonRef.current?.contains(target)) return;
+      setShowIconMenu(false);
+    };
+    document.addEventListener('mousedown', onPointerDown, true);
+    return () => document.removeEventListener('mousedown', onPointerDown, true);
+  }, [showIconMenu]);
 
   const placeholderGroups = useMemo(() => {
     const snippetItems: PlaceholderGroupItem[] = snippets.map((snippet) => ({
@@ -438,6 +495,37 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     [applications, selectedAppPath]
   );
   const selectedAppName = selectedApp?.name || 'Default Browser';
+  const selectedAppResolvedIconDataUrl =
+    (selectedAppPath
+      ? applicationIcons[selectedAppPath] || selectedApp?.iconDataUrl || appIconDataUrl
+      : undefined) || undefined;
+  const selectedIconOption = getQuickLinkIconOption(icon) || QUICK_LINK_ICON_OPTIONS[0];
+  const filteredIconOptions = useMemo(() => {
+    const query = iconQuery.trim().toLowerCase();
+    if (!query) return QUICK_LINK_ICON_OPTIONS;
+    return QUICK_LINK_ICON_OPTIONS.filter((option) => option.searchText.includes(query));
+  }, [iconQuery]);
+  const visibleIconOptions = useMemo(() => {
+    const query = iconQuery.trim().toLowerCase();
+    if (query) {
+      return filteredIconOptions.slice(0, MAX_VISIBLE_ICON_RESULTS);
+    }
+
+    // Keep the current selection visible while limiting initial render to 5 entries.
+    const seen = new Set<string>();
+    const list = [];
+    if (selectedIconOption) {
+      list.push(selectedIconOption);
+      seen.add(selectedIconOption.value);
+    }
+    for (const option of QUICK_LINK_ICON_OPTIONS) {
+      if (seen.has(option.value)) continue;
+      list.push(option);
+      seen.add(option.value);
+      if (list.length >= MAX_VISIBLE_ICON_RESULTS) break;
+    }
+    return list;
+  }, [filteredIconOptions, iconQuery, selectedIconOption]);
 
   const insertPlaceholder = (placeholder: string) => {
     const input = urlRef.current;
@@ -508,6 +596,10 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       }
       if (showApplicationMenu) {
         setShowApplicationMenu(false);
+        return;
+      }
+      if (showIconMenu) {
+        setShowIconMenu(false);
         return;
       }
       onCancel();
@@ -597,7 +689,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-md border border-[var(--snippet-divider)] bg-white/[0.04] flex items-center justify-center overflow-hidden">
-                <QuickLinkIconPreview icon="default" appIconDataUrl={appIconDataUrl} />
+                <QuickLinkIconPreview icon="default" appIconDataUrl={selectedAppResolvedIconDataUrl} />
               </div>
               <button
                 ref={applicationButtonRef}
@@ -610,8 +702,8 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
               >
                 <span className="min-w-0 flex items-center gap-2">
                   <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {selectedAppPath && appIconDataUrl ? (
-                      <img src={appIconDataUrl} alt="" className="w-4 h-4 object-contain" draggable={false} />
+                    {selectedAppPath && selectedAppResolvedIconDataUrl ? (
+                      <img src={selectedAppResolvedIconDataUrl} alt="" className="w-4 h-4 object-contain" draggable={false} />
                     ) : (
                       <Globe className="w-3.5 h-3.5 text-white/65" />
                     )}
@@ -629,19 +721,25 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-md border border-[var(--snippet-divider)] bg-white/[0.04] flex items-center justify-center overflow-hidden">
-                <QuickLinkIconPreview icon={icon} appIconDataUrl={appIconDataUrl} />
+                <QuickLinkIconPreview icon={icon} appIconDataUrl={selectedAppResolvedIconDataUrl} />
               </div>
-              <select
-                value={icon}
-                onChange={(event) => setIcon(event.target.value as QuickLinkIcon)}
-                className="flex-1 bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] outline-none focus:border-[var(--snippet-divider-strong)] transition-colors"
+              <button
+                ref={iconButtonRef}
+                type="button"
+                onClick={(event) => {
+                  const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                  refreshIconMenuPos(rect);
+                  setShowIconMenu((prev) => !prev);
+                  setIconQuery('');
+                }}
+                className="flex-1 bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] outline-none hover:border-[var(--snippet-divider-strong)] transition-colors text-left flex items-center justify-between gap-2"
               >
-                {QUICK_LINK_ICON_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value} className="text-black">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                <span className="min-w-0 flex items-center gap-2">
+                  <QuickLinkIconPreview icon={icon} appIconDataUrl={selectedAppResolvedIconDataUrl} />
+                  <span className="truncate">{selectedIconOption.label}</span>
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-white/55 flex-shrink-0" />
+              </button>
             </div>
           </div>
         </div>
@@ -715,6 +813,65 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                 </button>
               );
             })}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {showIconMenu && createPortal(
+        <div
+          id="quicklink-icon-menu"
+          className="fixed z-[120] rounded-lg overflow-hidden border border-[var(--snippet-divider)]"
+          style={{
+            top: iconMenuPos.top,
+            left: iconMenuPos.left,
+            width: iconMenuPos.width,
+            background: 'var(--bg-overlay-strong)',
+            backdropFilter: 'blur(18px)',
+            boxShadow: '0 12px 28px rgba(var(--backdrop-rgb), 0.45)',
+          }}
+        >
+          <div className="px-2 py-1.5 border-b border-[var(--snippet-divider)]">
+            <input
+              type="text"
+              value={iconQuery}
+              onChange={(event) => setIconQuery(event.target.value)}
+              placeholder="Search icons..."
+              className="w-full bg-transparent text-[13px] text-white/75 placeholder:text-[color:var(--text-subtle)] outline-none"
+              autoFocus
+            />
+          </div>
+          <div className="overflow-y-auto py-1" style={{ maxHeight: iconMenuPos.maxHeight }}>
+            {visibleIconOptions.map((option) => {
+              const isSelected = icon === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setIcon(option.value as QuickLinkIcon);
+                    setShowIconMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 hover:bg-white/[0.07] transition-colors flex items-center gap-2"
+                >
+                  <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <QuickLinkIconPreview icon={option.value} appIconDataUrl={selectedAppResolvedIconDataUrl} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                  {isSelected ? <Check className="w-3.5 h-3.5 text-white/65 flex-shrink-0" /> : null}
+                </button>
+              );
+            })}
+            {filteredIconOptions.length === 0 ? (
+              <div className="px-2.5 py-2 text-xs text-white/35">No icons found</div>
+            ) : null}
+            {filteredIconOptions.length > visibleIconOptions.length ? (
+              <div className="px-2.5 py-2 text-[11px] text-white/35 border-t border-[var(--snippet-divider)]">
+                {iconQuery.trim()
+                  ? `Showing top ${MAX_VISIBLE_ICON_RESULTS} results. Refine search to narrow more.`
+                  : `Showing ${MAX_VISIBLE_ICON_RESULTS} icons. Search to find more.`}
+              </div>
+            ) : null}
           </div>
         </div>,
         document.body
@@ -1190,7 +1347,7 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className="text-white/35">Icon</span>
                   <span className="text-white/65 text-right truncate">
-                    {QUICK_LINK_ICON_OPTIONS.find((item) => item.value === selectedQuickLink.icon)?.label || 'Default'}
+                    {getQuickLinkIconLabel(selectedQuickLink.icon)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3 text-xs">

@@ -17,6 +17,7 @@ import { Search, Power, Settings, Puzzle, Sparkles, Clipboard, FileText, Mic, Vo
 import type { CommandInfo, EdgeTtsVoice } from '../../types/electron';
 import supercmdLogo from '../../../../supercmd.svg';
 import { formatShortcutForDisplay } from './hyper-key';
+import { renderQuickLinkIconGlyph } from './quicklink-icons';
 
 export interface LauncherAction {
   id: string;
@@ -826,6 +827,16 @@ export function renderCommandIcon(command: CommandInfo): React.ReactNode {
         className="w-5 h-5 object-contain"
         draggable={false}
       />
+    );
+  }
+  if (command.iconName) {
+    return (
+      <div
+        className="w-5 h-5 rounded flex items-center justify-center"
+        style={{ background: 'var(--icon-neutral-bg)', color: 'var(--icon-neutral-fg)' }}
+      >
+        {renderQuickLinkIconGlyph(command.iconName, 'w-3.5 h-3.5')}
+      </div>
     );
   }
   if (command.category === 'system') {
