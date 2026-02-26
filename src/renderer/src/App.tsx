@@ -121,6 +121,18 @@ function getExtensionIdentityFromCommand(
   return { extName, cmdName };
 }
 
+function isEditableElement(element: Element | null): boolean {
+  const target = element as HTMLElement | null;
+  if (!target) return false;
+  const tagName = String(target.tagName || '').toUpperCase();
+  return (
+    target.isContentEditable ||
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT'
+  );
+}
+
 const App: React.FC = () => {
   const [commands, setCommands] = useState<CommandInfo[]>([]);
   const [commandAliases, setCommandAliases] = useState<Record<string, string>>({});
@@ -251,6 +263,7 @@ const App: React.FC = () => {
   const windowPresetCommandQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastWindowHiddenAtRef = useRef<number>(0);
   const calcRequestSeqRef = useRef(0);
+  const isLauncherModeActiveRef = useRef(false);
   const pinnedCommandsRef = useRef<string[]>([]);
   const extensionViewRef = useRef<ExtensionBundle | null>(null);
   extensionViewRef.current = extensionView;
@@ -903,6 +916,10 @@ const App: React.FC = () => {
     !showWhisperOnboarding;
 
   useEffect(() => {
+    isLauncherModeActiveRef.current = isLauncherModeActive;
+  }, [isLauncherModeActive]);
+
+  useEffect(() => {
     fileSearchRequestSeqRef.current += 1;
     const requestSeq = fileSearchRequestSeqRef.current;
     const trimmed = searchQuery.trim();
@@ -1396,6 +1413,17 @@ const App: React.FC = () => {
     [displayCommands.length, calcOffset]
   );
 
+  const handleLauncherSearchBlur = useCallback(() => {
+    if (!isLauncherModeActiveRef.current) return;
+    requestAnimationFrame(() => {
+      if (!isLauncherModeActiveRef.current) return;
+      const activeElement = document.activeElement;
+      if (activeElement === inputRef.current) return;
+      if (isEditableElement(activeElement)) return;
+      inputRef.current?.focus();
+    });
+  }, []);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (quickLinkDynamicPrompt) {
@@ -1531,8 +1559,11 @@ const App: React.FC = () => {
             setShowActions(false);
             return;
           }
-          setSearchQuery('');
-          setSelectedIndex(0);
+          if (searchQuery.length > 0) {
+            setSearchQuery('');
+            setSelectedIndex(0);
+            return;
+          }
           window.electron.hideWindow();
           break;
       }
@@ -2646,6 +2677,7 @@ const App: React.FC = () => {
                 placeholder="Search apps and settings..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onBlur={handleLauncherSearchBlur}
                 onKeyDown={handleKeyDown}
                 className="launcher-search-input min-w-0 w-full bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] placeholder:font-medium text-[0.9375rem] font-medium tracking-[0.005em]"
                 autoFocus
