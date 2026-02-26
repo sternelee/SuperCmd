@@ -9,6 +9,7 @@ export interface CommandInfo {
   keywords?: string[];
   iconDataUrl?: string;
   iconEmoji?: string;
+  iconName?: string;
   category: 'app' | 'settings' | 'system' | 'extension' | 'script';
   path?: string;
   mode?: string;
@@ -267,6 +268,27 @@ export interface SnippetDynamicField {
   defaultValue?: string;
 }
 
+export type QuickLinkIcon = string;
+
+export interface QuickLink {
+  id: string;
+  name: string;
+  urlTemplate: string;
+  applicationName?: string;
+  applicationPath?: string;
+  applicationBundleId?: string;
+  appIconDataUrl?: string;
+  icon: QuickLinkIcon;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface QuickLinkDynamicField {
+  key: string;
+  name: string;
+  defaultValue?: string;
+}
+
 export interface OllamaLocalModel {
   name: string;
   size: number;
@@ -453,7 +475,8 @@ export interface ElectronAPI {
   onSpawnEvent: (
     callback: (event: { pid: number; seq: number; type: 'stdout' | 'stderr' | 'exit' | 'error'; data?: Uint8Array; code?: number; message?: string }) => void
   ) => (() => void);
-  getApplications: (path?: string) => Promise<Array<{ name: string; path: string; bundleId?: string }>>;
+  getApplications: (path?: string) => Promise<Array<{ name: string; path: string; bundleId?: string; iconDataUrl?: string }>>;
+  getDefaultApplication: (filePath: string) => Promise<{ name: string; path: string; bundleId?: string }>;
   getFrontmostApplication: () => Promise<{ name: string; path: string; bundleId?: string } | null>;
   runAppleScript: (script: string) => Promise<string>;
   moveToTrash: (paths: string[]) => Promise<void>;
@@ -507,6 +530,30 @@ export interface ElectronAPI {
   snippetPasteResolved: (id: string, dynamicValues?: Record<string, string>) => Promise<boolean>;
   snippetImport: () => Promise<{ imported: number; skipped: number }>;
   snippetExport: () => Promise<boolean>;
+  quickLinkGetAll: () => Promise<QuickLink[]>;
+  quickLinkSearch: (query: string) => Promise<QuickLink[]>;
+  quickLinkGetDynamicFields: (id: string) => Promise<QuickLinkDynamicField[]>;
+  quickLinkCreate: (data: {
+    name: string;
+    urlTemplate: string;
+    applicationName?: string;
+    applicationPath?: string;
+    applicationBundleId?: string;
+    appIconDataUrl?: string;
+    icon?: QuickLinkIcon;
+  }) => Promise<QuickLink>;
+  quickLinkUpdate: (id: string, data: {
+    name?: string;
+    urlTemplate?: string;
+    applicationName?: string;
+    applicationPath?: string;
+    applicationBundleId?: string;
+    appIconDataUrl?: string;
+    icon?: QuickLinkIcon;
+  }) => Promise<QuickLink | null>;
+  quickLinkDelete: (id: string) => Promise<boolean>;
+  quickLinkDuplicate: (id: string) => Promise<QuickLink | null>;
+  quickLinkOpen: (id: string, dynamicValues?: Record<string, string>) => Promise<boolean>;
   pasteText: (text: string) => Promise<boolean>;
   pasteFile: (filePath: string) => Promise<boolean>;
   typeTextLive: (text: string) => Promise<boolean>;

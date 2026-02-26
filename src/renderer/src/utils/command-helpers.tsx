@@ -13,10 +13,11 @@
  */
 
 import React from 'react';
-import { Search, Power, Settings, Puzzle, Sparkles, Clipboard, FileText, Mic, Volume2, Brain, TerminalSquare, RefreshCw, LayoutGrid } from 'lucide-react';
+import { Search, Power, Settings, Puzzle, Sparkles, Clipboard, FileText, Mic, Volume2, Brain, TerminalSquare, RefreshCw, LayoutGrid, Link2 } from 'lucide-react';
 import type { CommandInfo, EdgeTtsVoice } from '../../types/electron';
 import supercmdLogo from '../../../../supercmd.svg';
 import { formatShortcutForDisplay } from './hyper-key';
+import { renderQuickLinkIconGlyph } from './quicklink-icons';
 
 export interface LauncherAction {
   id: string;
@@ -266,6 +267,14 @@ export function getCommandAccessoryLabel(command: CommandInfo): string {
   const subtitle = String(command.subtitle || '').trim();
   if (subtitle) return subtitle;
 
+  return '';
+}
+
+export function getCommandTypeBadgeLabel(command: CommandInfo): string {
+  const commandId = String(command.id || '').trim();
+  if (commandId.startsWith('quicklink-')) {
+    return 'Quick Link';
+  }
   return '';
 }
 
@@ -820,6 +829,16 @@ export function renderCommandIcon(command: CommandInfo): React.ReactNode {
       />
     );
   }
+  if (command.iconName) {
+    return (
+      <div
+        className="w-5 h-5 rounded flex items-center justify-center"
+        style={{ background: 'var(--icon-neutral-bg)', color: 'var(--icon-neutral-fg)' }}
+      >
+        {renderQuickLinkIconGlyph(command.iconName, 'w-3.5 h-3.5')}
+      </div>
+    );
+  }
   if (command.category === 'system') {
     return getSystemCommandFallbackIcon(command.id);
   }
@@ -894,6 +913,21 @@ export function getSystemCommandFallbackIcon(commandId: string): React.ReactNode
         style={{ background: 'var(--icon-snippet-bg)', color: 'var(--icon-snippet-fg)' }}
       >
         <FileText className="w-3 h-3" />
+      </div>
+    );
+  }
+
+  if (
+    commandId === 'system-create-quicklink' ||
+    commandId === 'system-search-quicklinks' ||
+    commandId.startsWith('quicklink-')
+  ) {
+    return (
+      <div
+        className="w-5 h-5 rounded flex items-center justify-center"
+        style={{ background: 'var(--icon-search-bg)', color: 'var(--icon-search-fg)' }}
+      >
+        <Link2 className="w-3 h-3" />
       </div>
     );
   }

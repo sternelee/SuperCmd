@@ -18,6 +18,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { discoverInstalledExtensionCommands } from './extension-runner';
 import { discoverScriptCommands } from './script-command-runner';
+import { getAllQuickLinks, getQuickLinkCommandId, type QuickLink, type QuickLinkIcon } from './quicklink-store';
 import { loadSettings } from './settings-store';
 
 const execAsync = promisify(exec);
@@ -30,6 +31,7 @@ export interface CommandInfo {
   keywords?: string[];
   iconDataUrl?: string;
   iconEmoji?: string;
+  iconName?: string;
   category: 'app' | 'settings' | 'system' | 'extension' | 'script';
   /** .app path for apps, bundle identifier for settings */
   path?: string;
@@ -462,6 +464,48 @@ function splitSearchKeywords(value: string): string[] {
     .split(',')
     .map((term) => term.trim().toLowerCase())
     .filter((term) => term.length >= 2);
+}
+
+function resolveQuickLinkIconName(icon: QuickLinkIcon): string | undefined {
+  const raw = String(icon || '').trim();
+  if (!raw) return undefined;
+
+  const normalized = raw.toLowerCase();
+  if (normalized === 'default') return undefined;
+  if (normalized === 'link') return 'Link';
+  if (normalized === 'globe') return 'Globe';
+  if (normalized === 'search') return 'Search';
+  if (normalized === 'bolt') return 'Bolt';
+
+  return raw.slice(0, 80);
+}
+
+function resolveQuickLinkIconDataUrl(quickLink: QuickLink, iconName?: string): string | undefined {
+  if (iconName) return undefined;
+  return quickLink.appIconDataUrl;
+}
+
+function buildQuickLinkKeywords(quickLink: QuickLink): string[] {
+  const set = new Set<string>();
+  const add = (value: string | undefined) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return;
+    set.add(normalized);
+  };
+
+  add('quick link');
+  add('quicklink');
+  add(quickLink.name);
+  add(quickLink.applicationName);
+  add(quickLink.urlTemplate);
+
+  const hostCandidate = quickLink.urlTemplate.replace(/\{[^}]+\}/g, 'placeholder');
+  try {
+    const host = new URL(hostCandidate).hostname.trim();
+    if (host) add(host);
+  } catch {}
+
+  return Array.from(set);
 }
 
 function getLocaleCandidates(): string[] {
@@ -1262,6 +1306,18 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
       category: 'system',
     },
     {
+      id: 'system-create-quicklink',
+      title: 'Create Quick Link',
+      keywords: ['quick link', 'quicklink', 'create', 'new', 'url'],
+      category: 'system',
+    },
+    {
+      id: 'system-search-quicklinks',
+      title: 'Search Quick Links',
+      keywords: ['quick link', 'quicklink', 'search', 'find', 'url'],
+      category: 'system',
+    },
+    {
       id: 'system-search-files',
       title: 'Search Files',
       keywords: ['files', 'finder', 'search', 'find', 'open'],
@@ -1346,7 +1402,25 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
     console.error('Failed to discover script commands:', e);
   }
 
-  const allCommands = [...apps, ...settings, ...extensionCommands, ...scriptCommands, ...systemCommands];
+  let quickLinkCommands: CommandInfo[] = [];
+  try {
+    quickLinkCommands = getAllQuickLinks().map((quickLink) => {
+      const resolvedIconName = resolveQuickLinkIconName(quickLink.icon);
+      return {
+        id: getQuickLinkCommandId(quickLink.id),
+        title: quickLink.name,
+        subtitle: quickLink.applicationName || 'Quick Link',
+        keywords: buildQuickLinkKeywords(quickLink),
+        iconDataUrl: resolveQuickLinkIconDataUrl(quickLink, resolvedIconName),
+        iconName: resolvedIconName,
+        category: 'system' as const,
+      };
+    });
+  } catch (e) {
+    console.error('Failed to discover quick links:', e);
+  }
+
+  const allCommands = [...apps, ...settings, ...extensionCommands, ...scriptCommands, ...quickLinkCommands, ...systemCommands];
 
   // ── Batch-extract icons via NSWorkspace for app/settings bundles ──
   const bundlesNeedingIcon = allCommands.filter(
@@ -1411,7 +1485,7 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
   cacheTimestamp = Date.now();
 
   console.log(
-    `Discovered ${apps.length} apps, ${settings.length} settings panes, ${extensionCommands.length} extension commands, ${scriptCommands.length} script commands in ${Date.now() - t0}ms`
+    `Discovered ${apps.length} apps, ${settings.length} settings panes, ${extensionCommands.length} extension commands, ${scriptCommands.length} script commands, ${quickLinkCommands.length} quick links in ${Date.now() - t0}ms`
   );
 
   return cachedCommands;
