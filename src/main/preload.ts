@@ -442,6 +442,33 @@ contextBridge.exposeInMainWorld('electron', {
 
   getFileIconDataUrl: (filePath: string, size = 20): Promise<string | null> =>
     ipcRenderer.invoke('get-file-icon-data-url', filePath, size),
+  searchIndexedFiles: (
+    query: string,
+    options?: { limit?: number }
+  ): Promise<Array<{ path: string; name: string; parentPath: string; displayPath: string; isDirectory: boolean }>> =>
+    ipcRenderer.invoke('file-search-query', query, options),
+  getFileSearchIndexStatus: (): Promise<{
+    indexing: boolean;
+    ready: boolean;
+    indexedEntryCount: number;
+    lastIndexedAt: number | null;
+    homeDirectory: string;
+    includeRoots: string[];
+    excludedDirectoryNames: string[];
+    excludedTopLevelDirectories: string[];
+    lastError: string | null;
+  }> => ipcRenderer.invoke('file-search-status'),
+  refreshFileSearchIndex: (reason?: string): Promise<{
+    indexing: boolean;
+    ready: boolean;
+    indexedEntryCount: number;
+    lastIndexedAt: number | null;
+    homeDirectory: string;
+    includeRoots: string[];
+    excludedDirectoryNames: string[];
+    excludedTopLevelDirectories: string[];
+    lastError: string | null;
+  }> => ipcRenderer.invoke('file-search-refresh', reason),
 
   // Get system appearance (dark/light)
   getAppearance: (): Promise<'dark' | 'light'> =>

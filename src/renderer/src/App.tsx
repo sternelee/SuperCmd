@@ -9,6 +9,12 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import { X, Sparkles, ArrowRight } from 'lucide-react';
 import type { CommandInfo, ExtensionBundle, AppSettings, QuickLinkDynamicField } from '../types/electron';
+import type {
+  CommandInfo,
+  ExtensionBundle,
+  AppSettings,
+  IndexedFileSearchResult,
+} from '../types/electron';
 import ExtensionView from './ExtensionView';
 import ClipboardManager from './ClipboardManager';
 import SnippetManager from './SnippetManager';
@@ -68,6 +74,38 @@ function getQuickLinkIdFromCommandId(commandId: string): string | null {
   return id || null;
 }
 
+const FILE_RESULT_COMMAND_PREFIX = 'system-file-result:';
+const MAX_LAUNCHER_FILE_RESULTS = 30;
+const MAX_LAUNCHER_FILE_RESULT_ICONS = MAX_LAUNCHER_FILE_RESULTS;
+const MIN_LAUNCHER_FILE_QUERY_LENGTH = 2;
+
+function asTildePath(filePath: string, homeDir: string): string {
+  if (!homeDir) return filePath;
+  if (filePath === homeDir) return '~';
+  if (filePath.startsWith(homeDir)) {
+    return `~${filePath.slice(homeDir.length) || '/'}`;
+  }
+  return filePath;
+}
+
+function buildFileResultCommandId(filePath: string): string {
+  return `${FILE_RESULT_COMMAND_PREFIX}${encodeURIComponent(filePath)}`;
+}
+
+function getFileResultPathFromCommand(command: CommandInfo | null | undefined): string | null {
+  if (!command) return null;
+  if (command.id.startsWith(FILE_RESULT_COMMAND_PREFIX)) {
+    if (command.path) return String(command.path);
+    const encoded = command.id.slice(FILE_RESULT_COMMAND_PREFIX.length);
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 const App: React.FC = () => {
   const [commands, setCommands] = useState<CommandInfo[]>([]);
   const [commandAliases, setCommandAliases] = useState<Record<string, string>>({});
@@ -75,8 +113,11 @@ const App: React.FC = () => {
   const [recentCommands, setRecentCommands] = useState<string[]>([]);
   const [recentCommandLaunchCounts, setRecentCommandLaunchCounts] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [launcherFileResults, setLauncherFileResults] = useState<IndexedFileSearchResult[]>([]);
+  const [launcherFileIcons, setLauncherFileIcons] = useState<Record<string, string>>({});
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const homeDir = String((window.electron as any).homeDir || '');
   const {
     extensionView, extensionPreferenceSetup, scriptCommandSetup, scriptCommandOutput,
     showClipboardManager, showSnippetManager, showQuickLinkManager, showFileSearch, showCursorPrompt,
@@ -135,6 +176,7 @@ const App: React.FC = () => {
   const [memoryActionLoading, setMemoryActionLoading] = useState(false);
   const memoryFeedbackTimerRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileSearchRequestSeqRef = useRef(0);
   const commandsRef = useRef<CommandInfo[]>([]);
   commandsRef.current = commands;
 
@@ -833,6 +875,56 @@ const App: React.FC = () => {
     !showWhisperOnboarding;
 
   useEffect(() => {
+    fileSearchRequestSeqRef.current += 1;
+    const requestSeq = fileSearchRequestSeqRef.current;
+    const trimmed = searchQuery.trim();
+
+    if (!isLauncherModeActive || trimmed.length < MIN_LAUNCHER_FILE_QUERY_LENGTH) {
+      setLauncherFileResults([]);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const results = await window.electron.searchIndexedFiles(trimmed, { limit: MAX_LAUNCHER_FILE_RESULTS });
+          if (fileSearchRequestSeqRef.current !== requestSeq) return;
+          setLauncherFileResults(results);
+
+          const iconTargets = results.slice(0, MAX_LAUNCHER_FILE_RESULT_ICONS);
+          const iconEntries = await Promise.all(
+            iconTargets.map(async (result) => {
+              try {
+                const dataUrl = await window.electron.getFileIconDataUrl(result.path, 20);
+                return [result.path, dataUrl || ''] as const;
+              } catch {
+                return [result.path, ''] as const;
+              }
+            })
+          );
+          if (fileSearchRequestSeqRef.current !== requestSeq) return;
+          setLauncherFileIcons((prev) => {
+            const next = { ...prev };
+            for (const [targetPath, icon] of iconEntries) {
+              if (icon) next[targetPath] = icon;
+            }
+            return next;
+          });
+        } catch (error) {
+          console.error('Failed to search indexed files for launcher:', error);
+          if (fileSearchRequestSeqRef.current === requestSeq) {
+            setLauncherFileResults([]);
+          }
+        }
+      })();
+    }, 110);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [searchQuery, isLauncherModeActive]);
+
+  useEffect(() => {
     if (!isLauncherModeActive) return;
     const onWindowKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -913,8 +1005,36 @@ const App: React.FC = () => {
     () => sourceCommands.filter((cmd) => !hiddenListOnlyCommandIds.has(cmd.id)),
     [sourceCommands, hiddenListOnlyCommandIds]
   );
+  const hasSearchQuery = searchQuery.trim().length > 0;
+
+  const fileResultCommands = useMemo<CommandInfo[]>(
+    () =>
+      launcherFileResults.map((result) => {
+        const displayParent = result.displayPath || asTildePath(result.parentPath, homeDir);
+        return {
+          id: buildFileResultCommandId(result.path),
+          title: result.name,
+          subtitle: displayParent,
+          keywords: [result.name, result.parentPath, result.displayPath],
+          iconDataUrl: launcherFileIcons[result.path] || undefined,
+          category: 'system',
+          path: result.path,
+        };
+      }),
+    [launcherFileResults, launcherFileIcons, homeDir]
+  );
 
   const groupedCommands = useMemo(() => {
+    if (hasSearchQuery) {
+      return {
+        contextual: [] as CommandInfo[],
+        pinned: [] as CommandInfo[],
+        recent: [] as CommandInfo[],
+        other: visibleSourceCommands,
+        files: fileResultCommands,
+      };
+    }
+
     const sourceMap = new Map(visibleSourceCommands.map((cmd) => [cmd.id, cmd]));
     const hasSelection = selectedTextSnapshot.trim().length > 0;
     const contextual = hasSelection
@@ -950,8 +1070,8 @@ const App: React.FC = () => {
       (c) => !pinnedSet.has(c.id) && !recentSet.has(c.id) && !contextualIds.has(c.id)
     );
 
-    return { contextual, pinned, recent, other };
-  }, [visibleSourceCommands, pinnedCommands, recentCommands, recentCommandLaunchCounts, selectedTextSnapshot]);
+    return { contextual, pinned, recent, files: fileResultCommands, other };
+  }, [hasSearchQuery, visibleSourceCommands, pinnedCommands, recentCommands, recentCommandLaunchCounts, selectedTextSnapshot, fileResultCommands]);
 
   const displayCommands = useMemo(
     () => [
@@ -959,6 +1079,7 @@ const App: React.FC = () => {
       ...groupedCommands.pinned,
       ...groupedCommands.recent,
       ...groupedCommands.other,
+      ...groupedCommands.files,
     ],
     [groupedCommands]
   );
@@ -1000,6 +1121,38 @@ const App: React.FC = () => {
     selectedIndex >= calcOffset
       ? displayCommands[selectedIndex - calcOffset]
       : null;
+  const selectedFileResultPath = useMemo(
+    () => getFileResultPathFromCommand(selectedCommand),
+    [selectedCommand]
+  );
+
+  const openFileResultByPath = useCallback(async (targetPath: string) => {
+    if (!targetPath) return;
+    try {
+      await window.electron.execCommand('open', [targetPath]);
+      await window.electron.hideWindow();
+    } catch (error) {
+      console.error('Failed to open file result:', error);
+    }
+  }, []);
+
+  const revealFileResultByPath = useCallback(async (targetPath: string) => {
+    if (!targetPath) return;
+    try {
+      await window.electron.execCommand('open', ['-R', targetPath]);
+    } catch (error) {
+      console.error('Failed to reveal file result:', error);
+    }
+  }, []);
+
+  const copyFileResultPath = useCallback(async (targetPath: string) => {
+    if (!targetPath) return;
+    try {
+      await window.electron.clipboardWrite({ text: targetPath });
+    } catch (error) {
+      console.error('Failed to copy file path:', error);
+    }
+  }, []);
 
   const togglePinSelectedCommand = useCallback(async () => {
     if (!selectedCommand) return;
@@ -1075,29 +1228,39 @@ const App: React.FC = () => {
         }
         return;
       }
-      if (e.metaKey && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
+      if (selectedFileResultPath && e.metaKey && e.key === 'Enter') {
+        e.preventDefault();
+        void revealFileResultByPath(selectedFileResultPath);
+        return;
+      }
+      if (selectedFileResultPath && e.metaKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
+        e.preventDefault();
+        void copyFileResultPath(selectedFileResultPath);
+        return;
+      }
+      if (!selectedFileResultPath && e.metaKey && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
         e.preventDefault();
         togglePinSelectedCommand();
         return;
       }
-      if (e.metaKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+      if (!selectedFileResultPath && e.metaKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
         e.preventDefault();
         disableSelectedCommand();
         return;
       }
-      if (e.metaKey && (e.key === 'Backspace' || e.key === 'Delete')) {
+      if (!selectedFileResultPath && e.metaKey && (e.key === 'Backspace' || e.key === 'Delete')) {
         if (selectedCommand?.category === 'extension') {
           e.preventDefault();
           uninstallSelectedExtension();
           return;
         }
       }
-      if (e.metaKey && e.altKey && e.key === 'ArrowUp') {
+      if (!selectedFileResultPath && e.metaKey && e.altKey && e.key === 'ArrowUp') {
         e.preventDefault();
         moveSelectedPinnedCommand('up');
         return;
       }
-      if (e.metaKey && e.altKey && e.key === 'ArrowDown') {
+      if (!selectedFileResultPath && e.metaKey && e.altKey && e.key === 'ArrowDown') {
         e.preventDefault();
         moveSelectedPinnedCommand('down');
         return;
@@ -1127,7 +1290,12 @@ const App: React.FC = () => {
             navigator.clipboard.writeText(calcResult.result);
             window.electron.hideWindow();
           } else if (displayCommands[selectedIndex - calcOffset]) {
-            handleCommandExecute(displayCommands[selectedIndex - calcOffset]);
+            const selected = displayCommands[selectedIndex - calcOffset];
+            if (selectedFileResultPath && e.metaKey) {
+              void revealFileResultByPath(selectedFileResultPath);
+            } else if (selected) {
+              handleCommandExecute(selected);
+            }
           }
           break;
 
@@ -1160,6 +1328,9 @@ const App: React.FC = () => {
       disableSelectedCommand,
       uninstallSelectedExtension,
       moveSelectedPinnedCommand,
+      selectedFileResultPath,
+      revealFileResultByPath,
+      copyFileResultPath,
       selectedCommand,
       contextMenu,
       showActions,
@@ -1502,6 +1673,14 @@ const App: React.FC = () => {
 
   const handleCommandExecute = async (command: CommandInfo) => {
     try {
+      const filePath = getFileResultPathFromCommand(command);
+      if (filePath) {
+        await openFileResultByPath(filePath);
+        setSearchQuery('');
+        setSelectedIndex(0);
+        return;
+      }
+
       if (await runLocalSystemCommand(command.id)) {
         await updateRecentCommands(command.id);
         return;
@@ -1598,6 +1777,30 @@ const App: React.FC = () => {
   const getActionsForCommand = useCallback(
     (command: CommandInfo | null): LauncherAction[] => {
       if (!command) return [];
+      const filePath = getFileResultPathFromCommand(command);
+      if (filePath) {
+        return [
+          {
+            id: 'open-file',
+            title: 'Open File',
+            shortcut: 'Enter',
+            execute: () => openFileResultByPath(filePath),
+          },
+          {
+            id: 'reveal-file',
+            title: 'Reveal in Finder',
+            shortcut: 'Cmd+Enter',
+            execute: () => revealFileResultByPath(filePath),
+          },
+          {
+            id: 'copy-file-path',
+            title: 'Copy Path',
+            shortcut: 'Cmd+Shift+C',
+            execute: () => copyFileResultPath(filePath),
+          },
+        ];
+      }
+
       const isPinned = pinnedCommands.includes(command.id);
       const pinnedIndex = pinnedCommands.indexOf(command.id);
       return [
@@ -1654,6 +1857,9 @@ const App: React.FC = () => {
       disableCommand,
       uninstallExtensionCommand,
       movePinnedCommand,
+      openFileResultByPath,
+      revealFileResultByPath,
+      copyFileResultPath,
     ]
   );
 
@@ -2234,6 +2440,7 @@ const App: React.FC = () => {
                 { title: 'Pinned', items: groupedCommands.pinned },
                 { title: 'Recent', items: groupedCommands.recent },
                 { title: 'Other', items: groupedCommands.other },
+                { title: 'Files', items: groupedCommands.files },
               ]
                 .filter((section) => section.items.length > 0)
                 .map((section) => section)

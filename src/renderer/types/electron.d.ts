@@ -26,6 +26,26 @@ export interface CommandInfo {
   }>;
 }
 
+export interface IndexedFileSearchResult {
+  path: string;
+  name: string;
+  parentPath: string;
+  displayPath: string;
+  isDirectory: boolean;
+}
+
+export interface FileSearchIndexStatus {
+  indexing: boolean;
+  ready: boolean;
+  indexedEntryCount: number;
+  lastIndexedAt: number | null;
+  homeDirectory: string;
+  includeRoots: string[];
+  excludedDirectoryNames: string[];
+  excludedTopLevelDirectories: string[];
+  lastError: string | null;
+}
+
 export interface ExtensionPreferenceSchema {
   scope: 'extension' | 'command';
   name: string;
@@ -465,6 +485,9 @@ export interface ElectronAPI {
   fileExists: (filePath: string) => Promise<boolean>;
   readDir: (dirPath: string) => Promise<string[]>;
   getFileIconDataUrl: (filePath: string, size?: number) => Promise<string | null>;
+  searchIndexedFiles: (query: string, options?: { limit?: number }) => Promise<IndexedFileSearchResult[]>;
+  getFileSearchIndexStatus: () => Promise<FileSearchIndexStatus>;
+  refreshFileSearchIndex: (reason?: string) => Promise<FileSearchIndexStatus>;
   getAppearance: () => Promise<'dark' | 'light'>;
 
   // SQLite query execution
