@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown, FolderOpen, Search } from 'lucide-react';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
+import type { FileSearchIndexStatus } from '../types/electron';
 
 interface FileSearchExtensionProps {
   onClose: () => void;
@@ -68,26 +69,6 @@ function asTildePath(filePath: string, homeDir: string): string {
   return filePath;
 }
 
-function escapeSpotlightValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function buildNameOnlySpotlightQuery(rawQuery: string): string {
-  const terms = rawQuery
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter(Boolean);
-
-  if (terms.length === 0) {
-    return 'kMDItemFSName == "*"cd';
-  }
-
-  // Name-only matching. This prevents matches from parent directory names.
-  return terms
-    .map((term) => `kMDItemFSName == "*${escapeSpotlightValue(term)}*"cd`)
-    .join(' && ');
-}
-
 function getNormalizedTerms(rawQuery: string): string[] {
   return rawQuery
     .normalize('NFKD')
@@ -138,6 +119,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
   const [iconsByPath, setIconsByPath] = useState<Record<string, string>>({});
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [opening, setOpening] = useState(false);
+  const [indexStatus, setIndexStatus] = useState<FileSearchIndexStatus | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -150,6 +132,28 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
     setScopes([{ id: 'home', label: `User (${username})`, path: homeDir || '/' }]);
     setScopeId('home');
     inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const syncStatus = async () => {
+      try {
+        const next = await window.electron.getFileSearchIndexStatus();
+        if (!cancelled) setIndexStatus(next);
+      } catch {
+        if (!cancelled) setIndexStatus(null);
+      }
+    };
+
+    void syncStatus();
+    const intervalId = window.setInterval(() => {
+      void syncStatus();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const selectedScope = useMemo(
@@ -211,18 +215,15 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
     const timer = window.setTimeout(async () => {
       setIsLoading(true);
       try {
-        const spotlightQuery = buildNameOnlySpotlightQuery(trimmed);
-        const response = await window.electron.execCommand('mdfind', ['-onlyin', currentScope.path, spotlightQuery]);
+        const indexed = await window.electron.searchIndexedFiles(trimmed, { limit: 220 });
         if (searchRequestRef.current !== requestId) return;
 
         const terms = getNormalizedTerms(trimmed);
-        const lines = response.stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean);
-
-        // Hard guard: keep only entries whose own file/folder name matches all terms.
-        const strictNameMatches = lines.filter((filePath) => matchesFileNameTerms(filePath, terms));
+        const scopePrefix = `${currentScope.path.replace(/\/$/, '')}/`;
+        const strictNameMatches = indexed
+          .map((entry) => entry.path)
+          .filter((filePath) => filePath.startsWith(scopePrefix) || filePath === currentScope.path)
+          .filter((filePath) => matchesFileNameTerms(filePath, terms));
 
         const deduped = Array.from(new Set(strictNameMatches));
         setResults(deduped);
@@ -429,13 +430,13 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
 
   return (
     <div className="w-full h-full flex flex-col relative" onKeyDown={handleKeyDown} tabIndex={-1}>
-      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
+      <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-[var(--ui-divider)]">
         <button
           onClick={onClose}
           className="text-white/35 hover:text-white/70 transition-colors flex-shrink-0"
           aria-label="Back"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4" />
         </button>
         <input
           ref={inputRef}
@@ -443,15 +444,15 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search Files"
-          className="flex-1 bg-transparent border-none outline-none text-white/90 placeholder-white/35 text-[14px] font-medium tracking-wide min-w-0"
+          className="flex-1 bg-transparent border-none outline-none text-white/90 placeholder-white/35 text-[13px] font-medium tracking-wide min-w-0"
           autoFocus
         />
-        <div className="flex items-center gap-1 px-3 py-2 rounded-xl border border-white/[0.12] bg-white/[0.04] text-white/80 min-w-[190px] justify-between">
-          <span className="text-[11px] uppercase tracking-wide text-white/45">Scope</span>
+        <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[var(--ui-segment-border)] bg-[var(--ui-segment-hover-bg)] text-[var(--text-secondary)] min-w-[170px] justify-between">
+          <span className="text-[10px] uppercase tracking-wide text-white/45">Scope</span>
           <select
             value={scopeId}
             onChange={(e) => setScopeId(e.target.value)}
-            className="bg-transparent border-none outline-none text-[14px] font-medium text-white/85 pr-4 appearance-none"
+            className="bg-transparent border-none outline-none text-[12px] font-medium text-[var(--text-primary)] pr-4 appearance-none"
           >
             {scopes.map((scope) => (
               <option key={scope.id} value={scope.id} className="bg-[var(--bg-overlay)]">
@@ -459,22 +460,26 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
               </option>
             ))}
           </select>
-          <ChevronDown className="w-4 h-4 text-white/45" />
+          <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
         </div>
       </div>
 
       <div className="flex-1 min-h-0 flex">
-        <div ref={listRef} className="w-[38%] border-r border-white/[0.08] overflow-y-auto custom-scrollbar">
+        <div ref={listRef} className="w-[40%] border-r border-[var(--ui-divider)] overflow-y-auto custom-scrollbar">
           {isLoading ? (
-            <div className="h-full flex items-center justify-center text-white/45 text-sm">Searching files…</div>
+            <div className="h-full flex items-center justify-center text-white/45 text-[13px]">Searching files…</div>
           ) : !query.trim() ? (
-            <div className="h-full flex items-center justify-center text-white/35 text-sm">Type to search files</div>
+            <div className="h-full flex items-center justify-center text-white/35 text-[13px]">
+              {indexStatus?.indexing ? 'Indexing home files…' : 'Type to search files'}
+            </div>
           ) : visibleResults.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-white/35 text-sm">No files found</div>
+            <div className="h-full flex items-center justify-center text-white/35 text-[13px]">
+              {indexStatus?.indexing ? 'Indexing in progress. Results will improve shortly.' : 'No files found'}
+            </div>
           ) : (
-            <div className="p-2.5">
-              <div className="px-2 py-1 text-[13px] uppercase tracking-wide text-white/45 font-semibold">Files</div>
-              <div className="space-y-1 mt-2">
+            <div className="p-2">
+              <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-white/45 font-semibold">Files</div>
+              <div className="space-y-0.5 mt-1.5">
                 {visibleResults.map((filePath, index) => {
                   const selected = index === selectedIndex;
                   const icon = iconsByPath[filePath];
@@ -487,23 +492,23 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                       type="button"
                       onClick={() => setSelectedIndex(index)}
                       onDoubleClick={() => openSelectedFile()}
-                      className={`w-full text-left px-3 py-2 rounded-2xl border transition-colors ${
+                      className={`w-full text-left px-2.5 py-1.5 rounded-md border transition-colors ${
                         selected
-                          ? 'bg-white/[0.12] border-white/[0.18]'
-                          : 'bg-transparent border-transparent hover:bg-white/[0.06]'
+                          ? 'bg-[var(--launcher-card-selected-bg)] border-transparent'
+                          : 'bg-transparent border-transparent hover:bg-[var(--launcher-card-hover-bg)] hover:border-[var(--launcher-card-border)]'
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         {icon ? (
-                          <img src={icon} alt="" className="w-8 h-8 object-contain flex-shrink-0" draggable={false} />
+                          <img src={icon} alt="" className="w-6 h-6 object-contain flex-shrink-0" draggable={false} />
                         ) : (
-                          <div className="w-8 h-8 rounded-md bg-white/[0.08] flex items-center justify-center flex-shrink-0">
-                            <Search className="w-4 h-4 text-white/35" />
+                          <div className="w-6 h-6 rounded-md bg-[var(--launcher-card-bg)] flex items-center justify-center flex-shrink-0">
+                            <Search className="w-3.5 h-3.5 text-white/35" />
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="text-white/90 text-[16px] leading-tight font-medium truncate">{basename(filePath)}</div>
-                          <div className="text-white/35 text-[13px] truncate">{asTildePath(dirname(filePath), selectedScope?.path || '')}</div>
+                          <div className="text-white/90 text-[13px] leading-tight font-medium truncate">{basename(filePath)}</div>
+                          <div className="text-white/35 text-[11px] truncate">{asTildePath(dirname(filePath), selectedScope?.path || '')}</div>
                         </div>
                       </div>
                     </button>
@@ -514,21 +519,21 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
           {selectedPath ? (
             <>
-              <div className="flex justify-center mb-6">
+              <div className="flex justify-center mb-4">
                 {iconsByPath[selectedPath] ? (
-                  <img src={iconsByPath[selectedPath]} alt="" className="w-40 h-40 object-contain" draggable={false} />
+                  <img src={iconsByPath[selectedPath]} alt="" className="w-28 h-28 object-contain" draggable={false} />
                 ) : (
-                  <div className="w-40 h-40 rounded-3xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-                    <FolderOpen className="w-10 h-10 text-white/30" />
+                  <div className="w-28 h-28 rounded-2xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] flex items-center justify-center">
+                    <FolderOpen className="w-7 h-7 text-white/30" />
                   </div>
                 )}
               </div>
-              <div className="text-[24px] font-semibold text-white/90 mb-4">Metadata</div>
+              <div className="text-[18px] font-semibold text-white/90 mb-3">Metadata</div>
               {metadata ? (
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   {[
                     ['Name', metadata.name],
                     ['Where', metadata.where],
@@ -537,9 +542,9 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                     ['Created', metadata.created],
                     ['Modified', metadata.modified],
                   ].map(([label, value]) => (
-                    <div key={label} className="grid grid-cols-[120px_1fr] items-center gap-3 pb-2 border-b border-white/[0.08]">
-                      <div className="text-white/55 text-[13px] font-semibold">{label}</div>
-                      <div className="text-white/92 text-[14px] font-semibold text-right truncate">{value}</div>
+                    <div key={label} className="grid grid-cols-[96px_1fr] items-center gap-2 pb-1.5 border-b border-[var(--ui-divider)]">
+                      <div className="text-white/55 text-[11px] font-semibold">{label}</div>
+                      <div className="text-white/92 text-[12px] font-semibold text-right truncate">{value}</div>
                     </div>
                   ))}
                 </div>
@@ -556,7 +561,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
       <ExtensionActionFooter
         leftContent={
           <div className="flex items-center gap-2 text-white/55 min-w-0">
-            <Search className="w-5 h-5 text-white/45" />
+            <Search className="w-4 h-4 text-white/45" />
             <span className="truncate">Search Files</span>
           </div>
         }
@@ -579,7 +584,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
       {showActions ? (
         <div className="absolute inset-0 bg-black/30 flex items-center justify-center" onClick={() => setShowActions(false)}>
           <div
-            className="w-[430px] rounded-2xl border p-2"
+            className="w-[380px] rounded-xl border p-1.5"
             style={
               isGlassyTheme
                 ? {
@@ -599,7 +604,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
             onClick={(e) => e.stopPropagation()}
           >
             {selectedActions.length === 0 ? (
-              <div className="px-3 py-2 text-white/45 text-sm">No actions</div>
+              <div className="px-2.5 py-1.5 text-white/45 text-[13px]">No actions</div>
             ) : (
               selectedActions.map((action, index) => (
                 <button
@@ -609,7 +614,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                     await Promise.resolve(action.execute());
                     setShowActions(false);
                   }}
-                  className={`w-full px-3 py-2 rounded-lg border border-transparent text-left flex items-center justify-between transition-colors ${
+                  className={`w-full px-2.5 py-1.5 rounded-md border border-transparent text-left flex items-center justify-between transition-colors ${
                     index === selectedActionIndex
                       ? 'bg-white/[0.18] text-white'
                       : 'text-white/80 hover:bg-white/[0.08]'
@@ -624,8 +629,8 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                       : undefined
                   }
                 >
-                  <span className="text-sm">{action.title}</span>
-                  <span className="text-xs text-white/40">{action.shortcut}</span>
+                  <span className="text-[13px]">{action.title}</span>
+                  <span className="text-[11px] text-white/40">{action.shortcut}</span>
                 </button>
               ))
             )}

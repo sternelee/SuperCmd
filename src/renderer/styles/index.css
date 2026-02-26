@@ -480,7 +480,7 @@ html {
 .dark.sc-native-liquid-glass .glass-effect {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04)),
-    rgba(var(--surface-base-rgb), 0.7);
+    rgba(var(--surface-base-rgb), 0.1);
 }
 
 /* Keep launcher readable in native liquid glass by giving it the same
@@ -492,7 +492,7 @@ html {
 .dark.sc-native-liquid-glass .launcher-main-surface {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04)),
-    rgba(var(--surface-base-rgb), 0.72);
+    rgba(var(--surface-base-rgb), 0.1);
 }
 
 .sc-native-liquid-glass .sc-glass-footer {
