@@ -42,7 +42,7 @@ export default function ScriptCommandSetupView({
       {alwaysMountedRunners}
       <div className="w-full h-full">
         <div className="glass-effect overflow-hidden h-full flex flex-col">
-          <div className="flex items-center gap-2 px-5 py-3.5 border-b border-white/[0.06]">
+          <div className="flex items-center gap-2 px-5 py-3.5 border-b border-[var(--ui-divider)]">
             <button
               onClick={onBack}
               className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0 p-0.5"
@@ -74,7 +74,7 @@ export default function ScriptCommandSetupView({
                           values: { ...prev.values, [arg.name]: v },
                         } : prev);
                       }}
-                      className="w-full bg-white/[0.05] border border-white/[0.1] rounded-md px-3 py-2 text-sm text-white/90 outline-none"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-segment-border)] rounded-md px-3 py-2 text-sm text-[var(--text-secondary)] outline-none focus:border-[var(--border-strong)] transition-colors"
                     >
                       <option value="">Select an option</option>
                       {(arg.data || []).map((opt) => (
@@ -95,14 +95,14 @@ export default function ScriptCommandSetupView({
                           values: { ...prev.values, [arg.name]: v },
                         } : prev);
                       }}
-                      className="w-full bg-white/[0.05] border border-white/[0.1] rounded-md px-3 py-2 text-sm text-white/90 placeholder-white/30 outline-none"
+                      className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-segment-border)] rounded-md px-3 py-2 text-sm text-[var(--text-secondary)] placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--border-strong)] transition-colors"
                     />
                   )}
                 </div>
               );
             })}
           </div>
-          <div className="sc-glass-footer px-4 py-3.5 flex items-center justify-end gap-2">
+          <div className="sc-glass-footer px-4 py-2.5 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => {
