@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { QuickLink, QuickLinkDynamicField, QuickLinkIcon } from '../types/electron';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
+import { useInlineArgumentAnchor } from './hooks/useInlineArgumentAnchor';
 import {
   getQuickLinkIconLabel,
   getQuickLinkIconOption,
@@ -993,6 +994,8 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
   } | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const inlineArgumentLaneRef = useRef<HTMLDivElement>(null);
+  const inlineArgumentClusterRef = useRef<HTMLDivElement>(null);
   const inlineDynamicInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const firstDynamicInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -1079,10 +1082,19 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
     ? quickLinkDynamicFieldsById[selectedQuickLink.id] || []
     : [];
   const selectedInlineDynamicFields = selectedQuickLinkDynamicFields.slice(0, MAX_INLINE_QUICK_LINK_ARGUMENTS);
+  const hasInlineDynamicFields = selectedInlineDynamicFields.length > 0;
   const selectedHasOverflowDynamicFields = selectedQuickLinkDynamicFields.length > selectedInlineDynamicFields.length;
   const selectedInlineDynamicValues = selectedQuickLink
     ? inlineDynamicValuesByQuickLinkId[selectedQuickLink.id] || {}
     : {};
+  const inlineArgumentStartPx = useInlineArgumentAnchor({
+    enabled: hasInlineDynamicFields,
+    query: searchQuery,
+    searchInputRef: inputRef,
+    laneRef: inlineArgumentLaneRef,
+    inlineRef: inlineArgumentClusterRef,
+    minStartRatio: 0.3,
+  });
 
   const getDynamicFieldsForQuickLink = useCallback(
     async (quickLinkId: string): Promise<QuickLinkDynamicField[]> => {
@@ -1147,14 +1159,6 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
   useEffect(() => {
     inlineDynamicInputRefs.current = inlineDynamicInputRefs.current.slice(0, selectedInlineDynamicFields.length);
   }, [selectedInlineDynamicFields.length]);
-
-  useEffect(() => {
-    if (!selectedQuickLink || selectedInlineDynamicFields.length === 0) return;
-    const timer = window.setTimeout(() => {
-      inlineDynamicInputRefs.current[0]?.focus();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [selectedQuickLink?.id, selectedInlineDynamicFields.length]);
 
   useEffect(() => {
     if (!dynamicPrompt) return;
@@ -1429,7 +1433,7 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
 
   return (
     <div className="snippet-view w-full h-full flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
-      <div className="snippet-header flex items-center gap-2.5 px-5 py-3.5">
+      <div className="snippet-header flex h-14 items-center gap-2.5 px-5">
         <button
           onClick={onClose}
           className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
@@ -1437,89 +1441,101 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Search quick links..."
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          className="min-w-[180px] flex-1 bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
-          autoFocus
-        />
-        {selectedInlineDynamicFields.length > 0 ? (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {selectedInlineDynamicFields.map((field, index) => (
-              <input
-                key={`quicklink-inline-arg-${selectedQuickLink?.id || 'none'}-${field.key}`}
-                ref={(el) => {
-                  inlineDynamicInputRefs.current[index] = el;
-                }}
-                type="text"
-                value={selectedInlineDynamicValues[field.key] || ''}
-                onChange={(event) => {
-                  if (!selectedQuickLink) return;
-                  const nextValue = event.target.value;
-                  setInlineDynamicValuesByQuickLinkId((prev) => ({
-                    ...prev,
-                    [selectedQuickLink.id]: {
-                      ...(prev[selectedQuickLink.id] || {}),
-                      [field.key]: nextValue,
-                    },
-                  }));
-                }}
-                onKeyDown={(event) => {
-                  if (
-                    (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter') &&
-                    !event.metaKey &&
-                    !event.ctrlKey &&
-                    !event.altKey &&
-                    !event.shiftKey
-                  ) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    void handleOpen();
-                    return;
-                  }
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    inputRef.current?.focus();
-                    return;
-                  }
-                  if (!event.metaKey && !event.ctrlKey && !event.altKey) {
-                    event.stopPropagation();
-                  }
-                }}
-                placeholder={field.defaultValue || field.name}
-                className="h-9 max-w-[170px] min-w-[112px] rounded-lg border border-[var(--snippet-divider)] bg-white/[0.06] px-2.5 py-1.5 text-[13px] text-white/90 placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
-              />
-            ))}
-            {selectedHasOverflowDynamicFields ? (
-              <div className="inline-flex h-9 items-center rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-2 text-[0.6875rem] font-medium text-[var(--text-subtle)]">
-                +{selectedQuickLinkDynamicFields.length - selectedInlineDynamicFields.length}
-              </div>
-            ) : null}
+        <div ref={inlineArgumentLaneRef} className="relative min-w-0 flex-1">
+          <div className="flex h-full items-center">
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Search quick links..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="min-w-0 w-full bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
+              autoFocus
+            />
           </div>
-        ) : null}
-        {searchQuery ? (
+          {hasInlineDynamicFields ? (
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-hidden">
+              <div
+                ref={inlineArgumentClusterRef}
+                className="pointer-events-auto flex max-w-full min-w-0 items-center gap-1.5"
+                style={{ marginLeft: inlineArgumentStartPx != null ? `${inlineArgumentStartPx}px` : '30%' }}
+              >
+                {selectedInlineDynamicFields.map((field, index) => (
+                  <input
+                    key={`quicklink-inline-arg-${selectedQuickLink?.id || 'none'}-${field.key}`}
+                    ref={(el) => {
+                      inlineDynamicInputRefs.current[index] = el;
+                    }}
+                    type="text"
+                    value={selectedInlineDynamicValues[field.key] || ''}
+                    onChange={(event) => {
+                      if (!selectedQuickLink) return;
+                      const nextValue = event.target.value;
+                      setInlineDynamicValuesByQuickLinkId((prev) => ({
+                        ...prev,
+                        [selectedQuickLink.id]: {
+                          ...(prev[selectedQuickLink.id] || {}),
+                          [field.key]: nextValue,
+                        },
+                      }));
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter') &&
+                        !event.metaKey &&
+                        !event.ctrlKey &&
+                        !event.altKey &&
+                        !event.shiftKey
+                      ) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void handleOpen();
+                        return;
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        inputRef.current?.focus();
+                        return;
+                      }
+                      if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+                        event.stopPropagation();
+                      }
+                    }}
+                    placeholder={field.defaultValue || field.name}
+                    className="h-7 max-w-[154px] min-w-[96px] rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-2 text-[0.75rem] leading-none text-white/90 placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
+                  />
+                ))}
+                {selectedHasOverflowDynamicFields ? (
+                  <div className="inline-flex h-7 items-center rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-1.5 text-[0.625rem] font-medium text-[var(--text-subtle)]">
+                    +{selectedQuickLinkDynamicFields.length - selectedInlineDynamicFields.length}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          {searchQuery ? (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+              aria-label="Clear"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          ) : null}
           <button
-            onClick={() => setSearchQuery('')}
-            className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
-            aria-label="Clear"
+            onClick={() => {
+              setEditingQuickLink(undefined);
+              setView('create');
+            }}
+            className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
+            title="Create Quick Link"
           >
-            <X className="w-4 h-4" />
+            <Plus className="w-4 h-4" />
           </button>
-        ) : null}
-        <button
-          onClick={() => {
-            setEditingQuickLink(undefined);
-            setView('create');
-          }}
-          className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
-          title="Create Quick Link"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        </div>
       </div>
 
       <div className="flex-1 flex min-h-0">

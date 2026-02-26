@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 import { Search, X, ArrowLeft, Plus, FileText, Pin, PinOff, Pencil, Copy, Clipboard, Trash2, Files, TextCursorInput, Variable, Hash, Clock, Calendar, CalendarClock } from 'lucide-react';
 import type { Snippet, SnippetDynamicField } from '../types/electron';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
+import { useInlineArgumentAnchor } from './hooks/useInlineArgumentAnchor';
 
 interface SnippetManagerProps {
   onClose: () => void;
@@ -428,6 +429,8 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
     values: Record<string, string>;
   } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inlineArgumentLaneRef = useRef<HTMLDivElement>(null);
+  const inlineArgumentClusterRef = useRef<HTMLDivElement>(null);
   const inlineArgumentInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const firstDynamicInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -522,10 +525,19 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
     ? extractSnippetArgumentFields(activeSnippet.content)
     : [];
   const inlineActiveSnippetDynamicFields = activeSnippetDynamicFields.slice(0, MAX_INLINE_SNIPPET_ARGUMENTS);
+  const hasInlineSnippetArguments = inlineActiveSnippetDynamicFields.length > 0;
   const activeSnippetHasOverflowFields = activeSnippetDynamicFields.length > inlineActiveSnippetDynamicFields.length;
   const activeInlineArgumentValues = activeSnippet
     ? inlineArgumentValuesBySnippetId[activeSnippet.id] || {}
     : {};
+  const inlineArgumentStartPx = useInlineArgumentAnchor({
+    enabled: hasInlineSnippetArguments,
+    query: searchQuery,
+    searchInputRef: inputRef,
+    laneRef: inlineArgumentLaneRef,
+    inlineRef: inlineArgumentClusterRef,
+    minStartRatio: 0.3,
+  });
 
   const getResolvedInlineArgumentValues = useCallback(
     (snippet: Snippet, fields: SnippetDynamicField[]) => {
@@ -561,14 +573,6 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
       };
     });
   }, [activeSnippet, activeSnippetDynamicFields]);
-
-  useEffect(() => {
-    if (!activeSnippet || inlineActiveSnippetDynamicFields.length === 0) return;
-    const timer = window.setTimeout(() => {
-      inlineArgumentInputRefs.current[0]?.focus();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [activeSnippet?.id, inlineActiveSnippetDynamicFields.length]);
 
   // ─── Actions ────────────────────────────────────────────────────
 
@@ -957,92 +961,104 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
   return (
     <div className="snippet-view snippet-search-view w-full h-full flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
       {/* Header */}
-      <div className="snippet-header flex items-center gap-2.5 px-5 py-3.5">
+      <div className="snippet-header flex h-14 items-center gap-2.5 px-5">
         <button
           onClick={onClose}
           className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Search snippets..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="min-w-[180px] flex-1 bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
-          autoFocus
-        />
-        {inlineActiveSnippetDynamicFields.length > 0 ? (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {inlineActiveSnippetDynamicFields.map((field, index) => (
-              <input
-                key={`snippet-inline-arg-${field.key}`}
-                ref={(el) => {
-                  inlineArgumentInputRefs.current[index] = el;
-                }}
-                type="text"
-                value={activeInlineArgumentValues[field.key] || ''}
-                onChange={(e) => {
-                  if (!activeSnippet) return;
-                  const nextValue = e.target.value;
-                  setInlineArgumentValuesBySnippetId((prev) => ({
-                    ...prev,
-                    [activeSnippet.id]: {
-                      ...(prev[activeSnippet.id] || {}),
-                      [field.key]: nextValue,
-                    },
-                  }));
-                }}
-                onKeyDown={(e) => {
-                  if (
-                    (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') &&
-                    !e.metaKey &&
-                    !e.ctrlKey &&
-                    !e.altKey &&
-                    !e.shiftKey
-                  ) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void handlePaste();
-                    return;
-                  }
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    inputRef.current?.focus();
-                    return;
-                  }
-                  if (!e.metaKey && !e.ctrlKey && !e.altKey) {
-                    e.stopPropagation();
-                  }
-                }}
-                placeholder={field.defaultValue || field.name}
-                className="h-9 max-w-[170px] min-w-[112px] rounded-lg border border-[var(--snippet-divider)] bg-white/[0.06] px-2.5 py-1.5 text-[13px] text-white/90 placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
-              />
-            ))}
-            {activeSnippetHasOverflowFields ? (
-              <div className="inline-flex h-9 items-center rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-2 text-[0.6875rem] font-medium text-[var(--text-subtle)]">
-                +{activeSnippetDynamicFields.length - inlineActiveSnippetDynamicFields.length}
-              </div>
-            ) : null}
+        <div ref={inlineArgumentLaneRef} className="relative min-w-0 flex-1">
+          <div className="flex h-full items-center">
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Search snippets..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="min-w-0 w-full bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
+              autoFocus
+            />
           </div>
-        ) : null}
-        {searchQuery && (
+          {hasInlineSnippetArguments ? (
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-hidden">
+              <div
+                ref={inlineArgumentClusterRef}
+                className="pointer-events-auto flex max-w-full min-w-0 items-center gap-1.5"
+                style={{ marginLeft: inlineArgumentStartPx != null ? `${inlineArgumentStartPx}px` : '30%' }}
+              >
+                {inlineActiveSnippetDynamicFields.map((field, index) => (
+                  <input
+                    key={`snippet-inline-arg-${field.key}`}
+                    ref={(el) => {
+                      inlineArgumentInputRefs.current[index] = el;
+                    }}
+                    type="text"
+                    value={activeInlineArgumentValues[field.key] || ''}
+                    onChange={(e) => {
+                      if (!activeSnippet) return;
+                      const nextValue = e.target.value;
+                      setInlineArgumentValuesBySnippetId((prev) => ({
+                        ...prev,
+                        [activeSnippet.id]: {
+                          ...(prev[activeSnippet.id] || {}),
+                          [field.key]: nextValue,
+                        },
+                      }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') &&
+                        !e.metaKey &&
+                        !e.ctrlKey &&
+                        !e.altKey &&
+                        !e.shiftKey
+                      ) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void handlePaste();
+                        return;
+                      }
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        inputRef.current?.focus();
+                        return;
+                      }
+                      if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+                        e.stopPropagation();
+                      }
+                    }}
+                    placeholder={field.defaultValue || field.name}
+                    className="h-7 max-w-[154px] min-w-[96px] rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-2 text-[0.75rem] leading-none text-white/90 placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
+                  />
+                ))}
+                {activeSnippetHasOverflowFields ? (
+                  <div className="inline-flex h-7 items-center rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-1.5 text-[0.625rem] font-medium text-[var(--text-subtle)]">
+                    +{activeSnippetDynamicFields.length - inlineActiveSnippetDynamicFields.length}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
           <button
-            onClick={() => setSearchQuery('')}
-            className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+            onClick={() => setView('create')}
+            className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
+            title="Create Snippet"
           >
-            <X className="w-4 h-4" />
+            <Plus className="w-4 h-4" />
           </button>
-        )}
-        <button
-          onClick={() => setView('create')}
-          className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
-          title="Create Snippet"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        </div>
       </div>
 
       {/* Import result banner */}

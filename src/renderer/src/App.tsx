@@ -36,6 +36,7 @@ import { useMenuBarExtensions } from './hooks/useMenuBarExtensions';
 import { useBackgroundRefresh } from './hooks/useBackgroundRefresh';
 import { useSpeakManager } from './hooks/useSpeakManager';
 import { useWhisperManager } from './hooks/useWhisperManager';
+import { useInlineArgumentAnchor } from './hooks/useInlineArgumentAnchor';
 import { LAST_EXT_KEY, MAX_RECENT_COMMANDS } from './utils/constants';
 import { applyBaseColor } from './utils/base-color';
 import { resetAccessToken } from './raycast-api';
@@ -198,6 +199,8 @@ const App: React.FC = () => {
   const [memoryActionLoading, setMemoryActionLoading] = useState(false);
   const memoryFeedbackTimerRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inlineArgumentLaneRef = useRef<HTMLDivElement>(null);
+  const inlineArgumentClusterRef = useRef<HTMLDivElement>(null);
   const inlineArgumentInputRefs = useRef<Array<HTMLInputElement | HTMLSelectElement | null>>([]);
   const inlineQuickLinkInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const fileSearchRequestSeqRef = useRef(0);
@@ -1183,6 +1186,14 @@ const App: React.FC = () => {
   const isShowingInlineArgumentInputs =
     selectedInlineExtensionArgumentDefinitions.length > 0 || selectedInlineQuickLinkDynamicFields.length > 0;
   const shouldHideAskAi = Boolean(selectedQuickLinkId) || isShowingInlineArgumentInputs;
+  const inlineArgumentStartPx = useInlineArgumentAnchor({
+    enabled: isShowingInlineArgumentInputs,
+    query: searchQuery,
+    searchInputRef: inputRef,
+    laneRef: inlineArgumentLaneRef,
+    inlineRef: inlineArgumentClusterRef,
+    minStartRatio: 0.3,
+  });
   const selectedFileResultPath = useMemo(
     () => getFileResultPathFromCommand(selectedCommand),
     [selectedCommand]
@@ -1269,16 +1280,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!isLauncherModeActive) return;
-    if (selectedInlineExtensionArgumentDefinitions.length === 0) return;
-    const timer = window.setTimeout(() => {
-      inlineArgumentInputRefs.current[0]?.focus();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [isLauncherModeActive, selectedCommand?.id, selectedInlineExtensionArgumentDefinitions.length]);
-
-  useEffect(() => {
-    if (!isLauncherModeActive) return;
-    if (selectedInlineExtensionArgumentDefinitions.length > 0 || selectedInlineQuickLinkDynamicFields.length > 0) return;
     const timer = window.setTimeout(() => {
       if (document.activeElement !== inputRef.current) {
         inputRef.current?.focus();
@@ -2611,116 +2612,134 @@ const App: React.FC = () => {
     <div className="w-full h-full">
       <div className="glass-effect launcher-main-surface overflow-hidden h-full flex flex-col relative">
         {/* Search header - transparent background */}
-        <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[var(--ui-divider)]">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Search apps and settings..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="launcher-search-input min-w-[180px] flex-1 bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] placeholder:font-medium text-[0.9375rem] font-medium tracking-[0.005em]"
-            autoFocus
-          />
-          {selectedInlineExtensionArgumentDefinitions.length > 0 ? (
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {selectedInlineExtensionArgumentDefinitions.map((definition, index) => {
-                const value = selectedInlineExtensionArgumentValues[definition.name] || '';
-                const placeholder = definition.placeholder || definition.title || definition.name;
-                const baseClassName =
-                  'h-7 max-w-[154px] min-w-[96px] rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-2 text-[0.75rem] text-[var(--text-primary)] placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]';
-                if (definition.type === 'dropdown') {
-                  return (
-                    <select
-                      key={`inline-arg-${definition.name}`}
+        <div className="flex h-14 items-center gap-2.5 px-5 border-b border-[var(--ui-divider)]">
+          <div ref={inlineArgumentLaneRef} className="relative min-w-0 flex-1">
+            <div className="flex h-full items-center">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Search apps and settings..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="launcher-search-input min-w-0 w-full bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[color:var(--text-muted)] placeholder:font-medium text-[0.9375rem] font-medium tracking-[0.005em]"
+                autoFocus
+              />
+            </div>
+            {selectedInlineExtensionArgumentDefinitions.length > 0 ? (
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-hidden">
+                <div
+                  ref={inlineArgumentClusterRef}
+                  className="pointer-events-auto flex max-w-full min-w-0 items-center gap-1.5"
+                  style={{ marginLeft: inlineArgumentStartPx != null ? `${inlineArgumentStartPx}px` : '30%' }}
+                >
+                  {selectedInlineExtensionArgumentDefinitions.map((definition, index) => {
+                    const value = selectedInlineExtensionArgumentValues[definition.name] || '';
+                    const placeholder = definition.placeholder || definition.title || definition.name;
+                    const baseClassName =
+                      'h-7 max-w-[154px] min-w-[96px] rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-2 text-[0.75rem] leading-none text-[var(--text-primary)] placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]';
+                    if (definition.type === 'dropdown') {
+                      return (
+                        <select
+                          key={`inline-arg-${definition.name}`}
+                          ref={(el) => {
+                            inlineArgumentInputRefs.current[index] = el;
+                          }}
+                          value={value}
+                          onChange={(event) => {
+                            if (!selectedCommand) return;
+                            updateInlineExtensionArgumentValue(selectedCommand, definition.name, event.target.value);
+                          }}
+                          onKeyDown={handleKeyDown}
+                          className={`${baseClassName} pr-5`}
+                        >
+                          <option value="">{placeholder}</option>
+                          {(definition.data || []).map((option) => (
+                            <option key={option?.value || option?.title} value={option?.value || ''}>
+                              {option?.title || option?.value || ''}
+                            </option>
+                          ))}
+                        </select>
+                      );
+                    }
+                    return (
+                      <input
+                        key={`inline-arg-${definition.name}`}
+                        ref={(el) => {
+                          inlineArgumentInputRefs.current[index] = el;
+                        }}
+                        type={definition.type === 'password' ? 'password' : 'text'}
+                        value={value}
+                        placeholder={placeholder}
+                        onChange={(event) => {
+                          if (!selectedCommand) return;
+                          updateInlineExtensionArgumentValue(selectedCommand, definition.name, event.target.value);
+                        }}
+                        onKeyDown={handleKeyDown}
+                        className={baseClassName}
+                      />
+                    );
+                  })}
+                  {hasSelectedExtensionOverflowArguments ? (
+                    <div className="inline-flex h-7 items-center rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-1.5 text-[0.625rem] font-medium text-[var(--text-subtle)]">
+                      +{selectedExtensionArgumentDefinitions.length - selectedInlineExtensionArgumentDefinitions.length}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : selectedInlineQuickLinkDynamicFields.length > 0 ? (
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-hidden">
+                <div
+                  ref={inlineArgumentClusterRef}
+                  className="pointer-events-auto flex max-w-full min-w-0 items-center gap-1.5"
+                  style={{ marginLeft: inlineArgumentStartPx != null ? `${inlineArgumentStartPx}px` : '30%' }}
+                >
+                  {selectedInlineQuickLinkDynamicFields.map((field, index) => (
+                    <input
+                      key={`inline-quicklink-${selectedQuickLinkId || 'none'}-${field.key}`}
                       ref={(el) => {
-                        inlineArgumentInputRefs.current[index] = el;
+                        inlineQuickLinkInputRefs.current[index] = el;
                       }}
-                      value={value}
+                      type="text"
+                      value={selectedInlineQuickLinkDynamicValues[field.key] || ''}
+                      placeholder={field.defaultValue || field.name}
                       onChange={(event) => {
-                        if (!selectedCommand) return;
-                        updateInlineExtensionArgumentValue(selectedCommand, definition.name, event.target.value);
+                        if (!selectedQuickLinkId) return;
+                        updateInlineQuickLinkDynamicValue(selectedQuickLinkId, field.key, event.target.value);
                       }}
                       onKeyDown={handleKeyDown}
-                      className={`${baseClassName} pr-5`}
-                    >
-                      <option value="">{placeholder}</option>
-                      {(definition.data || []).map((option) => (
-                        <option key={option?.value || option?.title} value={option?.value || ''}>
-                          {option?.title || option?.value || ''}
-                        </option>
-                      ))}
-                    </select>
-                  );
-                }
-                return (
-                  <input
-                    key={`inline-arg-${definition.name}`}
-                    ref={(el) => {
-                      inlineArgumentInputRefs.current[index] = el;
-                    }}
-                    type={definition.type === 'password' ? 'password' : 'text'}
-                    value={value}
-                    placeholder={placeholder}
-                    onChange={(event) => {
-                      if (!selectedCommand) return;
-                      updateInlineExtensionArgumentValue(selectedCommand, definition.name, event.target.value);
-                    }}
-                    onKeyDown={handleKeyDown}
-                    className={baseClassName}
-                  />
-                );
-              })}
-              {hasSelectedExtensionOverflowArguments ? (
-                <div className="inline-flex h-7 items-center rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-1.5 text-[0.625rem] font-medium text-[var(--text-subtle)]">
-                  +{selectedExtensionArgumentDefinitions.length - selectedInlineExtensionArgumentDefinitions.length}
+                      className="h-7 max-w-[154px] min-w-[96px] rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-2 text-[0.75rem] leading-none text-[var(--text-primary)] placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
+                    />
+                  ))}
+                  {hasSelectedQuickLinkOverflowDynamicFields ? (
+                    <div className="inline-flex h-7 items-center rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-1.5 text-[0.625rem] font-medium text-[var(--text-subtle)]">
+                      +{selectedQuickLinkDynamicFields.length - selectedInlineQuickLinkDynamicFields.length}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-          ) : selectedInlineQuickLinkDynamicFields.length > 0 ? (
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {selectedInlineQuickLinkDynamicFields.map((field, index) => (
-                <input
-                  key={`inline-quicklink-${selectedQuickLinkId || 'none'}-${field.key}`}
-                  ref={(el) => {
-                    inlineQuickLinkInputRefs.current[index] = el;
-                  }}
-                  type="text"
-                  value={selectedInlineQuickLinkDynamicValues[field.key] || ''}
-                  placeholder={field.defaultValue || field.name}
-                  onChange={(event) => {
-                    if (!selectedQuickLinkId) return;
-                    updateInlineQuickLinkDynamicValue(selectedQuickLinkId, field.key, event.target.value);
-                  }}
-                  onKeyDown={handleKeyDown}
-                  className="h-7 max-w-[154px] min-w-[96px] rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-2 text-[0.75rem] text-[var(--text-primary)] placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
-                />
-              ))}
-              {hasSelectedQuickLinkOverflowDynamicFields ? (
-                <div className="inline-flex h-7 items-center rounded-md border border-[var(--launcher-chip-border)] bg-[var(--launcher-chip-bg)] px-1.5 text-[0.625rem] font-medium text-[var(--text-subtle)]">
-                  +{selectedQuickLinkDynamicFields.length - selectedInlineQuickLinkDynamicFields.length}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {searchQuery && aiAvailable && !shouldHideAskAi && (
-            <button
-              onClick={() => startAiChat(searchQuery)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--soft-pill-bg)] hover:bg-[var(--soft-pill-hover-bg)] transition-colors flex-shrink-0 group"
-            >
-              <Sparkles className="w-3 h-3 text-white/30 group-hover:text-purple-400 transition-colors" />
-              <span className="text-[0.6875rem] text-white/30 group-hover:text-white/50 transition-colors">Ask AI</span>
-              <kbd className="text-[0.625rem] text-white/20 bg-[var(--soft-pill-bg)] px-1 py-0.5 rounded font-mono leading-none">Tab</kbd>
-            </button>
-          )}
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+              </div>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            {searchQuery && aiAvailable && !shouldHideAskAi && (
+              <button
+                onClick={() => startAiChat(searchQuery)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--soft-pill-bg)] hover:bg-[var(--soft-pill-hover-bg)] transition-colors flex-shrink-0 group"
+              >
+                <Sparkles className="w-3 h-3 text-white/30 group-hover:text-purple-400 transition-colors" />
+                <span className="text-[0.6875rem] text-white/30 group-hover:text-white/50 transition-colors">Ask AI</span>
+                <kbd className="text-[0.625rem] text-white/20 bg-[var(--soft-pill-bg)] px-1 py-0.5 rounded font-mono leading-none">Tab</kbd>
+              </button>
+            )}
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Command list */}
