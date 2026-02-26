@@ -14,6 +14,7 @@ import { Search, X, ArrowLeft, Plus, FileText, Pin, PinOff, Pencil, Copy, Clipbo
 import type { Snippet, SnippetDynamicField } from '../types/electron';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
 import { useInlineArgumentAnchor } from './hooks/useInlineArgumentAnchor';
+import InlineArgumentField, { InlineArgumentOverflowBadge } from './components/InlineArgumentField';
 
 interface SnippetManagerProps {
   onClose: () => void;
@@ -961,7 +962,7 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
   return (
     <div className="snippet-view snippet-search-view w-full h-full flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
       {/* Header */}
-      <div className="snippet-header flex h-14 items-center gap-2.5 px-5">
+      <div className="snippet-header flex h-16 items-center gap-2 px-4">
         <button
           onClick={onClose}
           className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
@@ -976,28 +977,33 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
               placeholder="Search snippets..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Tab' && hasInlineSnippetArguments) {
+                  e.preventDefault();
+                  const targetIndex = e.shiftKey ? inlineActiveSnippetDynamicFields.length - 1 : 0;
+                  inlineArgumentInputRefs.current[targetIndex]?.focus();
+                }
+              }}
               className="min-w-0 w-full bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
               autoFocus
             />
           </div>
           {hasInlineSnippetArguments ? (
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-hidden">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-x-hidden overflow-y-visible">
               <div
                 ref={inlineArgumentClusterRef}
-                className="pointer-events-auto flex max-w-full min-w-0 items-center gap-1.5"
+                className="pointer-events-auto inline-flex min-w-0 items-center gap-1.5"
                 style={{ marginLeft: inlineArgumentStartPx != null ? `${inlineArgumentStartPx}px` : '30%' }}
               >
                 {inlineActiveSnippetDynamicFields.map((field, index) => (
-                  <input
+                  <InlineArgumentField
                     key={`snippet-inline-arg-${field.key}`}
-                    ref={(el) => {
+                    inputRef={(el) => {
                       inlineArgumentInputRefs.current[index] = el;
                     }}
-                    type="text"
                     value={activeInlineArgumentValues[field.key] || ''}
-                    onChange={(e) => {
+                    onChange={(nextValue) => {
                       if (!activeSnippet) return;
-                      const nextValue = e.target.value;
                       setInlineArgumentValuesBySnippetId((prev) => ({
                         ...prev,
                         [activeSnippet.id]: {
@@ -1007,6 +1013,18 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
                       }));
                     }}
                     onKeyDown={(e) => {
+                      if (e.key === 'Tab') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const total = inlineActiveSnippetDynamicFields.length;
+                        const nextIndex = e.shiftKey ? index - 1 : index + 1;
+                        if (nextIndex >= 0 && nextIndex < total) {
+                          inlineArgumentInputRefs.current[nextIndex]?.focus();
+                        } else {
+                          inputRef.current?.focus();
+                        }
+                        return;
+                      }
                       if (
                         (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') &&
                         !e.metaKey &&
@@ -1030,13 +1048,12 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
                       }
                     }}
                     placeholder={field.defaultValue || field.name}
-                    className="h-7 max-w-[154px] min-w-[96px] rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-2 text-[0.75rem] leading-none text-white/90 placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
                   />
                 ))}
                 {activeSnippetHasOverflowFields ? (
-                  <div className="inline-flex h-7 items-center rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-1.5 text-[0.625rem] font-medium text-[var(--text-subtle)]">
-                    +{activeSnippetDynamicFields.length - inlineActiveSnippetDynamicFields.length}
-                  </div>
+                  <InlineArgumentOverflowBadge
+                    count={activeSnippetDynamicFields.length - inlineActiveSnippetDynamicFields.length}
+                  />
                 ) : null}
               </div>
             </div>

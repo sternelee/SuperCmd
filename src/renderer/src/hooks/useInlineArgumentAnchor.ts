@@ -51,7 +51,7 @@ export function useInlineArgumentAnchor({
 
     const laneWidth = laneEl.clientWidth;
     if (laneWidth <= 0) return;
-    const inlineWidth = inlineEl.offsetWidth;
+    const inlineWidth = Math.max(inlineEl.offsetWidth, inlineEl.scrollWidth);
 
     const defaultStart = Math.floor(laneWidth * minStartRatio);
     if (!canvasRef.current) {

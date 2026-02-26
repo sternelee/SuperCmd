@@ -21,6 +21,7 @@ import {
 import type { QuickLink, QuickLinkDynamicField, QuickLinkIcon } from '../types/electron';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
 import { useInlineArgumentAnchor } from './hooks/useInlineArgumentAnchor';
+import InlineArgumentField, { InlineArgumentLeadingIcon, InlineArgumentOverflowBadge } from './components/InlineArgumentField';
 import {
   getQuickLinkIconLabel,
   getQuickLinkIconOption,
@@ -1087,6 +1088,15 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
   const selectedInlineDynamicValues = selectedQuickLink
     ? inlineDynamicValuesByQuickLinkId[selectedQuickLink.id] || {}
     : {};
+  const selectedInlineLeadingIcon = useMemo(() => {
+    if (!hasInlineDynamicFields || !selectedQuickLink) return null;
+    return (
+      <QuickLinkIconPreview
+        icon={selectedQuickLink.icon}
+        appIconDataUrl={selectedQuickLink.appIconDataUrl}
+      />
+    );
+  }, [hasInlineDynamicFields, selectedQuickLink]);
   const inlineArgumentStartPx = useInlineArgumentAnchor({
     enabled: hasInlineDynamicFields,
     query: searchQuery,
@@ -1433,7 +1443,7 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
 
   return (
     <div className="snippet-view w-full h-full flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
-      <div className="snippet-header flex h-14 items-center gap-2.5 px-5">
+      <div className="snippet-header flex h-16 items-center gap-2 px-4">
         <button
           onClick={onClose}
           className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
@@ -1449,28 +1459,36 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
               placeholder="Search quick links..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Tab' && hasInlineDynamicFields) {
+                  event.preventDefault();
+                  const targetIndex = event.shiftKey ? selectedInlineDynamicFields.length - 1 : 0;
+                  inlineDynamicInputRefs.current[targetIndex]?.focus();
+                }
+              }}
               className="min-w-0 w-full bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
               autoFocus
             />
           </div>
           {hasInlineDynamicFields ? (
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-hidden">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center overflow-x-hidden overflow-y-visible">
               <div
                 ref={inlineArgumentClusterRef}
-                className="pointer-events-auto flex max-w-full min-w-0 items-center gap-1.5"
+                className="pointer-events-auto inline-flex min-w-0 items-center gap-1"
                 style={{ marginLeft: inlineArgumentStartPx != null ? `${inlineArgumentStartPx}px` : '30%' }}
               >
+                {selectedInlineLeadingIcon ? (
+                  <InlineArgumentLeadingIcon>{selectedInlineLeadingIcon}</InlineArgumentLeadingIcon>
+                ) : null}
                 {selectedInlineDynamicFields.map((field, index) => (
-                  <input
+                  <InlineArgumentField
                     key={`quicklink-inline-arg-${selectedQuickLink?.id || 'none'}-${field.key}`}
-                    ref={(el) => {
+                    inputRef={(el) => {
                       inlineDynamicInputRefs.current[index] = el;
                     }}
-                    type="text"
                     value={selectedInlineDynamicValues[field.key] || ''}
-                    onChange={(event) => {
+                    onChange={(nextValue) => {
                       if (!selectedQuickLink) return;
-                      const nextValue = event.target.value;
                       setInlineDynamicValuesByQuickLinkId((prev) => ({
                         ...prev,
                         [selectedQuickLink.id]: {
@@ -1480,6 +1498,18 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
                       }));
                     }}
                     onKeyDown={(event) => {
+                      if (event.key === 'Tab') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const total = selectedInlineDynamicFields.length;
+                        const nextIndex = event.shiftKey ? index - 1 : index + 1;
+                        if (nextIndex >= 0 && nextIndex < total) {
+                          inlineDynamicInputRefs.current[nextIndex]?.focus();
+                        } else {
+                          inputRef.current?.focus();
+                        }
+                        return;
+                      }
                       if (
                         (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter') &&
                         !event.metaKey &&
@@ -1503,13 +1533,12 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
                       }
                     }}
                     placeholder={field.defaultValue || field.name}
-                    className="h-7 max-w-[154px] min-w-[96px] rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-2 text-[0.75rem] leading-none text-white/90 placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
                   />
                 ))}
                 {selectedHasOverflowDynamicFields ? (
-                  <div className="inline-flex h-7 items-center rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-1.5 text-[0.625rem] font-medium text-[var(--text-subtle)]">
-                    +{selectedQuickLinkDynamicFields.length - selectedInlineDynamicFields.length}
-                  </div>
+                  <InlineArgumentOverflowBadge
+                    count={selectedQuickLinkDynamicFields.length - selectedInlineDynamicFields.length}
+                  />
                 ) : null}
               </div>
             </div>
