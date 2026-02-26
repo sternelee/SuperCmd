@@ -63,6 +63,20 @@ import {
   importSnippetsFromFile,
   exportSnippetsToFile,
 } from './snippet-store';
+import {
+  initQuickLinkStore,
+  getAllQuickLinks,
+  searchQuickLinks,
+  createQuickLink,
+  updateQuickLink,
+  deleteQuickLink,
+  duplicateQuickLink,
+  getQuickLinkById,
+  getQuickLinkByCommandId,
+  getQuickLinkDynamicFieldsById,
+  isQuickLinkCommandId,
+  resolveQuickLinkUrlTemplate,
+} from './quicklink-store';
 
 const electron = require('electron');
 const { app, BrowserWindow, globalShortcut, ipcMain, screen, shell, Menu, Tray, nativeImage, protocol, net, dialog, systemPreferences, clipboard: systemClipboard } = electron;
@@ -457,7 +471,7 @@ function applyLiquidGlassToWindow(
     return;
   }
 
-  const fallbackVibrancy = options?.fallbackVibrancy || 'under-window';
+  const fallbackVibrancy = 'hud';
   const cornerRadius = Number.isFinite(Number(options?.cornerRadius)) ? Number(options?.cornerRadius) : 16;
   const darkTint = String(options?.darkTint || '#10131a42');
   const lightTint = String(options?.lightTint || '#f8fbff26');
@@ -2402,6 +2416,8 @@ function isWindowShownRoutedSystemCommand(commandId: string): boolean {
     commandId === 'system-clipboard-manager' ||
     commandId === 'system-search-snippets' ||
     commandId === 'system-create-snippet' ||
+    commandId === 'system-search-quicklinks' ||
+    commandId === 'system-create-quicklink' ||
     commandId === 'system-search-files' ||
     commandId === 'system-open-onboarding'
   );
@@ -4541,6 +4557,114 @@ function parseRaycastDeepLink(url: string): ParsedRaycastDeepLink | null {
   return null;
 }
 
+function normalizeOpenTarget(rawTarget: string): {
+  normalizedTarget: string;
+  launchTarget: string;
+  externalTarget: string;
+} {
+  const normalizedTarget = (() => {
+    if (rawTarget.startsWith('file://')) {
+      try {
+        return decodeURIComponent(new URL(rawTarget).pathname);
+      } catch {
+        return rawTarget;
+      }
+    }
+    if (rawTarget.startsWith('~/')) return path.join(os.homedir(), rawTarget.slice(2));
+    if (rawTarget === '~') return os.homedir();
+    return rawTarget;
+  })();
+
+  const launchTarget = path.isAbsolute(normalizedTarget) ? normalizedTarget : rawTarget;
+  const externalTarget = rawTarget.includes(' ') ? encodeURI(rawTarget) : rawTarget;
+  return { normalizedTarget, launchTarget, externalTarget };
+}
+
+async function openTargetWithApplication(target: string, application?: string): Promise<boolean> {
+  const rawTarget = String(target || '').trim();
+  if (!rawTarget) return false;
+  const appName = String(application || '').trim();
+  const { normalizedTarget, launchTarget, externalTarget } = normalizeOpenTarget(rawTarget);
+
+  if (appName) {
+    try {
+      const { spawn } = require('child_process');
+      const exitCode = await new Promise<number>((resolve) => {
+        const proc = spawn('open', ['-a', appName, launchTarget], { shell: false });
+        let stderr = '';
+
+        proc.stderr?.on('data', (data: Buffer) => {
+          stderr += data.toString();
+        });
+
+        proc.on('close', (code: number | null) => {
+          const resolved = code ?? 1;
+          if (resolved !== 0) {
+            console.error(`Failed to open target with ${appName}: ${launchTarget}`, stderr.trim() || `exit code ${resolved}`);
+          }
+          resolve(resolved);
+        });
+
+        proc.on('error', (err: Error) => {
+          console.error(`Failed to open target with ${appName}: ${launchTarget}`, err);
+          resolve(1);
+        });
+      });
+      return exitCode === 0;
+    } catch (error) {
+      console.error(`Failed to open target with ${appName}: ${launchTarget}`, error);
+      return false;
+    }
+  }
+
+  if (path.isAbsolute(normalizedTarget)) {
+    try {
+      const openPathError = await shell.openPath(normalizedTarget);
+      if (openPathError) {
+        console.error(`Failed to open path: ${normalizedTarget}`, openPathError);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error(`Failed to open path: ${normalizedTarget}`, error);
+      return false;
+    }
+  }
+
+  try {
+    await shell.openExternal(externalTarget);
+    return true;
+  } catch (error) {
+    if (externalTarget !== rawTarget) {
+      try {
+        await shell.openExternal(rawTarget);
+        return true;
+      } catch {}
+    }
+    console.error(`Failed to open URL: ${rawTarget}`, error);
+    return false;
+  }
+}
+
+async function openQuickLinkById(id: string, dynamicValues?: Record<string, string>): Promise<boolean> {
+  const quickLinkId = String(id || '').trim();
+  if (!quickLinkId) return false;
+
+  const quickLink = getQuickLinkById(quickLinkId);
+  if (!quickLink) {
+    console.warn(`[QuickLinks] Quick link not found: ${quickLinkId}`);
+    return false;
+  }
+
+  const resolvedTarget = resolveQuickLinkUrlTemplate(quickLink.urlTemplate, dynamicValues);
+  if (!resolvedTarget) {
+    console.warn(`[QuickLinks] Resolved URL is empty for: ${quickLink.name}`);
+    return false;
+  }
+
+  return await openTargetWithApplication(resolvedTarget, quickLink.applicationName);
+}
+
 async function buildLaunchBundle(options: {
   extensionName: string;
   commandName: string;
@@ -4626,6 +4750,7 @@ function createWindow(): void {
     skipTaskbar: true,
     alwaysOnTop: true,
     show: false,
+    vibrancy: false,
     transparent: true,
     backgroundColor: '#00000000',
     webPreferences: {
@@ -4634,6 +4759,7 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+  mainWindow.setWindowButtonVisibility(true);
   applyLiquidGlassToWindow(mainWindow, {
     cornerRadius: 16,
     fallbackVibrancy: 'under-window',
@@ -6269,6 +6395,8 @@ async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' |
     commandId === 'system-clipboard-manager' ||
     commandId === 'system-search-snippets' ||
     commandId === 'system-create-snippet' ||
+    commandId === 'system-search-quicklinks' ||
+    commandId === 'system-create-quicklink' ||
     commandId === 'system-search-files'
   ) {
     return await openLauncherAndRunSystemCommand(commandId, {
@@ -6456,6 +6584,18 @@ async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' |
       console.error('[ScriptCommand] Failed to open script commands folder.');
       return false;
     }
+  }
+  if (isQuickLinkCommandId(commandId)) {
+    const quickLink = getQuickLinkByCommandId(commandId);
+    if (!quickLink) {
+      console.warn(`[QuickLinks] Command not found: ${commandId}`);
+      return false;
+    }
+    const opened = await openQuickLinkById(quickLink.id);
+    if (opened && source === 'launcher') {
+      setTimeout(() => hideWindow(), 50);
+    }
+    return opened;
   }
 
   const allCommands = await getAvailableCommands();
@@ -8119,6 +8259,7 @@ app.whenReady().then(async () => {
   try { refreshSnippetExpander(); } catch (e) {
     console.warn('[SnippetExpander] Failed to start:', e);
   }
+  initQuickLinkStore();
 
   // Rebuilding all extensions on every startup can stall app launch if one
   // extension build hangs. Keep startup fast by default; allow opt-in.
@@ -8853,72 +8994,7 @@ app.whenReady().then(async () => {
       }
     }
 
-    const normalizedTarget = (() => {
-      if (rawTarget.startsWith('file://')) {
-        try {
-          return decodeURIComponent(new URL(rawTarget).pathname);
-        } catch {
-          return rawTarget;
-        }
-      }
-      if (rawTarget.startsWith('~/')) return path.join(os.homedir(), rawTarget.slice(2));
-      if (rawTarget === '~') return os.homedir();
-      return rawTarget;
-    })();
-    const launchTarget = path.isAbsolute(normalizedTarget) ? normalizedTarget : rawTarget;
-
-    if (appName) {
-      try {
-        const { spawn } = require('child_process');
-        const exitCode = await new Promise<number>((resolve) => {
-          const proc = spawn('open', ['-a', appName, launchTarget], { shell: false });
-          let stderr = '';
-
-          proc.stderr?.on('data', (data: Buffer) => {
-            stderr += data.toString();
-          });
-
-          proc.on('close', (code: number | null) => {
-            const resolved = code ?? 1;
-            if (resolved !== 0) {
-              console.error(`Failed to open target with ${appName}: ${launchTarget}`, stderr.trim() || `exit code ${resolved}`);
-            }
-            resolve(resolved);
-          });
-
-          proc.on('error', (err: Error) => {
-            console.error(`Failed to open target with ${appName}: ${launchTarget}`, err);
-            resolve(1);
-          });
-        });
-        return exitCode === 0;
-      } catch (e) {
-        console.error(`Failed to open target with ${appName}: ${launchTarget}`, e);
-        return false;
-      }
-    }
-
-    if (path.isAbsolute(normalizedTarget)) {
-      try {
-        const openPathError = await shell.openPath(normalizedTarget);
-        if (openPathError) {
-          console.error(`Failed to open path: ${normalizedTarget}`, openPathError);
-          return false;
-        }
-        return true;
-      } catch (e) {
-        console.error(`Failed to open path: ${normalizedTarget}`, e);
-        return false;
-      }
-    }
-
-    try {
-      await shell.openExternal(rawTarget);
-      return true;
-    } catch (e) {
-      console.error(`Failed to open URL: ${rawTarget}`, e);
-      return false;
-    }
+    return await openTargetWithApplication(rawTarget, appName);
   });
 
   // ─── IPC: Extension Runner ───────────────────────────────────────
@@ -9656,6 +9732,7 @@ app.whenReady().then(async () => {
         name: c.title,
         path: c.path || '',
         bundleId: c.path ? resolveBundleId(c.path) : undefined,
+        iconDataUrl: typeof c.iconDataUrl === 'string' ? c.iconDataUrl : undefined,
       }));
 
     // Raycast API compatibility: if path is provided, return only apps that can open it.
@@ -10258,6 +10335,58 @@ if let tiff = image?.tiffRepresentation {
     } finally {
       suppressBlurHide = false;
     }
+  });
+
+  // ─── IPC: Quick Link Manager ───────────────────────────────────
+
+  ipcMain.handle('quicklink-get-all', () => {
+    return getAllQuickLinks();
+  });
+
+  ipcMain.handle('quicklink-search', (_event: any, query: string) => {
+    return searchQuickLinks(query);
+  });
+
+  ipcMain.handle('quicklink-get-dynamic-fields', (_event: any, id: string) => {
+    return getQuickLinkDynamicFieldsById(id);
+  });
+
+  ipcMain.handle('quicklink-create', (_event: any, data: any) => {
+    const created = createQuickLink(data || {});
+    invalidateCache();
+    broadcastCommandsUpdated();
+    return created;
+  });
+
+  ipcMain.handle('quicklink-update', (_event: any, id: string, data: any) => {
+    const updated = updateQuickLink(id, data || {});
+    if (updated) {
+      invalidateCache();
+      broadcastCommandsUpdated();
+    }
+    return updated;
+  });
+
+  ipcMain.handle('quicklink-delete', (_event: any, id: string) => {
+    const removed = deleteQuickLink(id);
+    if (removed) {
+      invalidateCache();
+      broadcastCommandsUpdated();
+    }
+    return removed;
+  });
+
+  ipcMain.handle('quicklink-duplicate', (_event: any, id: string) => {
+    const duplicated = duplicateQuickLink(id);
+    if (duplicated) {
+      invalidateCache();
+      broadcastCommandsUpdated();
+    }
+    return duplicated;
+  });
+
+  ipcMain.handle('quicklink-open', async (_event: any, id: string, dynamicValues?: Record<string, string>) => {
+    return await openQuickLinkById(id, dynamicValues);
   });
 
   ipcMain.handle('paste-text', async (_event: any, text: string) => {

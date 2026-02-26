@@ -61,6 +61,8 @@
   --ui-segment-bg: rgba(255, 255, 255, 0.56);
   --ui-segment-active-bg: rgba(118, 130, 149, 0.16);
   --ui-segment-hover-bg: rgba(118, 130, 149, 0.1);
+  --snippet-divider: var(--ui-divider);
+  --snippet-divider-strong: var(--ui-segment-border);
   --command-item-hover-bg: rgba(118, 130, 149, 0.055);
   --command-item-hover-border: rgba(118, 130, 149, 0.11);
   --command-item-selected-bg: rgba(118, 130, 149, 0.14);
@@ -445,8 +447,8 @@ html {
 }
 
 .snippet-view {
-  --snippet-divider: rgba(124, 136, 154, 0.24);
-  --snippet-divider-strong: rgba(124, 136, 154, 0.34);
+  --snippet-divider: var(--ui-divider);
+  --snippet-divider-strong: var(--ui-segment-border);
 }
 
 .snippet-view .snippet-header {
@@ -480,7 +482,7 @@ html {
 .dark.sc-native-liquid-glass .glass-effect {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04)),
-    rgba(var(--surface-base-rgb), 0.7);
+    rgba(var(--surface-base-rgb), 0.3);
 }
 
 /* Keep launcher readable in native liquid glass by giving it the same
@@ -492,7 +494,7 @@ html {
 .dark.sc-native-liquid-glass .launcher-main-surface {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04)),
-    rgba(var(--surface-base-rgb), 0.72);
+    rgba(var(--surface-base-rgb), 0.3);
 }
 
 .sc-native-liquid-glass .sc-glass-footer {

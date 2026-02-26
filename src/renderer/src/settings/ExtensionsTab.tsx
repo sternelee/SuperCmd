@@ -19,6 +19,7 @@ import {
   LogOut,
   Sparkles,
   LayoutGrid,
+  Link2,
 } from 'lucide-react';
 import supercmdLogo from '../../../../supercmd.svg';
 import HotkeyRecorder from './HotkeyRecorder';
@@ -658,6 +659,7 @@ const ExtensionsTab: React.FC<{
     if (commandId.includes('create-snippet')) return <FilePlus2 className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     if (commandId.includes('import-snippets')) return <FileInput className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     if (commandId.includes('export-snippets')) return <FileOutput className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
+    if (commandId.includes('quicklink') || commandId.includes('quicklinks')) return <Link2 className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     if (commandId.includes('quit')) return <LogOut className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     if (commandId.includes('onboarding')) return <Sparkles className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;
     return <TerminalSquare className="w-3.5 h-3.5 text-[var(--text-subtle)] flex-shrink-0" />;

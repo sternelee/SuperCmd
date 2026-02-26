@@ -397,7 +397,7 @@ contextBridge.exposeInMainWorld('electron', {
   },
 
   // Get installed applications
-  getApplications: (path?: string): Promise<Array<{ name: string; path: string; bundleId?: string }>> =>
+  getApplications: (path?: string): Promise<Array<{ name: string; path: string; bundleId?: string; iconDataUrl?: string }>> =>
     ipcRenderer.invoke('get-applications', path),
 
   // Get default application for a file/URL
@@ -512,6 +512,22 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke('snippet-import'),
   snippetExport: (): Promise<boolean> =>
     ipcRenderer.invoke('snippet-export'),
+  quickLinkGetAll: (): Promise<any[]> =>
+    ipcRenderer.invoke('quicklink-get-all'),
+  quickLinkSearch: (query: string): Promise<any[]> =>
+    ipcRenderer.invoke('quicklink-search', query),
+  quickLinkGetDynamicFields: (id: string): Promise<Array<{ key: string; name: string; defaultValue?: string }>> =>
+    ipcRenderer.invoke('quicklink-get-dynamic-fields', id),
+  quickLinkCreate: (data: any): Promise<any> =>
+    ipcRenderer.invoke('quicklink-create', data),
+  quickLinkUpdate: (id: string, data: any): Promise<any> =>
+    ipcRenderer.invoke('quicklink-update', id, data),
+  quickLinkDelete: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('quicklink-delete', id),
+  quickLinkDuplicate: (id: string): Promise<any> =>
+    ipcRenderer.invoke('quicklink-duplicate', id),
+  quickLinkOpen: (id: string, dynamicValues?: Record<string, string>): Promise<boolean> =>
+    ipcRenderer.invoke('quicklink-open', id, dynamicValues),
   pasteText: (text: string): Promise<boolean> =>
     ipcRenderer.invoke('paste-text', text),
   pasteFile: (filePath: string): Promise<boolean> =>

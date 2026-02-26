@@ -3,7 +3,7 @@
  *
  * Central view-state machine for the launcher. Owns every boolean/object flag
  * that determines which screen is shown (extension, preference setup, script
- * command setup/output, clipboard, snippets, file search, cursor prompt,
+ * command setup/output, clipboard, snippets, quick links, file search, cursor prompt,
  * whisper, speak, onboarding, AI mode).
  *
  * Key exports:
@@ -44,6 +44,7 @@ export interface AppViewManager {
   scriptCommandOutput: ScriptCommandOutput | null;
   showClipboardManager: boolean;
   showSnippetManager: 'search' | 'create' | null;
+  showQuickLinkManager: 'search' | 'create' | null;
   showFileSearch: boolean;
   showCursorPrompt: boolean;
   showWhisper: boolean;
@@ -64,6 +65,7 @@ export interface AppViewManager {
   openScriptCommandOutput: (output: ScriptCommandOutput) => void;
   openClipboardManager: () => void;
   openSnippetManager: (mode: 'search' | 'create') => void;
+  openQuickLinkManager: (mode: 'search' | 'create') => void;
   openFileSearch: () => void;
   openCursorPrompt: () => void;
   openWhisper: () => void;
@@ -81,6 +83,7 @@ export interface AppViewManager {
   setScriptCommandOutput: React.Dispatch<React.SetStateAction<ScriptCommandOutput | null>>;
   setShowClipboardManager: React.Dispatch<React.SetStateAction<boolean>>;
   setShowSnippetManager: React.Dispatch<React.SetStateAction<'search' | 'create' | null>>;
+  setShowQuickLinkManager: React.Dispatch<React.SetStateAction<'search' | 'create' | null>>;
   setShowFileSearch: React.Dispatch<React.SetStateAction<boolean>>;
   setShowCursorPrompt: React.Dispatch<React.SetStateAction<boolean>>;
   setShowWhisper: React.Dispatch<React.SetStateAction<boolean>>;
@@ -99,6 +102,7 @@ export function useAppViewManager(): AppViewManager {
   const [scriptCommandOutput, setScriptCommandOutput] = useState<ScriptCommandOutput | null>(null);
   const [showClipboardManager, setShowClipboardManager] = useState(false);
   const [showSnippetManager, setShowSnippetManager] = useState<'search' | 'create' | null>(null);
+  const [showQuickLinkManager, setShowQuickLinkManager] = useState<'search' | 'create' | null>(null);
   const [showFileSearch, setShowFileSearch] = useState(false);
   const [showCursorPrompt, setShowCursorPrompt] = useState(false);
   const [showWhisper, setShowWhisper] = useState(false);
@@ -116,6 +120,7 @@ export function useAppViewManager(): AppViewManager {
     setScriptCommandOutput(null);
     setShowClipboardManager(false);
     setShowSnippetManager(null);
+    setShowQuickLinkManager(null);
     setShowFileSearch(false);
     setShowCursorPrompt(false);
     setShowWhisper(false);
@@ -155,6 +160,11 @@ export function useAppViewManager(): AppViewManager {
   const openSnippetManager = useCallback((mode: 'search' | 'create') => {
     resetAllViews();
     setShowSnippetManager(mode);
+  }, [resetAllViews]);
+
+  const openQuickLinkManager = useCallback((mode: 'search' | 'create') => {
+    resetAllViews();
+    setShowQuickLinkManager(mode);
   }, [resetAllViews]);
 
   const openFileSearch = useCallback(() => {
@@ -209,6 +219,7 @@ export function useAppViewManager(): AppViewManager {
     scriptCommandOutput,
     showClipboardManager,
     showSnippetManager,
+    showQuickLinkManager,
     showFileSearch,
     showCursorPrompt,
     showWhisper,
@@ -227,6 +238,7 @@ export function useAppViewManager(): AppViewManager {
     openScriptCommandOutput,
     openClipboardManager,
     openSnippetManager,
+    openQuickLinkManager,
     openFileSearch,
     openCursorPrompt,
     openWhisper,
@@ -243,6 +255,7 @@ export function useAppViewManager(): AppViewManager {
     setScriptCommandOutput,
     setShowClipboardManager,
     setShowSnippetManager,
+    setShowQuickLinkManager,
     setShowFileSearch,
     setShowCursorPrompt,
     setShowWhisper,

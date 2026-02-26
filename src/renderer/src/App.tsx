@@ -8,10 +8,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, ArrowRight } from 'lucide-react';
-import type { CommandInfo, ExtensionBundle, AppSettings } from '../types/electron';
+import type { CommandInfo, ExtensionBundle, AppSettings, QuickLinkDynamicField } from '../types/electron';
 import ExtensionView from './ExtensionView';
 import ClipboardManager from './ClipboardManager';
 import SnippetManager from './SnippetManager';
+import QuickLinkManager from './QuickLinkManager';
 import OnboardingExtension from './OnboardingExtension';
 import FileSearchExtension from './FileSearchExtension';
 import SuperCmdWhisper from './SuperCmdWhisper';
@@ -57,6 +58,14 @@ import CursorPromptView from './views/CursorPromptView';
 
 const STALE_OVERLAY_RESET_MS = 60_000;
 const MAX_RECENT_SECTION_ITEMS = 5;
+const QUICK_LINK_COMMAND_PREFIX = 'quicklink-';
+
+function getQuickLinkIdFromCommandId(commandId: string): string | null {
+  const normalized = String(commandId || '').trim();
+  if (!normalized.startsWith(QUICK_LINK_COMMAND_PREFIX)) return null;
+  const id = normalized.slice(QUICK_LINK_COMMAND_PREFIX.length).trim();
+  return id || null;
+}
 
 const App: React.FC = () => {
   const [commands, setCommands] = useState<CommandInfo[]>([]);
@@ -69,12 +78,12 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const {
     extensionView, extensionPreferenceSetup, scriptCommandSetup, scriptCommandOutput,
-    showClipboardManager, showSnippetManager, showFileSearch, showCursorPrompt,
+    showClipboardManager, showSnippetManager, showQuickLinkManager, showFileSearch, showCursorPrompt,
     showWhisper, showSpeak, showWindowManager, showWhisperOnboarding, showWhisperHint, showOnboarding, aiMode,
     openOnboarding, openWhisper, openClipboardManager,
-    openSnippetManager, openFileSearch, openCursorPrompt, openSpeak, openWindowManager,
+    openSnippetManager, openQuickLinkManager, openFileSearch, openCursorPrompt, openSpeak, openWindowManager,
     setExtensionView, setExtensionPreferenceSetup, setScriptCommandSetup, setScriptCommandOutput,
-    setShowClipboardManager, setShowSnippetManager, setShowFileSearch, setShowCursorPrompt,
+    setShowClipboardManager, setShowSnippetManager, setShowQuickLinkManager, setShowFileSearch, setShowCursorPrompt,
     setShowWhisper, setShowSpeak, setShowWindowManager, setShowWhisperOnboarding, setShowWhisperHint,
     setShowOnboarding, setAiMode,
   } = useAppViewManager();
@@ -107,6 +116,12 @@ const App: React.FC = () => {
   } | null>(null);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
   const [selectedContextActionIndex, setSelectedContextActionIndex] = useState(0);
+  const [quickLinkDynamicPrompt, setQuickLinkDynamicPrompt] = useState<{
+    command: CommandInfo;
+    quickLinkId: string;
+    fields: QuickLinkDynamicField[];
+    values: Record<string, string>;
+  } | null>(null);
   const {
     menuBarExtensions,
     backgroundNoViewRuns, setBackgroundNoViewRuns,
@@ -161,6 +176,7 @@ const App: React.FC = () => {
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const actionsOverlayRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const quickLinkDynamicInputRef = useRef<HTMLInputElement>(null);
   const windowPresetCommandQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastWindowHiddenAtRef = useRef<number>(0);
   const calcRequestSeqRef = useRef(0);
@@ -386,6 +402,7 @@ const App: React.FC = () => {
         setShowCursorPrompt(false);
         setShowWhisperHint(false);
         setShowWindowManager(false);
+        setShowQuickLinkManager(null);
         setMemoryFeedback(null);
         setMemoryActionLoading(false);
         setScriptCommandSetup(null);
@@ -413,9 +430,22 @@ const App: React.FC = () => {
           openSnippetManager('create');
           return;
         }
+        if (routedSystemCommandId === 'system-search-quicklinks') {
+          setShowClipboardManager(false);
+          setShowFileSearch(false);
+          openQuickLinkManager('search');
+          return;
+        }
+        if (routedSystemCommandId === 'system-create-quicklink') {
+          setShowClipboardManager(false);
+          setShowFileSearch(false);
+          openQuickLinkManager('create');
+          return;
+        }
         if (routedSystemCommandId === 'system-search-files') {
           setShowClipboardManager(false);
           setShowSnippetManager(null);
+          setShowQuickLinkManager(null);
           openFileSearch();
           return;
         }
@@ -449,6 +479,7 @@ const App: React.FC = () => {
         setContextMenu(null);
         setShowClipboardManager(false);
         setShowSnippetManager(null);
+        setShowQuickLinkManager(null);
         setShowFileSearch(false);
         setShowCursorPrompt(false);
         setShowWhisper(false);
@@ -464,6 +495,7 @@ const App: React.FC = () => {
       exitAiMode();
       setShowClipboardManager(false);
       setShowSnippetManager(null);
+      setShowQuickLinkManager(null);
       setShowFileSearch(false);
       // Re-fetch commands every time the window is shown
       // so newly installed extensions appear immediately
@@ -473,7 +505,7 @@ const App: React.FC = () => {
       inputRef.current?.focus();
     });
     return cleanupWindowShown;
-  }, [fetchCommands, loadLauncherPreferences, refreshSelectedTextSnapshot, openWhisper, openSpeak, openCursorPrompt, resetCursorPromptState, exitAiMode, setShowCursorPrompt, setShowWhisperHint, setMemoryFeedback, setMemoryActionLoading, setScriptCommandSetup, setScriptCommandOutput, setExtensionView, setSearchQuery, setSelectedIndex, setShowSnippetManager, setShowFileSearch, openClipboardManager, setShowClipboardManager, openSnippetManager, openFileSearch, openOnboarding, setShowWindowManager]);
+  }, [fetchCommands, loadLauncherPreferences, refreshSelectedTextSnapshot, openWhisper, openSpeak, openCursorPrompt, resetCursorPromptState, exitAiMode, setShowCursorPrompt, setShowWhisperHint, setMemoryFeedback, setMemoryActionLoading, setScriptCommandSetup, setScriptCommandOutput, setExtensionView, setSearchQuery, setSelectedIndex, setShowSnippetManager, setShowQuickLinkManager, setShowFileSearch, openClipboardManager, setShowClipboardManager, openSnippetManager, openQuickLinkManager, openFileSearch, openOnboarding, setShowWindowManager]);
 
   useEffect(() => {
     const cleanupSelectionSnapshotUpdated = window.electron.onSelectionSnapshotUpdated((payload) => {
@@ -777,18 +809,20 @@ const App: React.FC = () => {
   }, [contextMenu]);
 
   useEffect(() => {
-    if (!showActions && !contextMenu && !aiMode && !extensionView && !showClipboardManager && !showSnippetManager && !showFileSearch && !showCursorPrompt && !showWhisper && !showSpeak && !showWindowManager && !showOnboarding) {
+    if (!showActions && !contextMenu && !quickLinkDynamicPrompt && !aiMode && !extensionView && !showClipboardManager && !showSnippetManager && !showQuickLinkManager && !showFileSearch && !showCursorPrompt && !showWhisper && !showSpeak && !showWindowManager && !showOnboarding) {
       restoreLauncherFocus();
     }
-  }, [showActions, contextMenu, aiMode, extensionView, showClipboardManager, showSnippetManager, showFileSearch, showCursorPrompt, showWhisper, showSpeak, showWindowManager, showOnboarding, showWhisperOnboarding, restoreLauncherFocus]);
+  }, [showActions, contextMenu, quickLinkDynamicPrompt, aiMode, extensionView, showClipboardManager, showSnippetManager, showQuickLinkManager, showFileSearch, showCursorPrompt, showWhisper, showSpeak, showWindowManager, showOnboarding, showWhisperOnboarding, restoreLauncherFocus]);
 
   const isLauncherModeActive =
     !showActions &&
     !contextMenu &&
+    !quickLinkDynamicPrompt &&
     !aiMode &&
     !extensionView &&
     !showClipboardManager &&
     !showSnippetManager &&
+    !showQuickLinkManager &&
     !showFileSearch &&
     !showCursorPrompt &&
     !showWhisper &&
@@ -1007,6 +1041,10 @@ const App: React.FC = () => {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (quickLinkDynamicPrompt) {
+        return;
+      }
+
       if (e.metaKey && (e.key === 'k' || e.key === 'K') && !e.repeat) {
         e.preventDefault();
         setShowActions((prev) => !prev);
@@ -1124,6 +1162,7 @@ const App: React.FC = () => {
       selectedCommand,
       contextMenu,
       showActions,
+      quickLinkDynamicPrompt,
     ]
   );
 
@@ -1164,6 +1203,16 @@ const App: React.FC = () => {
     if (commandId === 'system-create-snippet') {
       whisperSessionRef.current = false;
       openSnippetManager('create');
+      return true;
+    }
+    if (commandId === 'system-search-quicklinks') {
+      whisperSessionRef.current = false;
+      openQuickLinkManager('search');
+      return true;
+    }
+    if (commandId === 'system-create-quicklink') {
+      whisperSessionRef.current = false;
+      openQuickLinkManager('create');
       return true;
     }
     if (commandId === 'system-search-files') {
@@ -1280,7 +1329,7 @@ const App: React.FC = () => {
       return true;
     }
     return false;
-  }, [memoryActionLoading, selectedTextSnapshot, showMemoryFeedback, showOnboarding, showWindowManager, openOnboarding, openWhisper, setShowWhisper, setShowWhisperOnboarding, setShowWhisperHint, openClipboardManager, openSnippetManager, openFileSearch, openSpeak, openWindowManager, setShowSpeak, setShowWindowManager]);
+  }, [memoryActionLoading, selectedTextSnapshot, showMemoryFeedback, showOnboarding, showWindowManager, openOnboarding, openWhisper, setShowWhisper, setShowWhisperOnboarding, setShowWhisperHint, openClipboardManager, openSnippetManager, openQuickLinkManager, openFileSearch, openSpeak, openWindowManager, setShowSpeak, setShowWindowManager]);
 
   useEffect(() => {
     const cleanup = window.electron.onRunSystemCommand(async (commandId: string) => {
@@ -1353,10 +1402,112 @@ const App: React.FC = () => {
     [fetchCommands, updateRecentCommands]
   );
 
+  const executeQuickLinkCommand = useCallback(
+    async (
+      command: CommandInfo,
+      options?: {
+        skipPrompt?: boolean;
+        dynamicValues?: Record<string, string>;
+      }
+    ): Promise<boolean> => {
+      const quickLinkId = getQuickLinkIdFromCommandId(command.id);
+      if (!quickLinkId) return false;
+
+      if (!options?.skipPrompt) {
+        const fields = await window.electron.quickLinkGetDynamicFields(quickLinkId);
+        if (fields.length > 0) {
+          const initialValues: Record<string, string> = {};
+          for (const field of fields) {
+            const key = String(field.key || '').trim();
+            if (!key) continue;
+            initialValues[key] = String(options?.dynamicValues?.[key] ?? field.defaultValue ?? '');
+          }
+          setShowActions(false);
+          setContextMenu(null);
+          inputRef.current?.blur();
+          setQuickLinkDynamicPrompt({
+            command,
+            quickLinkId,
+            fields,
+            values: initialValues,
+          });
+          return true;
+        }
+      }
+
+      const opened = await window.electron.quickLinkOpen(quickLinkId, options?.dynamicValues);
+      if (!opened) return false;
+
+      setQuickLinkDynamicPrompt(null);
+      await updateRecentCommands(command.id);
+      setSearchQuery('');
+      setSelectedIndex(0);
+      await window.electron.hideWindow();
+      return true;
+    },
+    [updateRecentCommands]
+  );
+
+  const cancelQuickLinkDynamicPrompt = useCallback(() => {
+    setQuickLinkDynamicPrompt(null);
+    restoreLauncherFocus();
+  }, [restoreLauncherFocus]);
+
+  const submitQuickLinkDynamicPrompt = useCallback(async () => {
+    if (!quickLinkDynamicPrompt) return;
+    try {
+      await executeQuickLinkCommand(quickLinkDynamicPrompt.command, {
+        skipPrompt: true,
+        dynamicValues: quickLinkDynamicPrompt.values,
+      });
+    } catch (error) {
+      console.error('Failed to run quick link with dynamic values:', error);
+    }
+  }, [executeQuickLinkCommand, quickLinkDynamicPrompt]);
+
+  useEffect(() => {
+    if (!quickLinkDynamicPrompt) return;
+    const timer = window.setTimeout(() => {
+      quickLinkDynamicInputRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [quickLinkDynamicPrompt?.quickLinkId]);
+
+  useEffect(() => {
+    if (!quickLinkDynamicPrompt) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const plainEnter =
+        (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter') &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelQuickLinkDynamicPrompt();
+        return;
+      }
+
+      if (plainEnter || (event.key === 'Enter' && event.metaKey)) {
+        event.preventDefault();
+        void submitQuickLinkDynamicPrompt();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [cancelQuickLinkDynamicPrompt, quickLinkDynamicPrompt, submitQuickLinkDynamicPrompt]);
+
   const handleCommandExecute = async (command: CommandInfo) => {
     try {
       if (await runLocalSystemCommand(command.id)) {
         await updateRecentCommands(command.id);
+        return;
+      }
+
+      if (getQuickLinkIdFromCommandId(command.id)) {
+        await executeQuickLinkCommand(command);
         return;
       }
 
@@ -1900,6 +2051,28 @@ const App: React.FC = () => {
     );
   }
 
+  // ─── Quick Link Manager mode ──────────────────────────────────────
+  if (showQuickLinkManager) {
+    return (
+      <>
+        {alwaysMountedRunners}
+        <div className="w-full h-full">
+          <div className="glass-effect overflow-hidden h-full flex flex-col">
+            <QuickLinkManager
+              initialView={showQuickLinkManager}
+              onClose={() => {
+                setShowQuickLinkManager(null);
+                setSearchQuery('');
+                setSelectedIndex(0);
+                setTimeout(() => inputRef.current?.focus(), 50);
+              }}
+            />
+          </div>
+        </div>
+      </>
+    );
+  }
+
   // ─── File Search mode ─────────────────────────────────────────────
   if (showFileSearch) {
     return (
@@ -2188,6 +2361,91 @@ const App: React.FC = () => {
         )}
       </div>
     </div>
+    {quickLinkDynamicPrompt && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center px-5"
+        style={{ background: 'var(--bg-scrim)' }}
+        onMouseDown={cancelQuickLinkDynamicPrompt}
+      >
+        <div
+          className="w-[520px] max-w-[92vw] rounded-xl overflow-hidden"
+          onMouseDown={(event) => event.stopPropagation()}
+          style={
+            isNativeLiquidGlass
+              ? {
+                  background: 'rgba(var(--surface-base-rgb), 0.72)',
+                  backdropFilter: 'blur(44px) saturate(155%)',
+                  WebkitBackdropFilter: 'blur(44px) saturate(155%)',
+                  border: '1px solid rgba(var(--on-surface-rgb), 0.22)',
+                  boxShadow: '0 18px 38px -12px rgba(var(--backdrop-rgb), 0.26)',
+                }
+              : isGlassyTheme
+              ? {
+                  background: 'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+                  backdropFilter: 'blur(96px) saturate(190%)',
+                  WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+                  border: '1px solid var(--ui-panel-border)',
+                }
+              : {
+                  background: 'var(--bg-overlay-strong)',
+                  backdropFilter: 'blur(28px)',
+                  WebkitBackdropFilter: 'blur(28px)',
+                  border: '1px solid var(--snippet-divider)',
+                }
+          }
+        >
+          <div className="px-4 py-3 border-b border-[var(--snippet-divider)] text-[var(--text-primary)] text-sm font-medium">
+            Fill Quick Link Arguments
+          </div>
+          <div className="px-4 pt-3 text-xs text-[var(--text-muted)]">
+            {getCommandDisplayTitle(quickLinkDynamicPrompt.command)}
+          </div>
+          <div className="p-4 pt-3 space-y-3">
+            {quickLinkDynamicPrompt.fields.map((field, idx) => (
+              <div key={field.key}>
+                <label className="block text-xs text-[var(--text-muted)] mb-1.5">{field.name}</label>
+                <input
+                  ref={idx === 0 ? quickLinkDynamicInputRef : undefined}
+                  type="text"
+                  value={quickLinkDynamicPrompt.values[field.key] || ''}
+                  onChange={(event) =>
+                    setQuickLinkDynamicPrompt((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            values: {
+                              ...prev.values,
+                              [field.key]: event.target.value,
+                            },
+                          }
+                        : prev
+                    )
+                  }
+                  placeholder={field.defaultValue || ''}
+                  className="w-full bg-[var(--ui-segment-bg)] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--text-secondary)] placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="px-4 py-3 border-t border-[var(--snippet-divider)] flex items-center justify-end gap-2">
+            <button
+              onClick={cancelQuickLinkDynamicPrompt}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--snippet-divider)] bg-[var(--ui-segment-bg)] text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--ui-segment-hover-bg)] transition-colors"
+            >
+              <span>Cancel</span>
+              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-muted)] font-medium">Esc</kbd>
+            </button>
+            <button
+              onClick={() => void submitQuickLinkDynamicPrompt()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--snippet-divider-strong)] bg-[var(--ui-segment-active-bg)] text-xs text-[var(--text-primary)] hover:bg-[var(--ui-segment-hover-bg)] transition-colors"
+            >
+              <span>Open Link</span>
+              <kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-muted)] font-medium">↩</kbd>
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     {showActions && selectedActions.length > 0 && (
       <div
         className="fixed inset-0 z-50"

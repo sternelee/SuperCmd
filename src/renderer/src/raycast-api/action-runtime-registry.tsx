@@ -57,6 +57,14 @@ export function createActionRegistryRuntime(deps: RegistryDeps) {
   function makeActionExecutor(props: any, runtimeCtx?: any): () => void {
     return () => {
       withExtensionContext(runtimeCtx, () => {
+        if (props.__actionKind === 'createSnippet') {
+          void (window as any).electron?.executeCommand?.('system-create-snippet');
+          return;
+        }
+        if (props.__actionKind === 'createQuicklink') {
+          void (window as any).electron?.executeCommand?.('system-create-quicklink');
+          return;
+        }
         if (props.onAction) {
           return props.onAction();
         }
