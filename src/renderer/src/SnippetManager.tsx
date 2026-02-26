@@ -28,6 +28,7 @@ interface Action {
 }
 
 const INVALID_SNIPPET_KEYWORD_CHARS = /["'`]/;
+const MAX_INLINE_SNIPPET_ARGUMENTS = 3;
 
 function parseArgumentPlaceholderToken(rawToken: string): { key: string; name: string; defaultValue?: string } | null {
   const token = rawToken.trim();
@@ -38,6 +39,24 @@ function parseArgumentPlaceholderToken(rawToken: string): { key: string; name: s
   const name = (nameMatch?.[1] || fallbackNameMatch?.[1] || '').trim();
   if (!name) return null;
   return { key: name.toLowerCase(), name, defaultValue: defaultMatch?.[1] };
+}
+
+function extractSnippetArgumentFields(content: string): SnippetDynamicField[] {
+  const fields = new Map<string, SnippetDynamicField>();
+  const re = /\{([^}]+)\}/g;
+  let match: RegExpExecArray | null = null;
+  while ((match = re.exec(content)) !== null) {
+    const parsed = parseArgumentPlaceholderToken(match[1]);
+    if (!parsed) continue;
+    if (!fields.has(parsed.key)) {
+      fields.set(parsed.key, {
+        key: parsed.key,
+        name: parsed.name,
+        defaultValue: parsed.defaultValue,
+      });
+    }
+  }
+  return Array.from(fields.values());
 }
 
 function renderSnippetPreviewWithHighlights(content: string, values: Record<string, string>): React.ReactNode {
@@ -392,6 +411,9 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [filteredSnippets, setFilteredSnippets] = useState<Snippet[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [inlineArgumentValuesBySnippetId, setInlineArgumentValuesBySnippetId] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
@@ -406,6 +428,7 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
     values: Record<string, string>;
   } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inlineArgumentInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const firstDynamicInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -492,6 +515,60 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
     ? snippets.find((s) => (s.keyword || '').trim().toLowerCase() === searchQuery.trim().toLowerCase())
     : undefined;
   const activeSnippet = exactKeywordSnippet || selectedSnippet;
+  const selectedSnippetInlineValues = selectedSnippet
+    ? inlineArgumentValuesBySnippetId[selectedSnippet.id] || {}
+    : {};
+  const activeSnippetDynamicFields = activeSnippet
+    ? extractSnippetArgumentFields(activeSnippet.content)
+    : [];
+  const inlineActiveSnippetDynamicFields = activeSnippetDynamicFields.slice(0, MAX_INLINE_SNIPPET_ARGUMENTS);
+  const activeSnippetHasOverflowFields = activeSnippetDynamicFields.length > inlineActiveSnippetDynamicFields.length;
+  const activeInlineArgumentValues = activeSnippet
+    ? inlineArgumentValuesBySnippetId[activeSnippet.id] || {}
+    : {};
+
+  const getResolvedInlineArgumentValues = useCallback(
+    (snippet: Snippet, fields: SnippetDynamicField[]) => {
+      const values = inlineArgumentValuesBySnippetId[snippet.id] || {};
+      return fields.reduce((acc, field) => {
+        acc[field.key] = String(values[field.key] ?? field.defaultValue ?? '');
+        return acc;
+      }, {} as Record<string, string>);
+    },
+    [inlineArgumentValuesBySnippetId]
+  );
+
+  useEffect(() => {
+    inlineArgumentInputRefs.current = inlineArgumentInputRefs.current.slice(0, inlineActiveSnippetDynamicFields.length);
+  }, [inlineActiveSnippetDynamicFields.length]);
+
+  useEffect(() => {
+    if (!activeSnippet || activeSnippetDynamicFields.length === 0) return;
+    setInlineArgumentValuesBySnippetId((prev) => {
+      const previousValues = prev[activeSnippet.id] || {};
+      let changed = !prev[activeSnippet.id];
+      const nextValues = { ...previousValues };
+      for (const field of activeSnippetDynamicFields) {
+        if (nextValues[field.key] === undefined) {
+          nextValues[field.key] = String(field.defaultValue || '');
+          changed = true;
+        }
+      }
+      if (!changed) return prev;
+      return {
+        ...prev,
+        [activeSnippet.id]: nextValues,
+      };
+    });
+  }, [activeSnippet, activeSnippetDynamicFields]);
+
+  useEffect(() => {
+    if (!activeSnippet || inlineActiveSnippetDynamicFields.length === 0) return;
+    const timer = window.setTimeout(() => {
+      inlineArgumentInputRefs.current[0]?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeSnippet?.id, inlineActiveSnippetDynamicFields.length]);
 
   // ─── Actions ────────────────────────────────────────────────────
 
@@ -499,13 +576,14 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
     const s = snippet || activeSnippet;
     if (!s) return;
     try {
-      const fields = await window.electron.snippetGetDynamicFields(s.id);
+      const fields = extractSnippetArgumentFields(s.content);
       if (fields.length > 0) {
-        const initialValues: Record<string, string> = {};
-        for (const field of fields) {
-          initialValues[field.key] = field.defaultValue || '';
+        const resolvedValues = getResolvedInlineArgumentValues(s, fields);
+        if (fields.length <= MAX_INLINE_SNIPPET_ARGUMENTS) {
+          await window.electron.snippetPasteResolved(s.id, resolvedValues);
+          return;
         }
-        setDynamicPrompt({ snippet: s, mode: 'paste', fields, values: initialValues });
+        setDynamicPrompt({ snippet: s, mode: 'paste', fields, values: resolvedValues });
         return;
       }
       await window.electron.snippetPaste(s.id);
@@ -517,13 +595,14 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
   const handleCopy = async () => {
     if (!activeSnippet) return;
     try {
-      const fields = await window.electron.snippetGetDynamicFields(activeSnippet.id);
+      const fields = extractSnippetArgumentFields(activeSnippet.content);
       if (fields.length > 0) {
-        const initialValues: Record<string, string> = {};
-        for (const field of fields) {
-          initialValues[field.key] = field.defaultValue || '';
+        const resolvedValues = getResolvedInlineArgumentValues(activeSnippet, fields);
+        if (fields.length <= MAX_INLINE_SNIPPET_ARGUMENTS) {
+          await window.electron.snippetCopyToClipboardResolved(activeSnippet.id, resolvedValues);
+          return;
         }
-        setDynamicPrompt({ snippet: activeSnippet, mode: 'copy', fields, values: initialValues });
+        setDynamicPrompt({ snippet: activeSnippet, mode: 'copy', fields, values: resolvedValues });
         return;
       }
       await window.electron.snippetCopyToClipboard(activeSnippet.id);
@@ -878,7 +957,7 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
   return (
     <div className="snippet-view snippet-search-view w-full h-full flex flex-col" onKeyDown={handleKeyDown} tabIndex={-1}>
       {/* Header */}
-      <div className="snippet-header flex items-center gap-3 px-5 py-3.5">
+      <div className="snippet-header flex items-center gap-2.5 px-5 py-3.5">
         <button
           onClick={onClose}
           className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
@@ -891,9 +970,64 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
           placeholder="Search snippets..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
+          className="min-w-[180px] flex-1 bg-transparent border-none outline-none text-white/95 placeholder:text-[color:var(--text-subtle)] text-[15px] font-medium tracking-[0.005em]"
           autoFocus
         />
+        {inlineActiveSnippetDynamicFields.length > 0 ? (
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {inlineActiveSnippetDynamicFields.map((field, index) => (
+              <input
+                key={`snippet-inline-arg-${field.key}`}
+                ref={(el) => {
+                  inlineArgumentInputRefs.current[index] = el;
+                }}
+                type="text"
+                value={activeInlineArgumentValues[field.key] || ''}
+                onChange={(e) => {
+                  if (!activeSnippet) return;
+                  const nextValue = e.target.value;
+                  setInlineArgumentValuesBySnippetId((prev) => ({
+                    ...prev,
+                    [activeSnippet.id]: {
+                      ...(prev[activeSnippet.id] || {}),
+                      [field.key]: nextValue,
+                    },
+                  }));
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') &&
+                    !e.metaKey &&
+                    !e.ctrlKey &&
+                    !e.altKey &&
+                    !e.shiftKey
+                  ) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void handlePaste();
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    inputRef.current?.focus();
+                    return;
+                  }
+                  if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+                    e.stopPropagation();
+                  }
+                }}
+                placeholder={field.defaultValue || field.name}
+                className="h-9 max-w-[170px] min-w-[112px] rounded-lg border border-[var(--snippet-divider)] bg-white/[0.06] px-2.5 py-1.5 text-[13px] text-white/90 placeholder:text-[color:var(--text-subtle)] outline-none focus:border-[var(--snippet-divider-strong)]"
+              />
+            ))}
+            {activeSnippetHasOverflowFields ? (
+              <div className="inline-flex h-9 items-center rounded-md border border-[var(--snippet-divider)] bg-white/[0.06] px-2 text-[0.6875rem] font-medium text-[var(--text-subtle)]">
+                +{activeSnippetDynamicFields.length - inlineActiveSnippetDynamicFields.length}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
@@ -997,7 +1131,10 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
           {selectedSnippet ? (
             <div className="p-5">
               <pre className="text-white/80 text-sm whitespace-pre-wrap break-words font-mono leading-relaxed">
-                {selectedSnippet.content}
+                {renderSnippetPreviewWithHighlights(
+                  selectedSnippet.content,
+                  selectedSnippetInlineValues
+                )}
               </pre>
 
               <div className="mt-4 pt-3 border-t border-[var(--snippet-divider)] space-y-1.5">

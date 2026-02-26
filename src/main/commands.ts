@@ -1369,6 +1369,7 @@ async function discoverAndBuildCommands(): Promise<CommandInfo[]> {
       mode: ext.mode,
       interval: ext.interval,
       disabledByDefault: ext.disabledByDefault,
+      commandArgumentDefinitions: ext.commandArgumentDefinitions || [],
     }));
   } catch (e) {
     console.error('Failed to discover installed extensions:', e);
