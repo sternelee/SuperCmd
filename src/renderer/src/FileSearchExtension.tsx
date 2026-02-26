@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown, FolderOpen, Search } from 'lucide-react';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
+import type { FileSearchIndexStatus } from '../types/electron';
 
 interface FileSearchExtensionProps {
   onClose: () => void;
@@ -68,26 +69,6 @@ function asTildePath(filePath: string, homeDir: string): string {
   return filePath;
 }
 
-function escapeSpotlightValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function buildNameOnlySpotlightQuery(rawQuery: string): string {
-  const terms = rawQuery
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter(Boolean);
-
-  if (terms.length === 0) {
-    return 'kMDItemFSName == "*"cd';
-  }
-
-  // Name-only matching. This prevents matches from parent directory names.
-  return terms
-    .map((term) => `kMDItemFSName == "*${escapeSpotlightValue(term)}*"cd`)
-    .join(' && ');
-}
-
 function getNormalizedTerms(rawQuery: string): string[] {
   return rawQuery
     .normalize('NFKD')
@@ -138,6 +119,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
   const [iconsByPath, setIconsByPath] = useState<Record<string, string>>({});
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [opening, setOpening] = useState(false);
+  const [indexStatus, setIndexStatus] = useState<FileSearchIndexStatus | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -150,6 +132,28 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
     setScopes([{ id: 'home', label: `User (${username})`, path: homeDir || '/' }]);
     setScopeId('home');
     inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const syncStatus = async () => {
+      try {
+        const next = await window.electron.getFileSearchIndexStatus();
+        if (!cancelled) setIndexStatus(next);
+      } catch {
+        if (!cancelled) setIndexStatus(null);
+      }
+    };
+
+    void syncStatus();
+    const intervalId = window.setInterval(() => {
+      void syncStatus();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const selectedScope = useMemo(
@@ -211,18 +215,15 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
     const timer = window.setTimeout(async () => {
       setIsLoading(true);
       try {
-        const spotlightQuery = buildNameOnlySpotlightQuery(trimmed);
-        const response = await window.electron.execCommand('mdfind', ['-onlyin', currentScope.path, spotlightQuery]);
+        const indexed = await window.electron.searchIndexedFiles(trimmed, { limit: 220 });
         if (searchRequestRef.current !== requestId) return;
 
         const terms = getNormalizedTerms(trimmed);
-        const lines = response.stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean);
-
-        // Hard guard: keep only entries whose own file/folder name matches all terms.
-        const strictNameMatches = lines.filter((filePath) => matchesFileNameTerms(filePath, terms));
+        const scopePrefix = `${currentScope.path.replace(/\/$/, '')}/`;
+        const strictNameMatches = indexed
+          .map((entry) => entry.path)
+          .filter((filePath) => filePath.startsWith(scopePrefix) || filePath === currentScope.path)
+          .filter((filePath) => matchesFileNameTerms(filePath, terms));
 
         const deduped = Array.from(new Set(strictNameMatches));
         setResults(deduped);
@@ -468,9 +469,13 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
           {isLoading ? (
             <div className="h-full flex items-center justify-center text-white/45 text-sm">Searching files…</div>
           ) : !query.trim() ? (
-            <div className="h-full flex items-center justify-center text-white/35 text-sm">Type to search files</div>
+            <div className="h-full flex items-center justify-center text-white/35 text-sm">
+              {indexStatus?.indexing ? 'Indexing home files…' : 'Type to search files'}
+            </div>
           ) : visibleResults.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-white/35 text-sm">No files found</div>
+            <div className="h-full flex items-center justify-center text-white/35 text-sm">
+              {indexStatus?.indexing ? 'Indexing in progress. Results will improve shortly.' : 'No files found'}
+            </div>
           ) : (
             <div className="p-2.5">
               <div className="px-2 py-1 text-[13px] uppercase tracking-wide text-white/45 font-semibold">Files</div>

@@ -63,6 +63,13 @@ import {
   importSnippetsFromFile,
   exportSnippetsToFile,
 } from './snippet-store';
+import {
+  searchIndexedFiles,
+  getFileSearchIndexStatus,
+  rebuildFileSearchIndex,
+  startFileSearchIndexing,
+  stopFileSearchIndexing,
+} from './file-search-index';
 
 const electron = require('electron');
 const { app, BrowserWindow, globalShortcut, ipcMain, screen, shell, Menu, Tray, nativeImage, protocol, net, dialog, systemPreferences, clipboard: systemClipboard } = electron;
@@ -457,7 +464,7 @@ function applyLiquidGlassToWindow(
     return;
   }
 
-  const fallbackVibrancy = options?.fallbackVibrancy || 'under-window';
+  const fallbackVibrancy = 'fullscreen-ui';
   const cornerRadius = Number.isFinite(Number(options?.cornerRadius)) ? Number(options?.cornerRadius) : 16;
   const darkTint = String(options?.darkTint || '#10131a42');
   const lightTint = String(options?.lightTint || '#f8fbff26');
@@ -8103,6 +8110,7 @@ app.whenReady().then(async () => {
   const settings = loadSettings();
   applyOpenAtLogin(Boolean((settings as any).openAtLogin));
   ensureAppUpdaterConfigured();
+  startFileSearchIndexing({ homeDir: app.getPath('home') });
   // Daily background update check (once every 24h).
   void runBackgroundAppUpdaterCheck();
 
@@ -9850,6 +9858,19 @@ return appURL's |path|() as text`,
     }
   });
 
+  ipcMain.handle('file-search-query', async (_event: any, query: string, options?: { limit?: number }) => {
+    return await searchIndexedFiles(query, { limit: Number(options?.limit) || undefined });
+  });
+
+  ipcMain.handle('file-search-status', () => {
+    return getFileSearchIndexStatus();
+  });
+
+  ipcMain.handle('file-search-refresh', async (_event: any, reason?: string) => {
+    await rebuildFileSearchIndex(String(reason || 'manual'));
+    return getFileSearchIndexStatus();
+  });
+
   // Get system appearance
   ipcMain.handle('get-appearance', () => {
     try {
@@ -11567,6 +11588,7 @@ app.on('will-quit', () => {
   stopSpeakSession({ resetStatus: false });
   stopClipboardMonitor();
   stopSnippetExpander();
+  stopFileSearchIndexing();
   if (appTray) {
     try { appTray.destroy(); } catch {}
     appTray = null;
