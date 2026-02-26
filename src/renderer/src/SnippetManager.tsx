@@ -537,7 +537,8 @@ const SnippetManager: React.FC<SnippetManagerProps> = ({ onClose, initialView })
     searchInputRef: inputRef,
     laneRef: inlineArgumentLaneRef,
     inlineRef: inlineArgumentClusterRef,
-    minStartRatio: 0.3,
+    minStartRatio: 0.26,
+    gapPx: 8,
   });
 
   const getResolvedInlineArgumentValues = useCallback(
