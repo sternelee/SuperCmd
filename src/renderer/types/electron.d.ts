@@ -456,6 +456,7 @@ export interface ElectronAPI {
     callback: (event: { pid: number; seq: number; type: 'stdout' | 'stderr' | 'exit' | 'error'; data?: Uint8Array; code?: number; message?: string }) => void
   ) => (() => void);
   getApplications: (path?: string) => Promise<Array<{ name: string; path: string; bundleId?: string; iconDataUrl?: string }>>;
+  getDefaultApplication: (filePath: string) => Promise<{ name: string; path: string; bundleId?: string }>;
   getFrontmostApplication: () => Promise<{ name: string; path: string; bundleId?: string } | null>;
   runAppleScript: (script: string) => Promise<string>;
   moveToTrash: (paths: string[]) => Promise<void>;

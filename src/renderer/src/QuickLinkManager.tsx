@@ -9,16 +9,16 @@ import {
   Clipboard,
   Clock,
   ExternalLink,
+  Folder,
   Files,
   Globe,
-  Link2,
   Pencil,
   Plus,
   Trash2,
   Variable,
   X,
 } from 'lucide-react';
-import type { QuickLink, QuickLinkIcon, Snippet } from '../types/electron';
+import type { QuickLink, QuickLinkIcon } from '../types/electron';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
 import {
   getQuickLinkIconLabel,
@@ -56,6 +56,7 @@ type PlaceholderGroupItem = {
   value: string;
   icon?: React.ComponentType<{ className?: string }>;
   subtitle?: string;
+  pickerType?: 'path';
 };
 
 type PlaceholderGroup = {
@@ -64,17 +65,18 @@ type PlaceholderGroup = {
 };
 
 const QUICK_LINK_COMMAND_PREFIX = 'quicklink-';
-const MAX_VISIBLE_ICON_RESULTS = 5;
+const MAX_VISIBLE_ICON_RESULTS = 4;
 
 const BASE_PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
   {
     title: 'Dynamic Values',
     items: [
+      { label: 'Custom Argument', value: '{argument name="Value"}', icon: Variable },
       { label: 'Clipboard Text', value: '{clipboard}', icon: Clipboard },
       { label: 'Date', value: '{date}', icon: Calendar },
       { label: 'Time', value: '{time}', icon: Clock },
       { label: 'Date + Time', value: '{date:YYYY-MM-DD} {time:HH:mm}', icon: CalendarClock },
-      { label: 'Custom Argument', value: '{argument name="Value"}', icon: Variable },
+      { label: 'File / Folder', value: '', icon: Folder, pickerType: 'path' },
     ],
   },
 ];
@@ -122,6 +124,25 @@ function pickDefaultApplication(apps: ApplicationOption[]): ApplicationOption | 
   return browser || apps[0] || null;
 }
 
+function pickFinderApplication(apps: ApplicationOption[]): ApplicationOption | null {
+  return apps.find((app) => {
+    const bundleId = String(app.bundleId || '').toLowerCase();
+    const name = String(app.name || '').toLowerCase();
+    const path = String(app.path || '').toLowerCase();
+    return bundleId === 'com.apple.finder' || name === 'finder' || path.endsWith('/finder.app');
+  }) || null;
+}
+
+function toFileUrl(pathValue: string): string {
+  const raw = String(pathValue || '').trim();
+  if (!raw) return raw;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return raw;
+
+  const normalized = raw.replace(/\\/g, '/');
+  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return `file://${encodeURI(withLeadingSlash)}`;
+}
+
 const QuickLinkIconPreview: React.FC<{
   icon: QuickLinkIcon;
   appIconDataUrl?: string;
@@ -146,11 +167,9 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   const [applications, setApplications] = useState<ApplicationOption[]>([]);
   const [selectedAppPath, setSelectedAppPath] = useState(quickLink?.applicationPath || '');
   const [appIconDataUrl, setAppIconDataUrl] = useState<string | undefined>(quickLink?.appIconDataUrl);
-  const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [showPlaceholderMenu, setShowPlaceholderMenu] = useState(false);
-  const [placeholderQuery, setPlaceholderQuery] = useState('');
   const [showApplicationMenu, setShowApplicationMenu] = useState(false);
   const [showIconMenu, setShowIconMenu] = useState(false);
   const [iconQuery, setIconQuery] = useState('');
@@ -187,10 +206,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
 
   const loadContextData = useCallback(async () => {
     try {
-      const [appsRaw, snippetsRaw] = await Promise.all([
-        window.electron.getApplications(),
-        window.electron.snippetGetAll(),
-      ]);
+      const appsRaw = await window.electron.getApplications();
 
       const apps = (appsRaw || [])
         .map((app) => ({
@@ -213,8 +229,6 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
         }
         return changed ? next : prev;
       });
-      setSnippets(Array.isArray(snippetsRaw) ? snippetsRaw : []);
-
       if (!selectedAppPath && !quickLink?.applicationPath) {
         const fallbackApp = pickDefaultApplication(apps);
         if (fallbackApp) {
@@ -463,32 +477,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     return () => document.removeEventListener('mousedown', onPointerDown, true);
   }, [showIconMenu]);
 
-  const placeholderGroups = useMemo(() => {
-    const snippetItems: PlaceholderGroupItem[] = snippets.map((snippet) => ({
-      label: snippet.name,
-      value: `{snippet:${snippet.id}}`,
-      subtitle: snippet.keyword ? `Keyword: ${snippet.keyword}` : undefined,
-      icon: Link2,
-    }));
-
-    const groups: PlaceholderGroup[] = [...BASE_PLACEHOLDER_GROUPS];
-    if (snippetItems.length > 0) {
-      groups.push({ title: 'Saved Snippets', items: snippetItems });
-    }
-
-    const query = placeholderQuery.trim().toLowerCase();
-    if (!query) return groups;
-
-    return groups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) => {
-          const haystack = `${item.label} ${item.value} ${item.subtitle || ''}`.toLowerCase();
-          return haystack.includes(query);
-        }),
-      }))
-      .filter((group) => group.items.length > 0);
-  }, [placeholderQuery, snippets]);
+  const placeholderGroups = useMemo(() => BASE_PLACEHOLDER_GROUPS, []);
 
   const selectedApp = useMemo(
     () => applications.find((app) => app.path === selectedAppPath) || null,
@@ -527,7 +516,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     return list;
   }, [filteredIconOptions, iconQuery, selectedIconOption]);
 
-  const insertPlaceholder = (placeholder: string) => {
+  const insertPlaceholder = useCallback((placeholder: string) => {
     const input = urlRef.current;
     if (!input) return;
 
@@ -541,7 +530,58 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       const nextPos = start + placeholder.length;
       input.setSelectionRange(nextPos, nextPos);
     });
-  };
+  }, [urlTemplate]);
+
+  const handlePlaceholderSelection = useCallback(async (item: PlaceholderGroupItem) => {
+    if (!item.pickerType) {
+      insertPlaceholder(item.value);
+      setShowPlaceholderMenu(false);
+      return;
+    }
+
+    try {
+      const picked = await window.electron.pickFiles({
+        allowMultipleSelection: false,
+        canChooseFiles: true,
+        canChooseDirectories: true,
+      });
+      const selectedPath = String(picked?.[0] || '').trim();
+      if (selectedPath) {
+        const fileUrl = toFileUrl(selectedPath);
+        setUrlTemplate(fileUrl);
+        requestAnimationFrame(() => {
+          urlRef.current?.focus();
+          const pos = fileUrl.length;
+          urlRef.current?.setSelectionRange(pos, pos);
+        });
+
+        const stat = window.electron.statSync(selectedPath);
+        if (stat?.isDirectory) {
+          const finder = pickFinderApplication(applications);
+          if (finder?.path) setSelectedAppPath(finder.path);
+        } else if (stat?.isFile) {
+          try {
+            const defaultApp = await window.electron.getDefaultApplication(selectedPath);
+            const matchingApp =
+              applications.find((app) => app.path === defaultApp?.path) ||
+              applications.find((app) => app.bundleId && defaultApp?.bundleId && app.bundleId === defaultApp.bundleId) ||
+              applications.find((app) => app.name === defaultApp?.name);
+            if (matchingApp?.path) {
+              setSelectedAppPath(matchingApp.path);
+            } else if (defaultApp?.path) {
+              setSelectedAppPath(defaultApp.path);
+            }
+          } catch (error) {
+            console.error('Failed to resolve default application for file:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to pick file/folder:', error);
+    } finally {
+      setShowPlaceholderMenu(false);
+    }
+  }, [applications, insertPlaceholder]);
 
   const submit = async () => {
     const nextErrors: Record<string, string> = {};
@@ -672,14 +712,14 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                   setShowPlaceholderMenu((prev) => !prev);
                 }}
                 className="absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 rounded-md border border-[rgba(124,136,154,0.24)] bg-white/[0.04] text-white/60 hover:text-white/80 hover:bg-white/[0.08] transition-colors"
-                title="Insert placeholder"
+                title="Add dynamic placeholder"
               >
                 <Variable className="w-3.5 h-3.5" />
               </button>
             </div>
             {errors.urlTemplate ? <p className="text-red-400 text-xs mt-1">{errors.urlTemplate}</p> : null}
             <p className="text-white/25 text-xs mt-2">
-              Type <strong className="text-white/45">{'{'}</strong> to insert dynamic placeholders or saved snippets.
+              You can add <strong className="text-white/45">{'{Custom Arguments}'}</strong> to add dynamic values like custom arguments, clipboard text, and time.
             </p>
           </div>
         </div>
@@ -763,24 +803,22 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       {showApplicationMenu && createPortal(
         <div
           id="quicklink-application-menu"
-          className="fixed z-[120] rounded-lg overflow-hidden border border-[var(--snippet-divider)]"
+          className="fixed z-[120] rounded-lg overflow-hidden sc-dropdown-surface"
           style={{
             top: applicationMenuPos.top,
             left: applicationMenuPos.left,
             width: applicationMenuPos.width,
-            background: 'var(--bg-overlay-strong)',
-            backdropFilter: 'blur(18px)',
-            boxShadow: '0 12px 28px rgba(var(--backdrop-rgb), 0.45)',
           }}
         >
-          <div className="overflow-y-auto py-1" style={{ maxHeight: applicationMenuPos.maxHeight }}>
+          <div className="overflow-y-auto py-1" style={{ maxHeight: Math.min(applicationMenuPos.maxHeight, 136) }}>
             <button
               type="button"
               onClick={() => {
                 setSelectedAppPath('');
                 setShowApplicationMenu(false);
               }}
-              className="w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 hover:bg-white/[0.07] transition-colors flex items-center gap-2"
+              className="sc-dropdown-item w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 flex items-center gap-2"
+              aria-selected={!selectedAppPath}
             >
               <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
                 <Globe className="w-3.5 h-3.5 text-white/65" />
@@ -799,7 +837,8 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                     setSelectedAppPath(app.path);
                     setShowApplicationMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 hover:bg-white/[0.07] transition-colors flex items-center gap-2"
+                  className="sc-dropdown-item w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 flex items-center gap-2"
+                  aria-selected={isSelected}
                 >
                   <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
                     {iconDataUrl ? (
@@ -821,27 +860,24 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       {showIconMenu && createPortal(
         <div
           id="quicklink-icon-menu"
-          className="fixed z-[120] rounded-lg overflow-hidden border border-[var(--snippet-divider)]"
+          className="fixed z-[120] rounded-lg overflow-hidden sc-dropdown-surface"
           style={{
             top: iconMenuPos.top,
             left: iconMenuPos.left,
             width: iconMenuPos.width,
-            background: 'var(--bg-overlay-strong)',
-            backdropFilter: 'blur(18px)',
-            boxShadow: '0 12px 28px rgba(var(--backdrop-rgb), 0.45)',
           }}
         >
-          <div className="px-2 py-1.5 border-b border-[var(--snippet-divider)]">
+          <div className="px-2 py-1.5 border-b sc-dropdown-divider">
             <input
               type="text"
               value={iconQuery}
               onChange={(event) => setIconQuery(event.target.value)}
               placeholder="Search icons..."
-              className="w-full bg-transparent text-[13px] text-white/75 placeholder:text-[color:var(--text-subtle)] outline-none"
+              className="w-full px-1.5 py-1 bg-transparent text-[13px] text-white/75 placeholder:text-[color:var(--text-subtle)] outline-none"
               autoFocus
             />
           </div>
-          <div className="overflow-y-auto py-1" style={{ maxHeight: iconMenuPos.maxHeight }}>
+          <div className="overflow-y-auto py-1" style={{ maxHeight: Math.min(iconMenuPos.maxHeight, 136) }}>
             {visibleIconOptions.map((option) => {
               const isSelected = icon === option.value;
               return (
@@ -852,7 +888,8 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                     setIcon(option.value as QuickLinkIcon);
                     setShowIconMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 hover:bg-white/[0.07] transition-colors flex items-center gap-2"
+                  className="sc-dropdown-item w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 flex items-center gap-2"
+                  aria-selected={isSelected}
                 >
                   <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
                     <QuickLinkIconPreview icon={option.value} appIconDataUrl={selectedAppResolvedIconDataUrl} />
@@ -866,7 +903,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
               <div className="px-2.5 py-2 text-xs text-white/35">No icons found</div>
             ) : null}
             {filteredIconOptions.length > visibleIconOptions.length ? (
-              <div className="px-2.5 py-2 text-[11px] text-white/35 border-t border-[var(--snippet-divider)]">
+              <div className="px-2.5 py-2 text-[11px] text-white/35 border-t sc-dropdown-divider">
                 {iconQuery.trim()
                   ? `Showing top ${MAX_VISIBLE_ICON_RESULTS} results. Refine search to narrow more.`
                   : `Showing ${MAX_VISIBLE_ICON_RESULTS} icons. Search to find more.`}
@@ -880,27 +917,14 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
       {showPlaceholderMenu && createPortal(
         <div
           id="quicklink-placeholder-menu"
-          className="fixed z-[120] rounded-lg overflow-hidden border border-[rgba(124,136,154,0.24)]"
+          className="fixed z-[120] rounded-lg overflow-hidden sc-dropdown-surface"
           style={{
             top: placeholderMenuPos.top,
             left: placeholderMenuPos.left,
             width: placeholderMenuPos.width,
-            background: 'var(--bg-overlay-strong)',
-            backdropFilter: 'blur(18px)',
-            boxShadow: '0 12px 28px rgba(var(--backdrop-rgb), 0.45)',
           }}
         >
-          <div className="px-2 py-1.5 border-b border-[rgba(124,136,154,0.24)]">
-            <input
-              type="text"
-              value={placeholderQuery}
-              onChange={(event) => setPlaceholderQuery(event.target.value)}
-              placeholder="Search placeholders..."
-              className="w-full bg-transparent text-[13px] text-white/75 placeholder:text-[color:var(--text-subtle)] outline-none"
-              autoFocus
-            />
-          </div>
-          <div className="overflow-y-auto py-1" style={{ maxHeight: placeholderMenuPos.maxHeight }}>
+          <div className="overflow-y-auto py-1" style={{ maxHeight: Math.min(placeholderMenuPos.maxHeight, 136) }}>
             {placeholderGroups.map((group) => (
               <div key={group.title} className="mb-1">
                 <div className="px-2.5 py-1 text-[11px] uppercase tracking-wider text-white/30">{group.title}</div>
@@ -910,12 +934,8 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                     <button
                       key={`${group.title}-${item.value}`}
                       type="button"
-                      onClick={() => {
-                        insertPlaceholder(item.value);
-                        setShowPlaceholderMenu(false);
-                        setPlaceholderQuery('');
-                      }}
-                      className="w-full text-left px-2.5 py-1 text-[13px] text-white/80 hover:bg-white/[0.07] transition-colors"
+                      onClick={() => void handlePlaceholderSelection(item)}
+                      className="sc-dropdown-item w-full text-left px-2.5 py-1 text-[13px] text-white/80"
                     >
                       <span className="flex items-center gap-2">
                         {Icon ? <Icon className="w-3.5 h-3.5 text-white/45" /> : null}

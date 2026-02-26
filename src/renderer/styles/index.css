@@ -596,6 +596,34 @@ html {
   backdrop-filter: blur(48px) saturate(170%);
 }
 
+/* Shared dropdown surface for snippet/quicklink/clipboard-like menus */
+.sc-dropdown-surface {
+  border: 1px solid var(--ui-panel-border);
+  background: rgba(var(--surface-base-rgb), 0.5);
+  -webkit-backdrop-filter: blur(32px) saturate(165%);
+  backdrop-filter: blur(32px) saturate(165%);
+  box-shadow:
+    0 12px 28px rgba(var(--backdrop-rgb), 0.36),
+    inset 0 0 0 1px rgba(var(--on-surface-rgb), 0.12);
+}
+
+.sc-dropdown-divider {
+  border-color: var(--snippet-divider);
+}
+
+.sc-dropdown-item {
+  border-radius: 8px;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.sc-dropdown-item:hover {
+  background: var(--overlay-item-hover-bg);
+}
+
+.sc-dropdown-item[aria-selected='true'] {
+  background: var(--overlay-item-active-bg);
+}
+
 .cursor-prompt-surface {
   border-radius: 10px;
   background: var(--bg-overlay);
