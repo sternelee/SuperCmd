@@ -220,7 +220,7 @@ export function renderSimpleMarkdown(md: string, resolveImageSrc: ResolveImageSr
     }
 
     if (line.trim() === '') {
-      elements.push(<div key={elements.length} className="h-2" />);
+      elements.push(<div key={elements.length} className="h-1" />);
       i += 1;
       continue;
     }

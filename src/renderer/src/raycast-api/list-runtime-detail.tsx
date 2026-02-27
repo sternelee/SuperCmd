@@ -32,7 +32,7 @@ export function createListDetailRuntime(deps: ListDetailDeps) {
     metadata?: React.ReactElement;
     children?: React.ReactNode;
   }) => (
-    <div className="flex flex-col h-full overflow-y-auto p-4">
+    <div className="flex flex-col h-full overflow-y-auto px-3 py-2.5">
       {isLoading ? (
         <div className="flex items-center justify-center h-full text-white/50"><p className="text-sm">Loading…</p></div>
       ) : (

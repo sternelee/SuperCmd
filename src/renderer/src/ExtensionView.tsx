@@ -443,7 +443,28 @@ function normalizeFsPath(input: any): string {
   return String(input);
 }
 
-function fsStatResult(exists: boolean, isDir = false, size = 0) {
+function fsStatResult(
+  exists: boolean,
+  isDir = false,
+  size = 0,
+  meta?: {
+    mode?: number;
+    uid?: number;
+    gid?: number;
+    dev?: number;
+    ino?: number;
+    nlink?: number;
+    atimeMs?: number;
+    mtimeMs?: number;
+    ctimeMs?: number;
+    birthtimeMs?: number;
+  }
+) {
+  const nowMs = Date.now();
+  const atimeMs = Number(meta?.atimeMs);
+  const mtimeMs = Number(meta?.mtimeMs);
+  const ctimeMs = Number(meta?.ctimeMs);
+  const birthtimeMs = Number(meta?.birthtimeMs);
   return {
     isFile: () => exists && !isDir,
     isDirectory: () => isDir,
@@ -453,16 +474,20 @@ function fsStatResult(exists: boolean, isDir = false, size = 0) {
     isFIFO: () => false,
     isSocket: () => false,
     size: exists ? size : 0,
-    mtime: new Date(),
-    atime: new Date(),
-    ctime: new Date(),
-    birthtime: new Date(),
-    mode: 0o644,
-    uid: 501,
-    gid: 20,
-    dev: 0,
-    ino: 0,
-    nlink: 1,
+    atimeMs: Number.isFinite(atimeMs) ? atimeMs : nowMs,
+    mtimeMs: Number.isFinite(mtimeMs) ? mtimeMs : nowMs,
+    ctimeMs: Number.isFinite(ctimeMs) ? ctimeMs : nowMs,
+    birthtimeMs: Number.isFinite(birthtimeMs) ? birthtimeMs : nowMs,
+    atime: new Date(Number.isFinite(atimeMs) ? atimeMs : nowMs),
+    mtime: new Date(Number.isFinite(mtimeMs) ? mtimeMs : nowMs),
+    ctime: new Date(Number.isFinite(ctimeMs) ? ctimeMs : nowMs),
+    birthtime: new Date(Number.isFinite(birthtimeMs) ? birthtimeMs : nowMs),
+    mode: Number(meta?.mode) || 0o644,
+    uid: Number(meta?.uid) || 501,
+    gid: Number(meta?.gid) || 20,
+    dev: Number(meta?.dev) || 0,
+    ino: Number(meta?.ino) || 0,
+    nlink: Number(meta?.nlink) || 1,
   };
 }
 
@@ -548,6 +573,209 @@ function toUint8Array(chunk: any): Uint8Array {
   return new TextEncoder().encode(String(chunk ?? ''));
 }
 
+type FsEntryKind = 'file' | 'directory' | 'unknown';
+
+function createFsError(code: string, syscall: string, targetPath: string): any {
+  const message = `${code}: no such file or directory, ${syscall} '${targetPath}'`;
+  const err: any = new Error(message);
+  err.code = code;
+  err.syscall = syscall;
+  err.path = targetPath;
+  return err;
+}
+
+function normalizeDirectoryPath(dirPath: string): string {
+  const trimmed = String(dirPath || '').trim();
+  if (!trimmed) return '.';
+  if (trimmed === '/') return '/';
+  return trimmed.replace(/\/+$/, '') || '/';
+}
+
+function buildDirectoryPrefix(dirPath: string): string {
+  const normalized = normalizeDirectoryPath(dirPath);
+  return normalized === '/' ? '/' : `${normalized}/`;
+}
+
+function joinDirectoryPath(dirPath: string, entryName: string): string {
+  const normalized = normalizeDirectoryPath(dirPath);
+  if (normalized === '/') return `/${entryName}`;
+  if (normalized === '.') return entryName;
+  return `${normalized}/${entryName}`;
+}
+
+function parseReaddirOptions(options: any): { withFileTypes: boolean; encoding: string | null } {
+  if (typeof options === 'string') {
+    return { withFileTypes: false, encoding: options };
+  }
+  if (options && typeof options === 'object') {
+    const encoding = typeof options.encoding === 'string' ? options.encoding : null;
+    return { withFileTypes: Boolean(options.withFileTypes), encoding };
+  }
+  return { withFileTypes: false, encoding: null };
+}
+
+function encodeDirEntryName(name: string, encoding: string | null): any {
+  if (encoding === 'buffer') return BufferPolyfill.from(name);
+  return name;
+}
+
+function createDirentLike(name: string, kind: FsEntryKind, encoding: string | null): any {
+  return {
+    name: encodeDirEntryName(name, encoding),
+    isFile: () => kind === 'file',
+    isDirectory: () => kind === 'directory',
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isFIFO: () => false,
+    isSocket: () => false,
+    isSymbolicLink: () => false,
+  };
+}
+
+function collectVirtualDirectoryEntries(dirPath: string): Map<string, FsEntryKind> {
+  const entries = new Map<string, FsEntryKind>();
+  const prefix = buildDirectoryPrefix(dirPath);
+
+  const upsert = (name: string, kind: FsEntryKind) => {
+    if (!name) return;
+    const existing = entries.get(name);
+    if (existing === 'directory') return;
+    if (existing === 'file' && kind === 'unknown') return;
+    if (!existing || kind === 'directory') {
+      entries.set(name, kind);
+    }
+  };
+
+  const addFromStoredPath = (storedPath: string) => {
+    if (!storedPath || !storedPath.startsWith(prefix)) return;
+    const rest = storedPath.slice(prefix.length);
+    if (!rest) return;
+    const firstSlash = rest.indexOf('/');
+    const entryName = firstSlash === -1 ? rest : rest.slice(0, firstSlash);
+    const kind: FsEntryKind = firstSlash === -1 ? 'file' : 'directory';
+    upsert(entryName, kind);
+  };
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith(FS_PREFIX)) continue;
+    addFromStoredPath(key.slice(FS_PREFIX.length));
+  }
+  for (const memoryPath of fsMemoryStore.keys()) {
+    addFromStoredPath(memoryPath);
+  }
+
+  return entries;
+}
+
+function getRealDirectoryEntriesSync(dirPath: string): string[] {
+  try {
+    const result = (window as any).electron?.execCommandSync?.('/bin/ls', ['-A1', dirPath], {});
+    if (!result || result.exitCode !== 0) return [];
+    return String(result.stdout || '')
+      .split(/\r?\n/)
+      .map((entry) => entry.replace(/\r$/, ''))
+      .filter((entry) => entry.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+async function getRealDirectoryEntriesAsync(dirPath: string): Promise<string[]> {
+  try {
+    const result = await (window as any).electron?.readDir?.(dirPath);
+    if (!Array.isArray(result)) return [];
+    return result.map((entry) => String(entry || '')).filter((entry) => entry.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function getEntryKindFromRealStat(path: string): FsEntryKind {
+  try {
+    const stat = (window as any).electron?.statSync?.(path);
+    if (!stat?.exists) return 'unknown';
+    if (stat.isDirectory) return 'directory';
+    if (stat.isFile) return 'file';
+  } catch {}
+  return 'unknown';
+}
+
+function combineDirectoryEntries(
+  dirPath: string,
+  realNames: string[],
+  virtualEntries: Map<string, FsEntryKind>
+): Array<{ name: string; kind: FsEntryKind }> {
+  const out: Array<{ name: string; kind: FsEntryKind }> = [];
+  const indexByName = new Map<string, number>();
+
+  const addOrUpgrade = (name: string, kind: FsEntryKind) => {
+    if (!name) return;
+    const idx = indexByName.get(name);
+    if (idx === undefined) {
+      indexByName.set(name, out.length);
+      out.push({ name, kind });
+      return;
+    }
+    const existing = out[idx];
+    if (existing.kind !== 'directory' && kind === 'directory') {
+      out[idx] = { name, kind };
+    } else if (existing.kind === 'unknown' && kind !== 'unknown') {
+      out[idx] = { name, kind };
+    }
+  };
+
+  for (const name of realNames) {
+    const fullPath = joinDirectoryPath(dirPath, name);
+    addOrUpgrade(name, getEntryKindFromRealStat(fullPath));
+  }
+  for (const [name, kind] of virtualEntries.entries()) {
+    addOrUpgrade(name, kind);
+  }
+
+  return out;
+}
+
+function assertReadableDirectory(path: string, hasEntries: boolean): void {
+  const stat = (window as any).electron?.statSync?.(path);
+  if (stat?.exists && !stat.isDirectory) {
+    throw createFsError('ENOTDIR', 'scandir', path);
+  }
+  if (!stat?.exists && !hasEntries) {
+    throw createFsError('ENOENT', 'scandir', path);
+  }
+}
+
+function formatDirectoryEntries(
+  entries: Array<{ name: string; kind: FsEntryKind }>,
+  options: { withFileTypes: boolean; encoding: string | null }
+): any[] {
+  if (options.withFileTypes) {
+    return entries.map(({ name, kind }) => createDirentLike(name, kind, options.encoding));
+  }
+  return entries.map(({ name }) => encodeDirEntryName(name, options.encoding));
+}
+
+function readdirSyncImpl(p: any, opts?: any): any[] {
+  const dirPath = resolveFsLookupPath(p);
+  const options = parseReaddirOptions(opts);
+  const virtualEntries = collectVirtualDirectoryEntries(dirPath);
+  const realEntries = getRealDirectoryEntriesSync(dirPath);
+  const combined = combineDirectoryEntries(dirPath, realEntries, virtualEntries);
+  assertReadableDirectory(dirPath, combined.length > 0);
+  return formatDirectoryEntries(combined, options);
+}
+
+async function readdirAsyncImpl(p: any, opts?: any): Promise<any[]> {
+  const dirPath = resolveFsLookupPath(p);
+  const options = parseReaddirOptions(opts);
+  const virtualEntries = collectVirtualDirectoryEntries(dirPath);
+  const realEntries = await getRealDirectoryEntriesAsync(dirPath);
+  const combined = combineDirectoryEntries(dirPath, realEntries, virtualEntries);
+  assertReadableDirectory(dirPath, combined.length > 0);
+  return formatDirectoryEntries(combined, options);
+}
+
 const fsStub: Record<string, any> = {
   existsSync: (p: any) => {
     const path = resolveFsLookupPath(p);
@@ -606,28 +834,14 @@ const fsStub: Record<string, any> = {
       exec('/bin/mkdir', args, {}).catch(() => {});
     }
   },
-  readdirSync: (p: string) => {
-    const path = resolveFsLookupPath(p);
-    const prefix = FS_PREFIX + (path.endsWith('/') ? path : path + '/');
-    const results: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(prefix)) {
-        const rest = key.slice(prefix.length);
-        const firstSlash = rest.indexOf('/');
-        const entry = firstSlash === -1 ? rest : rest.slice(0, firstSlash);
-        if (entry && !results.includes(entry)) results.push(entry);
-      }
-    }
-    return results;
-  },
+  readdirSync: (p: string, opts?: any) => readdirSyncImpl(p, opts),
   statSync: (p: any) => {
     const path = resolveFsLookupPath(p);
     const content = getStoredText(path);
     if (content !== null) return fsStatResult(true, false, content.length);
     try {
       const result = (window as any).electron?.statSync?.(path);
-      if (result?.exists) return fsStatResult(true, result.isDirectory);
+      if (result?.exists) return fsStatResult(true, result.isDirectory, Number(result.size) || 0, result);
     } catch {}
     return fsStatResult(false);
   },
@@ -637,7 +851,7 @@ const fsStub: Record<string, any> = {
     if (content !== null) return fsStatResult(true, false, content.length);
     try {
       const result = (window as any).electron?.statSync?.(path);
-      if (result?.exists) return fsStatResult(true, result.isDirectory);
+      if (result?.exists) return fsStatResult(true, result.isDirectory, Number(result.size) || 0, result);
     } catch {}
     return fsStatResult(false);
   },
@@ -757,13 +971,17 @@ const fsStub: Record<string, any> = {
         cb(null, content);
       } else {
         // Fall back to real file system
+        const exists = Boolean((window as any).electron?.fileExistsSync?.(path));
         ((window as any).electron?.readFile?.(path) as Promise<string>)
           ?.then((data: string) => {
-            if (data !== '') cb(null, data);
-            else { const err: any = new Error(`ENOENT: no such file or directory, open '${path}'`); err.code = 'ENOENT'; cb(err, null); }
+            if (exists) {
+              cb(null, data ?? '');
+            } else {
+              cb(createFsError('ENOENT', 'open', path), null);
+            }
           })
-          ?.catch(() => { const err: any = new Error(`ENOENT: no such file or directory, open '${path}'`); err.code = 'ENOENT'; cb(err, null); })
-          ?? (() => { const err: any = new Error(`ENOENT: no such file or directory, open '${path}'`); err.code = 'ENOENT'; cb(err, null); })();
+          ?.catch(() => cb(createFsError('ENOENT', 'open', path), null))
+          ?? cb(createFsError('ENOENT', 'open', path), null);
       }
     }
   },
@@ -815,13 +1033,11 @@ const fsStub: Record<string, any> = {
     try {
       const result = (window as any).electron?.statSync?.(path);
       if (result?.exists) {
-        cb(null, fsStatResult(true, result.isDirectory));
+        cb(null, fsStatResult(true, result.isDirectory, Number(result.size) || 0, result));
         return;
       }
     } catch {}
-    const err: any = new Error(`ENOENT: no such file or directory, stat '${path}'`);
-    err.code = 'ENOENT';
-    cb(err);
+    cb(createFsError('ENOENT', 'stat', path));
   },
   lstat: (p: string, ...args: any[]) => {
     const cb = args[args.length - 1];
@@ -835,13 +1051,11 @@ const fsStub: Record<string, any> = {
     try {
       const result = (window as any).electron?.statSync?.(path);
       if (result?.exists) {
-        cb(null, fsStatResult(true, result.isDirectory));
+        cb(null, fsStatResult(true, result.isDirectory, Number(result.size) || 0, result));
         return;
       }
     } catch {}
-    const err: any = new Error(`ENOENT: no such file or directory, lstat '${path}'`);
-    err.code = 'ENOENT';
-    cb(err);
+    cb(createFsError('ENOENT', 'lstat', path));
   },
   realpath: (p: string, ...args: any[]) => {
     const path = resolveFsLookupPath(p);
@@ -849,8 +1063,12 @@ const fsStub: Record<string, any> = {
     if (typeof cb === 'function') cb(null, path);
   },
   readdir: (p: string, ...args: any[]) => {
-    const cb = args[args.length - 1];
-    if (typeof cb === 'function') cb(null, fsStub.readdirSync(p));
+    const cb = typeof args[args.length - 1] === 'function' ? args.pop() : null;
+    const opts = args[0];
+    if (typeof cb !== 'function') return;
+    readdirAsyncImpl(p, opts)
+      .then((entries) => cb(null, entries))
+      .catch((error) => cb(error));
   },
   unlink: (p: string, ...args: any[]) => {
     const path = resolveFsLookupPath(p);
@@ -877,15 +1095,14 @@ const fsStub: Record<string, any> = {
       }
       // Fall back to real file system
       try {
+        const exists = Boolean((window as any).electron?.fileExistsSync?.(path));
         const data = await (window as any).electron?.readFile?.(path);
-        if (data !== undefined && data !== '') {
+        if (exists) {
           if (opts?.encoding || typeof opts === 'string') return data;
           return BufferPolyfill.from(data);
         }
       } catch { /* fall through */ }
-      const err: any = new Error(`ENOENT: no such file or directory, open '${path}'`);
-      err.code = 'ENOENT';
-      throw err;
+      throw createFsError('ENOENT', 'open', path);
     },
     writeFile: async (p: string, data: any) => {
       const path = resolveFsLookupPath(p);
@@ -908,18 +1125,16 @@ const fsStub: Record<string, any> = {
         throw new Error(result.stderr || `mkdir failed with exit code ${result.exitCode}`);
       }
     },
-    readdir: async (p: string) => fsStub.readdirSync(p),
+    readdir: async (p: string, opts?: any) => readdirAsyncImpl(p, opts),
     stat: async (p: string) => {
       const path = resolveFsLookupPath(p);
       const content = getStoredText(path);
       if (content !== null) return fsStatResult(true, false, content.length);
       try {
         const result = (window as any).electron?.statSync?.(path);
-        if (result?.exists) return fsStatResult(true, result.isDirectory);
+        if (result?.exists) return fsStatResult(true, result.isDirectory, Number(result.size) || 0, result);
       } catch {}
-      const err: any = new Error(`ENOENT: no such file or directory, stat '${path}'`);
-      err.code = 'ENOENT';
-      throw err;
+      throw createFsError('ENOENT', 'stat', path);
     },
     lstat: async (p: string) => {
       const path = resolveFsLookupPath(p);
@@ -927,11 +1142,9 @@ const fsStub: Record<string, any> = {
       if (content !== null) return fsStatResult(true, false, content.length);
       try {
         const result = (window as any).electron?.statSync?.(path);
-        if (result?.exists) return fsStatResult(true, result.isDirectory);
+        if (result?.exists) return fsStatResult(true, result.isDirectory, Number(result.size) || 0, result);
       } catch {}
-      const err: any = new Error(`ENOENT: no such file or directory, lstat '${path}'`);
-      err.code = 'ENOENT';
-      throw err;
+      throw createFsError('ENOENT', 'lstat', path);
     },
     realpath: async (p: string) => resolveFsLookupPath(p),
     access: async (p: string) => {
