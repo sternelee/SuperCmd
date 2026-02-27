@@ -1618,7 +1618,37 @@ if (typeof window !== 'undefined') {
 
 export function getPreferenceValues<Values extends PreferenceValues = PreferenceValues>(): Values {
   const scoped = getCurrentScopedExtensionContext();
-  return (scoped?.preferences || _extensionContext.preferences || {}) as Values;
+  const context = scoped || _extensionContext;
+  const contextPrefs = (context?.preferences || {}) as Record<string, any>;
+  const extName = String(context?.extensionName || _extensionContext.extensionName || '').trim();
+  const cmdName = String(context?.commandName || _extensionContext.commandName || '').trim();
+
+  const readStoredPrefs = (key: string): Record<string, any> => {
+    if (!key) return {};
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const extStored = extName ? readStoredPrefs(`sc-ext-prefs:${extName}`) : {};
+  const cmdStored = extName && cmdName ? readStoredPrefs(`sc-ext-cmd-prefs:${extName}/${cmdName}`) : {};
+  const stored = { ...extStored, ...cmdStored };
+
+  const merged = { ...stored, ...contextPrefs };
+  for (const [key, value] of Object.entries(contextPrefs)) {
+    if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
+      if (stored[key] !== undefined) {
+        merged[key] = stored[key];
+      }
+    }
+  }
+
+  return merged as Values;
 }
 
 export async function open(target: string, application?: string | Application): Promise<void> {

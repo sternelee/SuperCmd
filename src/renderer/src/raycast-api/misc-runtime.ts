@@ -30,7 +30,30 @@ export type Preferences = { [name: string]: Preference };
 export const preferences: Preferences = new Proxy({} as Preferences, {
   get(_target, prop: string) {
     const ctx = getCurrentScopedExtensionContext();
-    const val = (ctx.preferences || {})[prop];
+    const contextPrefs = (ctx.preferences || {}) as Record<string, any>;
+    const extName = String(ctx.extensionName || '').trim();
+    const cmdName = String(ctx.commandName || '').trim();
+
+    const readStoredPrefs = (key: string): Record<string, any> => {
+      if (!key) return {};
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      } catch {
+        return {};
+      }
+    };
+
+    const extStored = extName ? readStoredPrefs(`sc-ext-prefs:${extName}`) : {};
+    const cmdStored = extName && cmdName ? readStoredPrefs(`sc-ext-cmd-prefs:${extName}/${cmdName}`) : {};
+    const stored = { ...extStored, ...cmdStored };
+    const contextValue = contextPrefs[prop];
+    const val = contextValue === undefined || contextValue === null || (typeof contextValue === 'string' && contextValue.trim() === '')
+      ? stored[prop]
+      : contextValue;
+
     return { name: prop, type: 'textfield', required: false, title: prop, description: '', value: val } as Preference;
   },
 });
