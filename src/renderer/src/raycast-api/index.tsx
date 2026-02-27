@@ -347,6 +347,8 @@ export class Toast {
   private _keyHandler: ((event: KeyboardEvent) => void) | null = null;
   private _actions: Alert.ActionOptions[] = [];
   private _selectedActionIndex = 0;
+  private _hostEl: HTMLElement | null = null;
+  private _isInlineHost = false;
 
   constructor(options: Toast.Options) {
     this._style = this.normalizeStyle(options.style);
@@ -415,13 +417,26 @@ export class Toast {
   }
 
   private getClassName(): string {
-    return `sc-toast ${
+    return `sc-toast ${this._isInlineHost ? 'sc-toast-inline' : ''} ${
       this._style === ToastStyle.Failure
         ? 'sc-toast-failure'
         : this._style === ToastStyle.Animated
           ? 'sc-toast-animated'
           : 'sc-toast-success'
     }`;
+  }
+
+  private resolveInlineHost(): HTMLElement | null {
+    const footers = Array.from(document.querySelectorAll<HTMLElement>('.sc-glass-footer'));
+    for (let index = footers.length - 1; index >= 0; index -= 1) {
+      const footer = footers[index];
+      if (!footer) continue;
+      if (footer.getClientRects().length === 0) continue;
+      const style = window.getComputedStyle(footer);
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+      return footer;
+    }
+    return null;
   }
 
   private updateActions() {
@@ -537,6 +552,8 @@ export class Toast {
   private updateActionMenuPosition() {
     if (!this._menuEl || !this._el) return;
     const rect = this._el.getBoundingClientRect();
+    this._menuEl.style.right = '';
+    this._menuEl.style.top = '';
     this._menuEl.style.left = `${rect.left}px`;
     this._menuEl.style.bottom = `${Math.max(window.innerHeight - rect.top + 8, 12)}px`;
   }
@@ -564,9 +581,17 @@ export class Toast {
       void Toast._activeToast.hide();
     }
 
+    this._hostEl = this.resolveInlineHost() || document.body;
+    this._isInlineHost = this._hostEl !== document.body;
+
     this._el = document.createElement('div');
     this._el.className = this.getClassName();
-    document.body.appendChild(this._el);
+    if (this._isInlineHost) {
+      this._hostEl.classList.add('sc-toast-active');
+      this._hostEl.insertBefore(this._el, this._hostEl.firstChild || null);
+    } else {
+      this._hostEl.appendChild(this._el);
+    }
     Toast._activeToast = this;
     this.refresh();
     return Promise.resolve();
@@ -716,7 +741,10 @@ export class Toast {
     }
     if (Toast._activeToast === this) {
       Toast._activeToast = null;
+      this._hostEl?.classList.remove('sc-toast-active');
     }
+    this._hostEl = null;
+    this._isInlineHost = false;
     return Promise.resolve();
   }
 }

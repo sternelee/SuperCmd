@@ -243,7 +243,7 @@ export function createGridRuntime(deps: GridRuntimeDeps) {
           </div>
 
           <div className="sc-glass-footer flex items-center px-4 py-2.5">
-            <div className="flex items-center gap-2 text-[var(--text-subtle)] text-xs flex-1 min-w-0 font-normal">
+            <div className="sc-footer-primary flex items-center gap-2 text-[var(--text-subtle)] text-xs flex-1 min-w-0 font-normal">
               {footerIcon ? <img src={footerIcon} alt="" className="w-4 h-4 rounded-sm object-contain flex-shrink-0" /> : null}
               <span className="truncate">{footerTitle}</span>
             </div>

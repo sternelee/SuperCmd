@@ -948,6 +948,47 @@ kbd {
   animation: sc-toast-in 0.2s ease-out;
   pointer-events: auto;
 }
+
+.sc-toast-inline {
+  position: static;
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  z-index: auto;
+  max-width: min(620px, calc(100% - 12px));
+  margin-right: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  animation: none;
+}
+
+.sc-toast-inline.sc-toast-success,
+.sc-toast-inline.sc-toast-failure,
+.sc-toast-inline.sc-toast-animated {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.sc-toast-inline .sc-toast-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.sc-toast-inline .sc-toast-message {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.sc-toast-inline .sc-toast-hint {
+  margin-left: 8px;
+}
 .sc-toast-success {
   border-color: var(--status-success-soft);
   background: var(--toast-success-bg);
@@ -1072,6 +1113,11 @@ kbd {
 @keyframes sc-toast-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* When extension status toast is visible, replace default footer title text */
+.sc-glass-footer.sc-toast-active .sc-footer-primary {
+  display: none;
 }
 
 .whisper-shell {
