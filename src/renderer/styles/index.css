@@ -405,6 +405,14 @@ html {
   z-index: 9999;
 }
 
+.sc-command-setup-shell::after {
+  border-color: rgba(var(--on-surface-rgb), 0.1);
+}
+
+.dark .sc-command-setup-shell::after {
+  border-color: rgba(var(--on-surface-rgb), 0.06);
+}
+
 .sc-glassy .glass-effect {
   --glass-radius: 12px;
   background:
@@ -424,6 +432,14 @@ html {
 
 .sc-glassy .glass-effect::after {
   border: 1px solid rgba(var(--on-surface-rgb), 0.24);
+}
+
+.sc-glassy .sc-command-setup-shell::after {
+  border-color: rgba(var(--on-surface-rgb), 0.16);
+}
+
+.dark.sc-glassy .sc-command-setup-shell::after {
+  border-color: rgba(var(--on-surface-rgb), 0.08);
 }
 
 /* Onboarding-only border softening (prevents solid dark/white strokes on utility borders) */

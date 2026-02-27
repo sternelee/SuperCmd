@@ -277,6 +277,7 @@ export function createGridRuntime(deps: GridRuntimeDeps) {
   }
 
   const GridInset = { Small: 'small', Medium: 'medium', Large: 'large' } as const;
+  const GridItemSize = { Small: 'small', Medium: 'medium', Large: 'large' } as const;
   const GridFit = { Contain: 'contain', Fill: 'fill' } as const;
 
   const Grid = Object.assign(GridComponent, {
@@ -284,6 +285,7 @@ export function createGridRuntime(deps: GridRuntimeDeps) {
     Section: GridSectionComponent,
     EmptyView: ListEmptyView,
     Dropdown: ListDropdown,
+    ItemSize: GridItemSize,
     Inset: GridInset,
     Fit: GridFit,
   });
