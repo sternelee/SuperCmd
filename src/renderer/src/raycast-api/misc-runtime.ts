@@ -4,6 +4,7 @@
  */
 
 import { getExtensionContext, type LaunchType } from './index';
+import { getCurrentScopedExtensionContext } from './context-scope-runtime';
 
 export interface PreferenceValues {
   [name: string]: any;
@@ -28,8 +29,8 @@ export type Preferences = { [name: string]: Preference };
 /** @deprecated Use getPreferenceValues instead. */
 export const preferences: Preferences = new Proxy({} as Preferences, {
   get(_target, prop: string) {
-    const ctx = getExtensionContext();
-    const val = ctx.preferences[prop];
+    const ctx = getCurrentScopedExtensionContext();
+    const val = (ctx.preferences || {})[prop];
     return { name: prop, type: 'textfield', required: false, title: prop, description: '', value: val } as Preference;
   },
 });

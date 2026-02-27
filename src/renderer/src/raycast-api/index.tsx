@@ -54,7 +54,12 @@ import { useAI } from './hooks/use-ai';
 import { useFrecencySorting } from './hooks/use-frecency-sorting';
 import { useLocalStorage } from './hooks/use-local-storage';
 import { configureStorageEvents, emitExtensionStorageChanged } from './storage-events';
-import { configureContextScopeRuntime, snapshotExtensionContext, withExtensionContext } from './context-scope-runtime';
+import {
+  configureContextScopeRuntime,
+  snapshotExtensionContext,
+  withExtensionContext,
+  getCurrentScopedExtensionContext,
+} from './context-scope-runtime';
 import { configureMenuBarRuntime, MenuBarExtra } from './menubar-runtime';
 import { createDetailRuntime } from './detail-runtime';
 import { createActionRuntime } from './action-runtime';
@@ -1612,7 +1617,8 @@ if (typeof window !== 'undefined') {
 // =====================================================================
 
 export function getPreferenceValues<Values extends PreferenceValues = PreferenceValues>(): Values {
-  return _extensionContext.preferences as Values;
+  const scoped = getCurrentScopedExtensionContext();
+  return (scoped?.preferences || _extensionContext.preferences || {}) as Values;
 }
 
 export async function open(target: string, application?: string | Application): Promise<void> {

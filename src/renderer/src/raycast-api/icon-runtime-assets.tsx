@@ -6,7 +6,8 @@
 import React from 'react';
 import { getIconRuntimeContext } from './icon-runtime-config';
 
-export function isEmojiOrSymbol(s: string): boolean {
+export function isEmojiOrSymbol(input: unknown): boolean {
+  const s = typeof input === 'string' ? input.trim() : '';
   if (!s) return false;
   if (s.startsWith('data:') || s.startsWith('http') || s.startsWith('/') || s.startsWith('.')) return false;
   if (/\p{Extended_Pictographic}/u.test(s)) return true;
@@ -54,8 +55,9 @@ function localPathFromScAssetUrl(src: string): string | null {
 }
 
 export function normalizeScAssetUrl(src: string): string {
+  if (typeof src !== 'string' || !src.trim()) return '';
   try {
-    const parsed = new URL(src);
+    const parsed = new URL(src.trim());
     if (parsed.protocol !== 'sc-asset:' || parsed.hostname !== 'ext-asset') return src;
     return toScAssetUrl(parsed.pathname || '');
   } catch {
@@ -64,30 +66,33 @@ export function normalizeScAssetUrl(src: string): string {
 }
 
 export function resolveIconSrc(src: string, assetsPathOverride?: string): string {
-  if (/^https?:\/\//.test(src) || src.startsWith('data:') || src.startsWith('file://')) return src;
+  if (typeof src !== 'string') return '';
+  const raw = src.trim();
+  if (!raw) return '';
+  if (/^https?:\/\//.test(raw) || raw.startsWith('data:') || raw.startsWith('file://')) return raw;
 
-  if (src.startsWith('sc-asset://')) {
-    const normalized = normalizeScAssetUrl(src);
+  if (raw.startsWith('sc-asset://')) {
+    const normalized = normalizeScAssetUrl(raw);
     const localPath = localPathFromScAssetUrl(normalized);
     if (localPath && localPathExists(localPath)) return normalized;
     return '';
   }
 
-  if (src.startsWith('/')) {
-    if (!localPathExists(src)) return '';
-    return toScAssetUrl(src);
+  if (raw.startsWith('/')) {
+    if (!localPathExists(raw)) return '';
+    return toScAssetUrl(raw);
   }
 
-  if (/\.(svg|png|jpe?g|gif|webp|ico|tiff?)$/i.test(src)) {
+  if (/\.(svg|png|jpe?g|gif|webp|ico|tiff?)$/i.test(raw)) {
     const candidateAssetsPath = assetsPathOverride || getIconRuntimeContext().assetsPath || '';
     if (!candidateAssetsPath) return '';
 
-    const candidatePath = `${candidateAssetsPath}/${src}`;
+    const candidatePath = `${candidateAssetsPath}/${raw}`;
     if (!localPathExists(candidatePath)) return '';
     return toScAssetUrl(candidatePath);
   }
 
-  return src;
+  return raw;
 }
 
 export function resolveTintColor(tintColor: any): string | undefined {
