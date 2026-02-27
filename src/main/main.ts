@@ -9889,9 +9889,39 @@ return appURL's |path|() as text`,
   ipcMain.on('stat-sync', (event: any, filePath: string) => {
     try {
       const stat = fs.statSync(filePath);
-      event.returnValue = { exists: true, isDirectory: stat.isDirectory(), isFile: stat.isFile(), size: stat.size };
+      event.returnValue = {
+        exists: true,
+        isDirectory: stat.isDirectory(),
+        isFile: stat.isFile(),
+        size: stat.size,
+        mode: stat.mode,
+        uid: stat.uid,
+        gid: stat.gid,
+        dev: stat.dev,
+        ino: stat.ino,
+        nlink: stat.nlink,
+        atimeMs: stat.atimeMs,
+        mtimeMs: stat.mtimeMs,
+        ctimeMs: stat.ctimeMs,
+        birthtimeMs: stat.birthtimeMs,
+      };
     } catch {
-      event.returnValue = { exists: false, isDirectory: false, isFile: false, size: 0 };
+      event.returnValue = {
+        exists: false,
+        isDirectory: false,
+        isFile: false,
+        size: 0,
+        mode: 0,
+        uid: 0,
+        gid: 0,
+        dev: 0,
+        ino: 0,
+        nlink: 0,
+        atimeMs: 0,
+        mtimeMs: 0,
+        ctimeMs: 0,
+        birthtimeMs: 0,
+      };
     }
   });
 
