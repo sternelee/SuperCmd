@@ -120,7 +120,7 @@ export function createDetailRuntime(deps: CreateDetailRuntimeDeps) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto px-3.5 py-3">
           {isLoading ? <div className="h-full" /> : (
             <>
               {markdown && <div className="text-[var(--text-secondary)] text-sm leading-relaxed">{renderSimpleMarkdown(markdown, resolveMarkdownImageSrc)}</div>}
@@ -197,7 +197,7 @@ export function createDetailRuntime(deps: CreateDetailRuntimeDeps) {
   );
 
   const Metadata = Object.assign(
-    ({ children }: { children?: React.ReactNode }) => <div className="space-y-1 mt-4">{children}</div>,
+    ({ children }: { children?: React.ReactNode }) => <div className="space-y-1 mt-3">{children}</div>,
     { Label: MetadataLabel, Separator: MetadataSeparator, Link: MetadataLink, TagList: MetadataTagList }
   );
 

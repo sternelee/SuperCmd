@@ -312,7 +312,7 @@ export function createListRuntime(deps: ListRuntimeDeps) {
             {searchBarAccessory && <div className="flex-shrink-0">{searchBarAccessory}</div>}
           </div>
 
-          {isShowingDetail ? <div className="flex flex-1 overflow-hidden"><div className="w-1/3 flex flex-col overflow-hidden">{listContent}</div>{detailElement ? <div className="flex-1 border-l border-[var(--ui-divider)] overflow-y-auto"><div className="p-4">{detailElement}</div></div> : null}</div> : listContent}
+          {isShowingDetail ? <div className="flex flex-1 overflow-hidden"><div className="w-1/3 flex flex-col overflow-hidden">{listContent}</div>{detailElement ? <div className="flex-1 border-l border-[var(--ui-divider)] overflow-hidden">{detailElement}</div> : null}</div> : listContent}
 
           <div className="sc-glass-footer flex items-center px-4 py-2.5">
             <div className="flex items-center gap-2 text-[var(--text-subtle)] text-xs flex-1 min-w-0 font-normal">{footerIcon ? <img src={footerIcon} alt="" className="w-4 h-4 rounded-sm object-contain flex-shrink-0" /> : null}<span className="truncate">{footerTitle}</span></div>

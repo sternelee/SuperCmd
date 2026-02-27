@@ -45,7 +45,7 @@ export function createListRenderers(deps: ListRendererDeps) {
     return (
       <div
         data-idx={dataIdx}
-        className={`mx-2 px-3 py-1.5 rounded-xl min-h-[38px] border flex items-center cursor-pointer transition-colors ${
+        className={`mx-1.5 px-2.5 py-1 rounded-xl min-h-[34px] border flex items-center cursor-pointer transition-colors ${
           isSelected
             ? 'border-transparent bg-[var(--launcher-card-selected-bg)]'
             : 'border-transparent hover:border-[var(--launcher-card-border)] hover:bg-[var(--launcher-card-hover-bg)]'
@@ -54,7 +54,7 @@ export function createListRenderers(deps: ListRendererDeps) {
         onMouseMove={onSelect}
         onContextMenu={onContextAction}
       >
-        <div className="flex items-center gap-2.5 w-full">
+        <div className="flex items-center gap-2 w-full">
           {icon && <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-[var(--text-muted)] text-xs">{renderIcon(icon, 'w-5 h-5', assetsPath)}</div>}
           <div className="flex-1 min-w-0"><span className="text-[13px] leading-[18px] truncate block" style={{ color: 'rgba(var(--on-surface-rgb), 0.9)' }}>{titleStr}</span></div>
           {subtitleStr && <span className="text-[11px] leading-[16px] flex-shrink-0 truncate max-w-[220px]" style={{ color: 'var(--text-muted)' }}>{subtitleStr}</span>}
