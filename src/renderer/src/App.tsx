@@ -206,10 +206,11 @@ const App: React.FC = () => {
   const [onboardingHotkeyPresses, setOnboardingHotkeyPresses] = useState(0);
   const [launcherShortcut, setLauncherShortcut] = useState('Alt+Space');
   const [showActions, setShowActions] = useState(false);
+  const [actionsCommand, setActionsCommand] = useState<CommandInfo | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
-    commandId: string;
+    command: CommandInfo;
   } | null>(null);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
   const [selectedContextActionIndex, setSelectedContextActionIndex] = useState(0);
@@ -944,6 +945,8 @@ const App: React.FC = () => {
     !showWindowManager &&
     !showOnboarding &&
     !showWhisperOnboarding;
+  const shouldKeepLauncherSearchResults =
+    isLauncherModeActive || showActions || Boolean(contextMenu);
 
   useEffect(() => {
     isLauncherModeActiveRef.current = isLauncherModeActive;
@@ -954,7 +957,7 @@ const App: React.FC = () => {
     const requestSeq = fileSearchRequestSeqRef.current;
     const trimmed = searchQuery.trim();
 
-    if (!isLauncherModeActive || trimmed.length < MIN_LAUNCHER_FILE_QUERY_LENGTH) {
+    if (!shouldKeepLauncherSearchResults || trimmed.length < MIN_LAUNCHER_FILE_QUERY_LENGTH) {
       setLauncherFileResults([]);
       return;
     }
@@ -997,7 +1000,7 @@ const App: React.FC = () => {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [searchQuery, isLauncherModeActive]);
+  }, [searchQuery, shouldKeepLauncherSearchResults]);
 
   useEffect(() => {
     if (!isLauncherModeActive) return;
