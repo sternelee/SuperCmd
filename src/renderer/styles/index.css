@@ -451,6 +451,17 @@ html {
   border-color: var(--onboarding-shell-outline);
 }
 
+/* Extension compatibility: external extensions often ship hardcoded `border-white/*` utilities.
+   Re-map those to themed, softer borders inside extension view surfaces. */
+.extension-runtime-shell [class*='border-white'] {
+  border-color: var(--ui-segment-border) !important;
+}
+
+.extension-runtime-shell [class*='focus:border-white']:focus,
+.extension-runtime-shell [class*='focus\\:border-white']:focus {
+  border-color: var(--border-strong) !important;
+}
+
 .sc-glassy .sc-glass-footer {
   border-top: none;
   background:
