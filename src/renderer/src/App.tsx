@@ -1274,7 +1274,6 @@ const App: React.FC = () => {
     },
     [inlineQuickLinkDynamicFieldsById]
   );
-
   useEffect(() => {
     inlineArgumentInputRefs.current = inlineArgumentInputRefs.current.slice(
       0,
@@ -2119,6 +2118,40 @@ const App: React.FC = () => {
       console.error('Failed to execute command:', error);
     }
   };
+  const handleCommandRowClick = useCallback(
+    async (command: CommandInfo, absoluteIndex: number) => {
+      const isAlreadySelected = absoluteIndex === selectedIndex;
+
+      const hasInlineExtensionArguments =
+        command.category === 'extension' &&
+        (command.commandArgumentDefinitions || []).some((definition) => Boolean(definition?.name));
+      if (!isAlreadySelected && hasInlineExtensionArguments) {
+        setSelectedIndex(absoluteIndex);
+        return;
+      }
+
+      const quickLinkId = getQuickLinkIdFromCommandId(command.id);
+      if (!isAlreadySelected && quickLinkId) {
+        const cachedFields = inlineQuickLinkDynamicFieldsById[quickLinkId];
+        const quickLinkFields =
+          cachedFields !== undefined ? cachedFields : await getDynamicFieldsForQuickLink(quickLinkId);
+        const hasInlineQuickLinkArguments =
+          quickLinkFields.length > 0 && quickLinkFields.length <= MAX_INLINE_QUICK_LINK_ARGUMENTS;
+        if (hasInlineQuickLinkArguments) {
+          setSelectedIndex(absoluteIndex);
+          return;
+        }
+      }
+
+      void handleCommandExecute(command);
+    },
+    [
+      getDynamicFieldsForQuickLink,
+      handleCommandExecute,
+      inlineQuickLinkDynamicFieldsById,
+      selectedIndex,
+    ]
+  );
 
   const getActionsForCommand = useCallback(
     (command: CommandInfo | null): LauncherAction[] => {
@@ -2930,7 +2963,9 @@ const App: React.FC = () => {
                           className={`command-item px-3 py-2 rounded-lg cursor-pointer ${
                             flatIndex + calcOffset === selectedIndex ? 'selected' : ''
                           }`}
-                          onClick={() => handleCommandExecute(command)}
+                          onClick={() => {
+                            void handleCommandRowClick(command, flatIndex + calcOffset);
+                          }}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setSelectedIndex(flatIndex + calcOffset);
