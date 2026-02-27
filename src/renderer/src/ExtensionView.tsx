@@ -3360,11 +3360,7 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({
       preferences,
       commandMode: mode as 'view' | 'no-view' | 'menu-bar',
     });
-    const result = loadExtensionExport(code, extensionPath);
-    if (!result) {
-      setError(`Failed to load extension module for ${extensionName}/${commandName}. Check the console for details.`);
-    }
-    return result;
+    return loadExtensionExport(code, extensionPath);
   }, [code, buildError, extensionName, extensionDisplayName, extensionIconDataUrl, commandName, assetsPath, supportPath, extensionPath, owner, preferences, mode]);
 
   // Is this a no-view command? Trust the mode from package.json.
@@ -3411,8 +3407,10 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, pop, navStack.length]);
 
-  // These memos must be declared before any conditional return to keep
-  // hook ordering stable when extension render errors toggle branches.
+  // Keep hook order stable across renders by computing these before any early returns.
+  const currentView =
+    navStack.length > 0 ? navStack[navStack.length - 1] : null;
+
   const extInfoValue = useMemo(() => ({
     extId: `${extensionName}/${commandName}`,
     assetsPath,
@@ -3444,7 +3442,9 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({
   ]);
 
   if (error || !ExtExport) {
-    const errorMessage = error || 'Failed to load extension. No valid export found.';
+    const errorMessage = error
+      || buildError
+      || (code ? `Failed to load extension module for ${extensionName}/${commandName}.` : 'Failed to load extension. No valid export found.');
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center gap-2 px-5 py-3.5 border-b border-white/[0.06]">
@@ -3468,17 +3468,6 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({
 
   // ─── No-view command: execute the function directly ───────────
   if (isNoView) {
-    const scopedCtx: ExtensionContextType = {
-      extensionName,
-      extensionDisplayName,
-      extensionIconDataUrl,
-      commandName,
-      assetsPath,
-      supportPath,
-      owner,
-      preferences,
-      commandMode: mode as 'view' | 'no-view' | 'menu-bar',
-    };
     return (
       <div className="flex flex-col h-full">
         <ScopedExtensionContext ctx={scopedCtx}>
@@ -3495,10 +3484,6 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({
       </div>
     );
   }
-
-  // ─── View command: render as React component ──────────────────
-  const currentView =
-    navStack.length > 0 ? navStack[navStack.length - 1] : null;
 
   return (
     <ExtensionInfoReactContext.Provider value={extInfoValue}>

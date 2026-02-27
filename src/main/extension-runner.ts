@@ -415,6 +415,74 @@ const nodeBuiltins = [
   'node:async_hooks',
 ];
 
+function getInstallableRuntimeDeps(pkg: any): string[] {
+  const deps = {
+    ...(pkg?.dependencies || {}),
+    ...(pkg?.optionalDependencies || {}),
+  };
+
+  return Object.entries(deps)
+    .filter(([name]) => typeof name === 'string' && !name.startsWith('@raycast/'))
+    .map(([name, version]) => `${name}@${String(version || '').trim()}`)
+    .filter((value) => {
+      const atIndex = value.lastIndexOf('@');
+      return atIndex > 0 && atIndex < value.length - 1;
+    });
+}
+
+function extensionRequiresNodeModules(pkg: any): boolean {
+  return getInstallableRuntimeDeps(pkg).length > 0;
+}
+
+function getExtensionCompilerOptions(extPath: string): Record<string, any> {
+  const tsconfigPath = path.join(extPath, 'tsconfig.json');
+  if (!fs.existsSync(tsconfigPath)) return {};
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(tsconfigPath, 'utf-8'));
+    const compilerOptions =
+      parsed && typeof parsed === 'object' && parsed.compilerOptions && typeof parsed.compilerOptions === 'object'
+        ? parsed.compilerOptions
+        : {};
+
+    const options: Record<string, any> = {};
+    if (typeof compilerOptions.baseUrl === 'string' && compilerOptions.baseUrl.trim()) {
+      options.baseUrl = compilerOptions.baseUrl;
+    }
+    if (compilerOptions.paths && typeof compilerOptions.paths === 'object' && !Array.isArray(compilerOptions.paths)) {
+      options.paths = compilerOptions.paths;
+      // Some Raycast extensions define paths without baseUrl; default to extension root.
+      if (!options.baseUrl) options.baseUrl = '.';
+    }
+    if (typeof compilerOptions.jsx === 'string' && compilerOptions.jsx.trim()) {
+      options.jsx = compilerOptions.jsx;
+    }
+    if (typeof compilerOptions.jsxImportSource === 'string' && compilerOptions.jsxImportSource.trim()) {
+      options.jsxImportSource = compilerOptions.jsxImportSource;
+    }
+
+    return options;
+  } catch (error: any) {
+    console.warn(`Failed to parse tsconfig for ${path.basename(extPath)}:`, error?.message || error);
+    return {};
+  }
+}
+
+function getEsbuildTsconfigRaw(extPath: string): string {
+  const extensionCompilerOptions = getExtensionCompilerOptions(extPath);
+  return JSON.stringify({
+    compilerOptions: {
+      target: 'ES2020',
+      jsx: 'react-jsx',
+      jsxImportSource: 'react',
+      strict: false,
+      esModuleInterop: true,
+      moduleResolution: 'node',
+      ...extensionCompilerOptions,
+    },
+  });
+}
+
 /**
  * Resolve the source entry file for a given command.
  */
@@ -511,6 +579,7 @@ export async function buildAllCommands(extName: string, extPathOverride?: string
   }
 
   let commands: any[];
+  let requiresNodeModules = false;
   let manifestExternal: string[] = [];
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
@@ -519,6 +588,7 @@ export async function buildAllCommands(extName: string, extPathOverride?: string
       return 0;
     }
     commands = pkg.commands || [];
+    requiresNodeModules = extensionRequiresNodeModules(pkg);
     manifestExternal = Array.isArray(pkg.external)
       ? pkg.external.filter((v: any) => typeof v === 'string' && v.trim().length > 0)
       : [];
@@ -530,7 +600,7 @@ export async function buildAllCommands(extName: string, extPathOverride?: string
 
   const esbuild = requireEsbuild();
   const extNodeModules = path.join(extPath, 'node_modules');
-  if (!fs.existsSync(extNodeModules)) {
+  if (requiresNodeModules && !fs.existsSync(extNodeModules)) {
     try {
       const { installExtensionDeps } = require('./extension-registry');
       await installExtensionDeps(extPath);
@@ -569,6 +639,7 @@ export async function buildAllCommands(extName: string, extPathOverride?: string
 
       await esbuild.build({
         entryPoints: [entryFile],
+        absWorkingDir: extPath,
         bundle: true,
         format: 'cjs',
         platform: 'node',
@@ -622,16 +693,7 @@ export async function buildAllCommands(extName: string, extPathOverride?: string
         target: 'es2020',
         jsx: 'automatic',
         jsxImportSource: 'react',
-        tsconfigRaw: JSON.stringify({
-          compilerOptions: {
-            target: 'ES2020',
-            jsx: 'react-jsx',
-            jsxImportSource: 'react',
-            strict: false,
-            esModuleInterop: true,
-            moduleResolution: 'node',
-          },
-        }),
+        tsconfigRaw: getEsbuildTsconfigRaw(extPath),
         define: {
           'process.env.NODE_ENV': '"production"',
           'global': 'globalThis',
@@ -806,6 +868,7 @@ export async function buildSingleCommand(extName: string, cmdName: string): Prom
   }
 
   let cmd: any;
+  let requiresNodeModules = false;
   let manifestExternal: string[] = [];
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
@@ -815,6 +878,7 @@ export async function buildSingleCommand(extName: string, cmdName: string): Prom
     }
     const commands = pkg.commands || [];
     cmd = commands.find((c: any) => c.name === cmdName);
+    requiresNodeModules = extensionRequiresNodeModules(pkg);
     manifestExternal = Array.isArray(pkg.external)
       ? pkg.external.filter((v: any) => typeof v === 'string' && v.trim().length > 0)
       : [];
@@ -845,7 +909,7 @@ export async function buildSingleCommand(extName: string, cmdName: string): Prom
   const extNodeModules = path.join(extPath, 'node_modules');
 
   // If node_modules is missing, install dependencies first
-  if (!fs.existsSync(extNodeModules)) {
+  if (requiresNodeModules && !fs.existsSync(extNodeModules)) {
     console.log(`  node_modules missing for ${extName}, installing dependencies…`);
     try {
       const { installExtensionDeps } = require('./extension-registry');
@@ -862,6 +926,7 @@ export async function buildSingleCommand(extName: string, cmdName: string): Prom
     console.log(`  On-demand building ${extName}/${cmdName}…`);
     await esbuild.build({
       entryPoints: [entryFile],
+      absWorkingDir: extPath,
       bundle: true,
       format: 'cjs',
       platform: 'node',
@@ -891,16 +956,7 @@ export async function buildSingleCommand(extName: string, cmdName: string): Prom
       target: 'es2020',
       jsx: 'automatic',
       jsxImportSource: 'react',
-      tsconfigRaw: JSON.stringify({
-        compilerOptions: {
-          target: 'ES2020',
-          jsx: 'react-jsx',
-          jsxImportSource: 'react',
-          strict: false,
-          esModuleInterop: true,
-          moduleResolution: 'node',
-        },
-      }),
+      tsconfigRaw: getEsbuildTsconfigRaw(extPath),
       define: {
         'process.env.NODE_ENV': '"production"',
         'global': 'globalThis',
@@ -953,6 +1009,7 @@ export async function getExtensionBundle(
         const commands = Array.isArray(pkg?.commands) ? pkg.commands : [];
         const cmd = commands.find((c: any) => c?.name === cmdName);
         const nodeModulesExists = fs.existsSync(path.join(extPath, 'node_modules'));
+        const requiresNodeModules = extensionRequiresNodeModules(pkg);
 
         if (!cmd) {
           diagnostic = ` Command "${cmdName}" not found in package.json.`;
@@ -960,7 +1017,7 @@ export async function getExtensionBundle(
           const entry = resolveEntryFile(extPath, cmd);
           if (!entry) {
             diagnostic = ` Entry file not found for "${cmdName}".`;
-          } else if (!nodeModulesExists) {
+          } else if (requiresNodeModules && !nodeModulesExists) {
             diagnostic = ' node_modules is missing (dependency installation likely failed).';
           }
         }
