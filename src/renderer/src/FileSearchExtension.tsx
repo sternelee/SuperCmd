@@ -151,7 +151,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const searchRequestRef = useRef(0);
 
   useEffect(() => {
@@ -551,7 +551,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
             }
             onClose();
           }}
-          className="text-white/35 hover:text-white/70 transition-colors flex-shrink-0"
+          className="text-white/35 hover:text-white/70 transition-colors flex-shrink-0 focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0"
           aria-label={showDetails ? 'Back to search' : 'Back'}
         >
           <ArrowLeft className="w-4 h-4" />
@@ -572,12 +572,12 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
               className="flex-1 bg-transparent border-none outline-none text-white/90 placeholder-white/35 text-[13px] font-medium tracking-wide min-w-0"
               autoFocus
             />
-            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[var(--ui-segment-border)] bg-[var(--ui-segment-hover-bg)] text-[var(--text-secondary)] min-w-[170px] justify-between">
+            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] text-[var(--text-secondary)] min-w-[170px] justify-between">
               <span className="text-[10px] uppercase tracking-wide text-white/45">Scope</span>
               <select
                 value={scopeId}
                 onChange={(e) => setScopeId(e.target.value)}
-                className="bg-transparent border-none outline-none text-[12px] font-medium text-[var(--text-primary)] pr-4 appearance-none"
+                className="bg-transparent border-none outline-none focus:outline-none text-[12px] font-medium text-[var(--text-primary)] pr-4 appearance-none"
               >
                 {scopes.map((scope) => (
                   <option key={scope.id} value={scope.id} className="bg-[var(--bg-overlay)]">
@@ -644,41 +644,42 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                 {indexStatus?.indexing ? 'Indexing in progress. Results will improve shortly.' : 'No files found'}
               </div>
             ) : (
-              <div className="p-2">
-                <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-white/45 font-semibold">Files</div>
-                <div className="space-y-0.5 mt-1.5">
+              <div className="p-2 space-y-1">
+                <div className="px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-white/45 font-semibold">Files</div>
+                <div className="space-y-0.5">
                   {visibleResults.map((filePath, index) => {
                     const selected = index === selectedIndex;
                     const icon = iconsByPath[filePath];
                     return (
-                      <button
+                      <div
                         key={`${filePath}-${index}`}
                         ref={(el) => {
                           itemRefs.current[index] = el;
                         }}
-                        type="button"
+                        role="button"
+                        tabIndex={-1}
                         onClick={() => setSelectedIndex(index)}
                         onDoubleClick={() => openSelectedFile()}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-md border transition-colors ${
+                        className={`w-full text-left px-2 py-1.5 rounded-md border border-transparent cursor-pointer select-none transition-colors ${
                           selected
-                            ? 'bg-[var(--launcher-card-selected-bg)] border-transparent'
-                            : 'bg-transparent border-transparent hover:bg-[var(--launcher-card-hover-bg)] hover:border-[var(--launcher-card-border)]'
+                            ? 'bg-[var(--launcher-card-selected-bg)]'
+                            : 'bg-transparent hover:bg-[var(--launcher-card-hover-bg)]'
                         }`}
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
                           {icon ? (
-                            <img src={icon} alt="" className="w-6 h-6 object-contain flex-shrink-0" draggable={false} />
+                            <img src={icon} alt="" className="w-5 h-5 object-contain flex-shrink-0" draggable={false} />
                           ) : (
-                            <div className="w-6 h-6 rounded-md bg-[var(--launcher-card-bg)] flex items-center justify-center flex-shrink-0">
-                              <Search className="w-3.5 h-3.5 text-white/35" />
+                            <div className="w-5 h-5 rounded-md bg-[var(--launcher-card-bg)] flex items-center justify-center flex-shrink-0">
+                              <Search className="w-3 h-3 text-white/35" />
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className="text-white/90 text-[13px] leading-tight font-medium truncate">{basename(filePath)}</div>
-                            <div className="text-white/35 text-[11px] truncate">{asTildePath(dirname(filePath), selectedScope?.path || '')}</div>
+                            <div className="text-white/90 text-[12px] leading-tight font-medium truncate">{basename(filePath)}</div>
+                            <div className="text-white/35 text-[10px] leading-tight truncate">{asTildePath(dirname(filePath), selectedScope?.path || '')}</div>
                           </div>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>

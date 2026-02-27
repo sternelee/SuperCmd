@@ -79,6 +79,7 @@ function getQuickLinkIdFromCommandId(commandId: string): string | null {
 
 const FILE_RESULT_COMMAND_PREFIX = 'system-file-result:';
 const MAX_LAUNCHER_FILE_RESULTS = 30;
+const MAX_LAUNCHER_FILE_CANDIDATE_RESULTS = 220;
 const MAX_LAUNCHER_FILE_RESULT_ICONS = MAX_LAUNCHER_FILE_RESULTS;
 const MIN_LAUNCHER_FILE_QUERY_LENGTH = 2;
 const MAX_INLINE_EXTENSION_ARGUMENTS = 3;
@@ -95,6 +96,36 @@ function asTildePath(filePath: string, homeDir: string): string {
 
 function buildFileResultCommandId(filePath: string): string {
   return `${FILE_RESULT_COMMAND_PREFIX}${encodeURIComponent(filePath)}`;
+}
+
+function normalizeLauncherFileSearchText(value: string): string {
+  return String(value || '').normalize('NFKD').toLowerCase();
+}
+
+function getLauncherFileSearchTerms(rawQuery: string): string[] {
+  return normalizeLauncherFileSearchText(rawQuery)
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+}
+
+function splitLauncherFileNameTokens(fileName: string): string[] {
+  return normalizeLauncherFileSearchText(fileName)
+    .split(/[^a-z0-9]+/g)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function matchesLauncherFileNameTerms(fileName: string, terms: string[]): boolean {
+  if (terms.length === 0) return true;
+  const normalizedName = normalizeLauncherFileSearchText(fileName);
+  const tokens = splitLauncherFileNameTokens(fileName);
+  return terms.every((term) => {
+    if (/[^a-z0-9]/i.test(term)) {
+      return normalizedName.includes(term);
+    }
+    return tokens.some((token) => token.startsWith(term));
+  });
 }
 
 function getFileResultPathFromCommand(command: CommandInfo | null | undefined): string | null {
@@ -238,6 +269,8 @@ const App: React.FC = () => {
   const inlineQuickLinkInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const fileSearchRequestSeqRef = useRef(0);
   const commandsRef = useRef<CommandInfo[]>([]);
+  const showActionsRef = useRef(false);
+  const selectedCommandRef = useRef<CommandInfo | null>(null);
   commandsRef.current = commands;
 
   const restoreLauncherFocus = useCallback(() => {
@@ -918,6 +951,13 @@ const App: React.FC = () => {
   }, [showActions]);
 
   useEffect(() => {
+    showActionsRef.current = showActions;
+    if (!showActions) {
+      setActionsCommand(null);
+    }
+  }, [showActions]);
+
+  useEffect(() => {
     if (!contextMenu) return;
     setSelectedContextActionIndex(0);
     setTimeout(() => contextMenuRef.current?.focus(), 0);
@@ -956,6 +996,7 @@ const App: React.FC = () => {
     fileSearchRequestSeqRef.current += 1;
     const requestSeq = fileSearchRequestSeqRef.current;
     const trimmed = searchQuery.trim();
+    const terms = getLauncherFileSearchTerms(trimmed);
 
     if (!shouldKeepLauncherSearchResults || trimmed.length < MIN_LAUNCHER_FILE_QUERY_LENGTH) {
       setLauncherFileResults([]);
@@ -965,7 +1006,35 @@ const App: React.FC = () => {
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
-          const results = await window.electron.searchIndexedFiles(trimmed, { limit: MAX_LAUNCHER_FILE_RESULTS });
+          let candidates = await window.electron.searchIndexedFiles(trimmed, { limit: MAX_LAUNCHER_FILE_CANDIDATE_RESULTS });
+          if (fileSearchRequestSeqRef.current !== requestSeq) return;
+
+          if (candidates.length === 0) {
+            const status = await window.electron.getFileSearchIndexStatus().catch(() => null);
+            if (fileSearchRequestSeqRef.current !== requestSeq) return;
+
+            if (status && !status.ready && !status.indexing) {
+              await window.electron.refreshFileSearchIndex('launcher-query').catch(() => null);
+            }
+
+            if (status && (!status.ready || status.indexing)) {
+              await new Promise((resolve) => window.setTimeout(resolve, 220));
+              if (fileSearchRequestSeqRef.current !== requestSeq) return;
+              candidates = await window.electron.searchIndexedFiles(trimmed, { limit: MAX_LAUNCHER_FILE_CANDIDATE_RESULTS });
+            }
+          }
+
+          const seenPaths = new Set<string>();
+          const results: IndexedFileSearchResult[] = [];
+          for (const candidate of candidates) {
+            const candidatePath = String(candidate?.path || '').trim();
+            if (!candidatePath || seenPaths.has(candidatePath)) continue;
+            if (!matchesLauncherFileNameTerms(String(candidate?.name || ''), terms)) continue;
+            seenPaths.add(candidatePath);
+            results.push(candidate);
+            if (results.length >= MAX_LAUNCHER_FILE_RESULTS) break;
+          }
+
           if (fileSearchRequestSeqRef.current !== requestSeq) return;
           setLauncherFileResults(results);
 
@@ -1017,8 +1086,17 @@ const App: React.FC = () => {
 
       e.preventDefault();
       e.stopPropagation();
+      if (showActionsRef.current) {
+        setShowActions(false);
+        return;
+      }
+
+      const command = selectedCommandRef.current;
+      if (!command) return;
       setContextMenu(null);
-      setShowActions((prev) => !prev);
+      setActionsCommand(command);
+      setSelectedActionIndex(0);
+      setShowActions(true);
     };
 
     window.addEventListener('keydown', onWindowKeyDown, true);
@@ -1199,6 +1277,9 @@ const App: React.FC = () => {
     selectedIndex >= calcOffset
       ? displayCommands[selectedIndex - calcOffset]
       : null;
+  useEffect(() => {
+    selectedCommandRef.current = selectedCommand;
+  }, [selectedCommand]);
   const selectedExtensionArgumentDefinitions = useMemo(
     () =>
       selectedCommand?.category === 'extension'
@@ -1511,8 +1592,15 @@ const App: React.FC = () => {
 
       if (e.metaKey && (e.key === 'k' || e.key === 'K') && !e.repeat) {
         e.preventDefault();
-        setShowActions((prev) => !prev);
+        if (showActions) {
+          setShowActions(false);
+          return;
+        }
+        if (!selectedCommand) return;
         setContextMenu(null);
+        setActionsCommand(selectedCommand);
+        setSelectedActionIndex(0);
+        setShowActions(true);
         return;
       }
 
@@ -2291,13 +2379,14 @@ const App: React.FC = () => {
     () => getActionsForCommand(selectedCommand),
     [getActionsForCommand, selectedCommand]
   );
+  const actionsOverlayActions = useMemo(
+    () => getActionsForCommand(actionsCommand),
+    [actionsCommand, getActionsForCommand]
+  );
 
   const contextCommand = useMemo(
-    () =>
-      contextMenu
-        ? displayCommands.find((cmd) => cmd.id === contextMenu.commandId) || null
-        : null,
-    [contextMenu, displayCommands]
+    () => (contextMenu ? contextMenu.command : null),
+    [contextMenu]
   );
 
   const contextActions = useMemo(
@@ -2307,12 +2396,12 @@ const App: React.FC = () => {
 
   const handleActionsOverlayKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (selectedActions.length === 0) return;
+      if (actionsOverlayActions.length === 0) return;
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
           setSelectedActionIndex((prev) =>
-            Math.min(prev + 1, selectedActions.length - 1)
+            Math.min(prev + 1, actionsOverlayActions.length - 1)
           );
           break;
         case 'ArrowUp':
@@ -2321,7 +2410,7 @@ const App: React.FC = () => {
           break;
         case 'Enter':
           e.preventDefault();
-          await Promise.resolve(selectedActions[selectedActionIndex]?.execute());
+          await Promise.resolve(actionsOverlayActions[selectedActionIndex]?.execute());
           setShowActions(false);
           restoreLauncherFocus();
           break;
@@ -2332,7 +2421,7 @@ const App: React.FC = () => {
           break;
       }
     },
-    [selectedActions, selectedActionIndex, restoreLauncherFocus]
+    [actionsOverlayActions, selectedActionIndex, restoreLauncherFocus]
   );
 
   const handleContextMenuKeyDown = useCallback(
@@ -3018,7 +3107,7 @@ const App: React.FC = () => {
                             setContextMenu({
                               x: e.clientX,
                               y: e.clientY,
-                              commandId: command.id,
+                              command,
                             });
                           }}
                         >
@@ -3100,7 +3189,10 @@ const App: React.FC = () => {
             )}
             <button
               onClick={() => {
+                if (!selectedCommand) return;
                 setContextMenu(null);
+                setActionsCommand(selectedCommand);
+                setSelectedActionIndex(0);
                 setShowActions(true);
               }}
               className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
@@ -3198,7 +3290,7 @@ const App: React.FC = () => {
         </div>
       </div>
     )}
-    {showActions && selectedActions.length > 0 && (
+    {showActions && actionsOverlayActions.length > 0 && (
       <div
         className="fixed inset-0 z-50"
         onClick={() => setShowActions(false)}
@@ -3240,7 +3332,7 @@ const App: React.FC = () => {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex-1 overflow-y-auto py-1">
-            {selectedActions.map((action, idx) => (
+            {actionsOverlayActions.map((action, idx) => (
               <div
                 key={action.id}
                 className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
