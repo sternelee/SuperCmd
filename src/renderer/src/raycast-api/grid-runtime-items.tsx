@@ -4,7 +4,7 @@
  * Contains grid item registration contexts and row/cell renderers.
  */
 
-import React, { createContext, useContext, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useLayoutEffect, useRef } from 'react';
 import { resolveTintColor } from './icon-runtime-assets';
 import { renderIcon } from './icon-runtime-render';
 
@@ -42,13 +42,13 @@ export function createGridItemsRuntime(resolveIconSrc: (src: string) => string) 
     const registry = useContext(GridRegistryContext);
     const sectionTitle = useContext(GridSectionTitleContext);
     const stableId = useRef(props.id || `__gi_${++gridItemOrderCounter}`).current;
-    const order = ++gridItemOrderCounter;
+    const orderRef = useRef<number | null>(null);
+    if (orderRef.current === null) orderRef.current = ++gridItemOrderCounter;
 
-    registry.set(stableId, { props, sectionTitle, order });
-
-    useEffect(() => {
+    useLayoutEffect(() => {
+      registry.set(stableId, { props, sectionTitle, order: orderRef.current! });
       return () => registry.delete(stableId);
-    }, [registry, stableId]);
+    }, [props, registry, sectionTitle, stableId]);
 
     return null;
   }

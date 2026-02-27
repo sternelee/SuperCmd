@@ -45,6 +45,13 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
     document.documentElement.classList.contains('sc-native-liquid-glass') ||
     document.body.classList.contains('sc-native-liquid-glass');
 
+  const focusSearchInput = useCallback(() => {
+    // Defer focus to the next frame so window/show transitions don't steal it.
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true });
+    });
+  }, []);
+
   const loadHistory = useCallback(async (withLoading = false) => {
     if (withLoading) setIsLoading(true);
     try {
@@ -66,11 +73,17 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
 
   useEffect(() => {
     loadHistory(true);
-    inputRef.current?.focus();
+    focusSearchInput();
+    const focusTimer = window.setTimeout(() => {
+      focusSearchInput();
+    }, 40);
     window.electron.getLastFrontmostApp().then((app) => {
       if (app) setFrontmostAppName(app.name);
     });
-  }, [loadHistory]);
+    return () => {
+      window.clearTimeout(focusTimer);
+    };
+  }, [loadHistory, focusSearchInput]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -363,7 +376,8 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
       <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--ui-divider)]">
         <button
           onClick={onClose}
-          className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0"
+          className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors flex-shrink-0 focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0"
+          tabIndex={-1}
           title="Back"
         >
           <ArrowLeft className="w-4 h-4" />

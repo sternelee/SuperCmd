@@ -54,7 +54,9 @@ function resolveMetadataText(input: unknown): { value: string; color?: string } 
 
 export function createDetailRuntime(deps: CreateDetailRuntimeDeps) {
   const resolveMarkdownImageSrc = (src: string): string => {
-    const cleanSrc = src.replace(/\?.*$/, '');
+    const rawSrc = typeof src === 'string' ? src.trim() : '';
+    if (!rawSrc) return '';
+    const cleanSrc = rawSrc.replace(/\?.*$/, '');
     if (/^https?:\/\//.test(cleanSrc) || cleanSrc.startsWith('data:') || cleanSrc.startsWith('file://')) return cleanSrc;
     if (cleanSrc.startsWith('sc-asset://')) return normalizeScAssetUrl(cleanSrc);
     if (cleanSrc.startsWith('/')) return toScAssetUrl(cleanSrc);

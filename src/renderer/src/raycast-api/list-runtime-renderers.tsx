@@ -5,7 +5,7 @@
  * subcomponents like EmptyView and Dropdown.
  */
 
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   EmptyViewRegistryContext,
   ListRegistryContext,
@@ -51,10 +51,14 @@ export function createListRenderers(deps: ListRendererDeps) {
     const registry = useContext(ListRegistryContext);
     const sectionTitle = useContext(ListSectionTitleContext);
     const stableId = useRef(props.id || `__li_${++itemOrderCounter}`).current;
-    const order = ++itemOrderCounter;
+    const orderRef = useRef<number | null>(null);
+    if (orderRef.current === null) orderRef.current = ++itemOrderCounter;
 
-    registry.set(stableId, { props, sectionTitle, order });
-    useEffect(() => () => registry.delete(stableId), [registry, stableId]);
+    useLayoutEffect(() => {
+      registry.set(stableId, { props, sectionTitle, order: orderRef.current! });
+      return () => registry.delete(stableId);
+    }, [props, registry, sectionTitle, stableId]);
+
     return null;
   }
 
