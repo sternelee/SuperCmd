@@ -245,6 +245,14 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const queueNoViewBundleRun = useCallback((
+    bundle: ExtensionBundle,
+    launchType: 'userInitiated' | 'background' = 'userInitiated'
+  ) => {
+    const runId = `${bundle.extensionName || bundle.extName}/${bundle.commandName || bundle.cmdName}/${Date.now()}`;
+    setBackgroundNoViewRuns((prev) => [...prev, { runId, bundle, launchType }]);
+  }, [setBackgroundNoViewRuns]);
+
   const onExitAiMode = useCallback(() => {
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
@@ -675,8 +683,7 @@ const App: React.FC = () => {
 
       if (launchType === 'background') {
         if (hydrated.mode === 'no-view') {
-          const runId = `${hydrated.extensionName || hydrated.extName}/${hydrated.commandName || hydrated.cmdName}/${Date.now()}`;
-          setBackgroundNoViewRuns((prev) => [...prev, { runId, bundle: hydrated }]);
+          queueNoViewBundleRun(hydrated, 'background');
         }
         return;
       }
@@ -694,6 +701,8 @@ const App: React.FC = () => {
           values: { ...(hydrated.preferences || {}) },
           argumentValues: { ...((hydrated as any).launchArguments || {}) },
         });
+      } else if (hydrated.mode === 'no-view') {
+        queueNoViewBundleRun(hydrated, 'userInitiated');
       } else {
         setShowFileSearch(false);
         setExtensionView(hydrated);
@@ -702,7 +711,7 @@ const App: React.FC = () => {
 
     window.addEventListener('sc-launch-extension-bundle', onLaunchBundle as EventListener);
     return () => window.removeEventListener('sc-launch-extension-bundle', onLaunchBundle as EventListener);
-  }, [upsertMenuBarExtension]);
+  }, [queueNoViewBundleRun, upsertMenuBarExtension]);
 
   useEffect(() => {
     const onRunScript = (event: Event) => {
@@ -2052,6 +2061,12 @@ const App: React.FC = () => {
             await updateRecentCommands(command.id);
             return;
           }
+          if (hydratedWithInlineArguments.mode === 'no-view') {
+            queueNoViewBundleRun(hydratedWithInlineArguments, 'userInitiated');
+            localStorage.removeItem(LAST_EXT_KEY);
+            await updateRecentCommands(command.id);
+            return;
+          }
           setShowFileSearch(false);
           setExtensionView(hydratedWithInlineArguments);
           if (hydratedWithInlineArguments.mode === 'view') {
@@ -2320,7 +2335,7 @@ const App: React.FC = () => {
           launchArguments={(run.bundle as any).launchArguments}
           launchContext={(run.bundle as any).launchContext}
           fallbackText={(run.bundle as any).fallbackText}
-          launchType="background"
+          launchType={run.launchType}
           onClose={() => {
             setBackgroundNoViewRuns((prev) => prev.filter((item) => item.runId !== run.runId));
           }}
@@ -2460,6 +2475,11 @@ const App: React.FC = () => {
           setExtensionPreferenceSetup(null);
           setScriptCommandSetup(null);
           setScriptCommandOutput(null);
+          if (updatedBundle.mode === 'no-view') {
+            queueNoViewBundleRun(updatedBundle, 'userInitiated');
+            localStorage.removeItem(LAST_EXT_KEY);
+            return;
+          }
           setExtensionView(updatedBundle);
           const extName = updatedBundle.extName || (updatedBundle as any).extensionName || '';
           const cmdName = updatedBundle.cmdName || (updatedBundle as any).commandName || '';
