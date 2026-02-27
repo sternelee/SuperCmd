@@ -562,6 +562,7 @@ export async function buildAllCommands(extName: string, extPathOverride?: string
     }
 
     const outFile = path.join(buildDir, `${cmd.name}.js`);
+    fs.mkdirSync(path.dirname(outFile), { recursive: true });
 
     try {
       console.log(`  Building ${extName}/${cmd.name}…`);
@@ -840,6 +841,7 @@ export async function buildSingleCommand(extName: string, cmdName: string): Prom
   const buildDir = getBuildDir(extPath);
   fs.mkdirSync(buildDir, { recursive: true });
   const outFile = path.join(buildDir, `${cmdName}.js`);
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
   const extNodeModules = path.join(extPath, 'node_modules');
 
   // If node_modules is missing, install dependencies first

@@ -38,6 +38,140 @@ interface RegistryDeps {
   getGlobalNavigation: () => { push: (element: React.ReactElement) => void };
 }
 
+function parseExtensionIdentity(extId: string): { extensionName: string; commandName: string } | null {
+  const raw = String(extId || '').trim();
+  const separatorIndex = raw.indexOf('/');
+  if (separatorIndex <= 0 || separatorIndex >= raw.length - 1) return null;
+
+  const extensionName = raw.slice(0, separatorIndex).trim();
+  const commandName = raw.slice(separatorIndex + 1).trim();
+  if (!extensionName || !commandName) return null;
+
+  return { extensionName, commandName };
+}
+
+function toLocalDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function toLocalDateTimeInputValue(date: Date): string {
+  const datePart = toLocalDateInputValue(date);
+  const hours = `${date.getHours()}`.padStart(2, '0');
+  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+  return `${datePart}T${hours}:${minutes}`;
+}
+
+function parseInputDateValue(value: string, type: 'date' | 'datetime'): Date | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  if (type === 'date') {
+    const [yearRaw, monthRaw, dayRaw] = raw.split('-');
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    const day = Number(dayRaw);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+
+    const parsed = new Date(year, month - 1, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizePickerDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function runPickDateAction(props: any): void {
+  const pickerType = props?.type === 'datetime' ? 'datetime' : 'date';
+  const inputType = pickerType === 'datetime' ? 'datetime-local' : 'date';
+
+  if (typeof document === 'undefined') {
+    props?.onChange?.(null);
+    return;
+  }
+
+  const input = document.createElement('input');
+  input.type = inputType;
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  input.style.pointerEvents = 'none';
+  input.style.left = '-9999px';
+  input.style.top = '-9999px';
+  input.tabIndex = -1;
+  input.setAttribute('aria-hidden', 'true');
+
+  const initialValue = normalizePickerDate(props?.value);
+  if (initialValue) {
+    input.value = pickerType === 'datetime'
+      ? toLocalDateTimeInputValue(initialValue)
+      : toLocalDateInputValue(initialValue);
+  }
+
+  const minValue = normalizePickerDate(props?.min);
+  if (minValue) {
+    input.min = pickerType === 'datetime'
+      ? toLocalDateTimeInputValue(minValue)
+      : toLocalDateInputValue(minValue);
+  }
+
+  const maxValue = normalizePickerDate(props?.max);
+  if (maxValue) {
+    input.max = pickerType === 'datetime'
+      ? toLocalDateTimeInputValue(maxValue)
+      : toLocalDateInputValue(maxValue);
+  }
+
+  let finished = false;
+
+  const cleanup = () => {
+    if (input.parentElement) {
+      input.parentElement.removeChild(input);
+    }
+  };
+
+  const complete = (nextValue: Date | null, shouldEmit: boolean) => {
+    if (finished) return;
+    finished = true;
+    cleanup();
+    if (shouldEmit) {
+      props?.onChange?.(nextValue);
+    }
+  };
+
+  input.addEventListener('change', () => {
+    complete(parseInputDateValue(input.value, pickerType), true);
+  }, { once: true });
+
+  input.addEventListener('blur', () => {
+    // On cancel, browsers often blur without firing change.
+    window.setTimeout(() => complete(null, false), 0);
+  }, { once: true });
+
+  document.body.appendChild(input);
+  input.focus({ preventScroll: true });
+
+  const picker = (input as HTMLInputElement & { showPicker?: () => void }).showPicker;
+  if (typeof picker === 'function') {
+    try {
+      picker.call(input);
+      return;
+    } catch {
+      // Fallback to click when showPicker throws due activation constraints.
+    }
+  }
+
+  input.click();
+}
+
 export function createActionRegistryRuntime(deps: RegistryDeps) {
   const {
     snapshotExtensionContext,
@@ -63,6 +197,10 @@ export function createActionRegistryRuntime(deps: RegistryDeps) {
         }
         if (props.__actionKind === 'createQuicklink') {
           void (window as any).electron?.executeCommand?.('system-create-quicklink');
+          return;
+        }
+        if (props.__actionKind === 'pickDate') {
+          runPickDateAction(props);
           return;
         }
         if (props.onAction) {
@@ -146,9 +284,9 @@ export function createActionRegistryRuntime(deps: RegistryDeps) {
     propsRef.current = props;
     const nextRuntimeCtx = snapshotExtensionContext();
     const extId = String(extensionInfo?.extId || '').trim();
-    const [extName = '', commandName = ''] = extId.split('/');
-    if (extName) nextRuntimeCtx.extensionName = extName;
-    if (commandName) nextRuntimeCtx.commandName = commandName;
+    const parsedIdentity = parseExtensionIdentity(extId);
+    if (parsedIdentity?.extensionName) nextRuntimeCtx.extensionName = parsedIdentity.extensionName;
+    if (parsedIdentity?.commandName) nextRuntimeCtx.commandName = parsedIdentity.commandName;
     if (extensionInfo?.assetsPath) nextRuntimeCtx.assetsPath = extensionInfo.assetsPath;
     if (extensionInfo?.commandMode) nextRuntimeCtx.commandMode = extensionInfo.commandMode;
     if (extensionInfo?.extensionDisplayName) nextRuntimeCtx.extensionDisplayName = extensionInfo.extensionDisplayName;

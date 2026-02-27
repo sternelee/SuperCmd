@@ -6,11 +6,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { snapshotExtensionContext, withExtensionContext, type ExtensionContextSnapshot } from '../context-scope-runtime';
 
+function resolveInitialDataValue<T>(value: T | (() => T) | undefined): T | undefined {
+  if (typeof value === 'function') {
+    try {
+      return (value as () => T)();
+    } catch {
+      return undefined;
+    }
+  }
+  return value;
+}
+
 export function useCachedPromise<T>(
   fn: (...args: any[]) => Promise<T> | ((...args: any[]) => (...innerArgs: any[]) => Promise<any>),
   args?: any[],
   options?: {
-    initialData?: T;
+    initialData?: T | (() => T);
     execute?: boolean;
     keepPreviousData?: boolean;
     abortable?: React.MutableRefObject<AbortController | null | undefined>;
@@ -30,7 +41,7 @@ export function useCachedPromise<T>(
   const [page, setPage] = useState(0);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
-  const [accumulatedData, setAccumulatedData] = useState<any[] | undefined>(undefined);
+  const [accumulatedData, setAccumulatedData] = useState<any | undefined>(() => resolveInitialDataValue(options?.initialData));
   const [isLoading, setIsLoading] = useState(options?.execute !== false);
   const [error, setError] = useState<Error | undefined>(undefined);
   const [isPaginated, setIsPaginated] = useState(false);
@@ -146,25 +157,56 @@ export function useCachedPromise<T>(
   useEffect(() => {
     setPage(0);
     setCursor(undefined);
-    setAccumulatedData(undefined);
+    if (!optionsRef.current?.keepPreviousData) {
+      setAccumulatedData(resolveInitialDataValue(optionsRef.current?.initialData));
+    }
     fetchPage(0, undefined);
   }, [argsKey, fetchPage]);
 
   const revalidate = useCallback(() => {
     setPage(0);
     setCursor(undefined);
-    setAccumulatedData(undefined);
+    if (!optionsRef.current?.keepPreviousData) {
+      setAccumulatedData(resolveInitialDataValue(optionsRef.current?.initialData));
+    }
     fetchPage(0, undefined);
   }, [fetchPage]);
 
-  const mutate = useCallback(async (asyncUpdate?: Promise<T>) => {
-    if (asyncUpdate) {
-      const result = await asyncUpdate;
-      setAccumulatedData(result as any);
-      return result;
+  const mutate = useCallback(async (asyncUpdate?: Promise<T>, mutateOptions?: any) => {
+    const previousData = accumulatedData as T | undefined;
+
+    if (mutateOptions?.optimisticUpdate) {
+      try {
+        setAccumulatedData(mutateOptions.optimisticUpdate(previousData));
+      } catch {
+        setAccumulatedData(previousData as any);
+      }
     }
+
+    if (asyncUpdate) {
+      try {
+        const result = await asyncUpdate;
+        if (!mutateOptions?.shouldRevalidateAfter) {
+          setAccumulatedData(result as any);
+        }
+        if (mutateOptions?.shouldRevalidateAfter) {
+          revalidate();
+        }
+        return result;
+      } catch (error) {
+        if (mutateOptions?.rollbackOnError) {
+          try {
+            setAccumulatedData(mutateOptions.rollbackOnError(previousData));
+          } catch {
+            setAccumulatedData(previousData as any);
+          }
+        }
+        throw error;
+      }
+    }
+
     revalidate();
-    return accumulatedData as T | undefined;
+    return previousData;
   }, [accumulatedData, revalidate]);
 
   const onLoadMore = useCallback(() => {

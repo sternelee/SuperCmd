@@ -4487,6 +4487,14 @@ function loadWindowUrl(
   }
 }
 
+function shouldAutoOpenDevToolsOnStartup(): boolean {
+  const raw = String(process.env.SUPERCMD_OPEN_DEVTOOLS_ON_STARTUP || '').trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') {
+    return true;
+  }
+  return false;
+}
+
 function parseJsonObjectParam(raw: string | null): Record<string, any> {
   if (!raw) return {};
   try {
@@ -4509,6 +4517,18 @@ function parseScriptArgumentsFromQuery(parsed: URL): string[] {
     out.push(String(value ?? ''));
   }
   return out;
+}
+
+function parseExtensionCommandPath(pathValue: string): { extensionName: string; commandName: string } | null {
+  const raw = String(pathValue || '').trim();
+  const separatorIndex = raw.indexOf('/');
+  if (separatorIndex <= 0 || separatorIndex >= raw.length - 1) return null;
+
+  const extensionName = raw.slice(0, separatorIndex).trim();
+  const commandName = raw.slice(separatorIndex + 1).trim();
+  if (!extensionName || !commandName) return null;
+
+  return { extensionName, commandName };
 }
 
 type ParsedRaycastDeepLink =
@@ -4535,7 +4555,19 @@ function parseRaycastDeepLink(url: string): ParsedRaycastDeepLink | null {
     const parts = parsed.pathname.split('/').filter(Boolean).map((v) => decodeURIComponent(v));
 
     if (parsed.hostname === 'extensions') {
-      const [ownerOrAuthorName = '', extensionName = '', commandName = ''] = parts;
+      let ownerOrAuthorName = '';
+      let extensionName = '';
+      let commandName = '';
+
+      if (parts.length >= 3) {
+        ownerOrAuthorName = parts[0] || '';
+        extensionName = parts[1] || '';
+        commandName = parts.slice(2).join('/').trim();
+      } else if (parts.length >= 2) {
+        extensionName = parts[0] || '';
+        commandName = parts.slice(1).join('/').trim();
+      }
+
       if (!extensionName || !commandName) return null;
       return {
         type: 'extension',
@@ -4549,7 +4581,7 @@ function parseRaycastDeepLink(url: string): ParsedRaycastDeepLink | null {
     }
 
     if (parsed.hostname === 'script-commands') {
-      const [commandName = ''] = parts;
+      const commandName = parts.join('/').trim();
       if (!commandName) return null;
       return {
         type: 'scriptCommand',
@@ -4941,6 +4973,14 @@ function createWindow(): void {
   loadWindowUrl(mainWindow, '/');
 
   mainWindow.webContents.once('did-finish-load', () => {
+    if (shouldAutoOpenDevToolsOnStartup()) {
+      try {
+        mainWindow?.webContents.openDevTools({ mode: 'detach', activate: true });
+      } catch (error) {
+        console.warn('[DevTools] Failed auto-opening startup devtools:', error);
+      }
+    }
+
     if (pendingOAuthCallbackUrls.length > 0) {
       const urls = pendingOAuthCallbackUrls.splice(0, pendingOAuthCallbackUrls.length);
       for (const url of urls) {
@@ -6608,8 +6648,9 @@ async function runCommandById(commandId: string, source: 'launcher' | 'hotkey' |
   const allCommands = await getAvailableCommands();
   const command = allCommands.find((item) => item.id === commandId);
   if (command?.category === 'extension' && command.path) {
-    const [extName, cmdName] = command.path.split('/');
-    if (!extName || !cmdName) return false;
+    const parsedPath = parseExtensionCommandPath(command.path);
+    if (!parsedPath) return false;
+    const { extensionName: extName, commandName: cmdName } = parsedPath;
     try {
       const bundle = await buildLaunchBundle({
         extensionName: extName,

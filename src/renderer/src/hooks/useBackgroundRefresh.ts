@@ -31,6 +31,18 @@ export interface UseBackgroundRefreshOptions {
 export function useBackgroundRefresh({ commands, fetchCommands }: UseBackgroundRefreshOptions): void {
   const intervalTimerIdsRef = useRef<number[]>([]);
 
+  const parseExtensionCommandPath = (pathValue: string): { extName: string; cmdName: string } | null => {
+    const rawPath = String(pathValue || '').trim();
+    const separatorIndex = rawPath.indexOf('/');
+    if (separatorIndex <= 0 || separatorIndex >= rawPath.length - 1) return null;
+
+    const extName = rawPath.slice(0, separatorIndex).trim();
+    const cmdName = rawPath.slice(separatorIndex + 1).trim();
+    if (!extName || !cmdName) return null;
+
+    return { extName, cmdName };
+  };
+
   useEffect(() => {
     for (const timerId of intervalTimerIdsRef.current) {
       window.clearInterval(timerId);
@@ -45,8 +57,9 @@ export function useBackgroundRefresh({ commands, fetchCommands }: UseBackgroundR
       const ms = parseIntervalToMs(cmd.interval);
       if (!ms) continue;
 
-      const [extName, cmdName] = (cmd.path || '').split('/');
-      if (!extName || !cmdName) continue;
+      const identity = parseExtensionCommandPath(cmd.path || '');
+      if (!identity) continue;
+      const { extName, cmdName } = identity;
 
       const timerId = window.setInterval(async () => {
         try {

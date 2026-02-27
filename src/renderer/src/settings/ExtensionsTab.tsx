@@ -82,6 +82,18 @@ const SCRIPT_COMMANDS_EXTENSION_NAME = '__script_commands';
 const INSTALLED_APPLICATIONS_NAME = '__installed_applications';
 const SYSTEM_SETTINGS_NAME = '__system_settings';
 
+function parseExtensionCommandPath(pathValue: string): { extName: string; cmdName: string } | null {
+  const rawPath = String(pathValue || '').trim();
+  const separatorIndex = rawPath.indexOf('/');
+  if (separatorIndex <= 0 || separatorIndex >= rawPath.length - 1) return null;
+
+  const extName = rawPath.slice(0, separatorIndex).trim();
+  const cmdName = rawPath.slice(separatorIndex + 1).trim();
+  if (!extName || !cmdName) return null;
+
+  return { extName, cmdName };
+}
+
 const ExtensionsTab: React.FC<{
   focusTarget?: SettingsFocusTarget | null;
   onFocusTargetHandled?: () => void;
@@ -177,8 +189,8 @@ const ExtensionsTab: React.FC<{
     const map = new Map<string, CommandInfo>();
     for (const cmd of commands) {
       if (cmd.category === 'extension' && cmd.path) {
-        const [extName, cmdName] = cmd.path.split('/');
-        if (extName && cmdName) map.set(`${extName}/${cmdName}`, cmd);
+        const parsedPath = parseExtensionCommandPath(cmd.path);
+        if (parsedPath) map.set(`${parsedPath.extName}/${parsedPath.cmdName}`, cmd);
         continue;
       }
       if (cmd.category === 'script') {
@@ -204,7 +216,8 @@ const ExtensionsTab: React.FC<{
     const map = new Map<string, string>();
     for (const cmd of commands) {
       if (cmd.category !== 'extension' || !cmd.path || !cmd.iconDataUrl) continue;
-      const [extName] = cmd.path.split('/');
+      const parsedPath = parseExtensionCommandPath(cmd.path);
+      const extName = parsedPath?.extName || '';
       if (!extName || map.has(extName)) continue;
       map.set(extName, cmd.iconDataUrl);
     }
@@ -220,8 +233,9 @@ const ExtensionsTab: React.FC<{
 
     for (const cmd of commands) {
       if (cmd.category === 'extension' && cmd.path) {
-        const [extName, cmdName] = cmd.path.split('/');
-        if (!extName || !cmdName) continue;
+        const parsedPath = parseExtensionCommandPath(cmd.path);
+        if (!parsedPath) continue;
+        const { extName, cmdName } = parsedPath;
 
         let schema = byExt.get(extName);
         if (!schema) {

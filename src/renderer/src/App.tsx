@@ -115,9 +115,11 @@ function getExtensionIdentityFromCommand(
   command: CommandInfo | null | undefined
 ): { extName: string; cmdName: string } | null {
   if (!command || command.category !== 'extension' || !command.path) return null;
-  const [extNameRaw, cmdNameRaw] = String(command.path).split('/');
-  const extName = String(extNameRaw || '').trim();
-  const cmdName = String(cmdNameRaw || '').trim();
+  const rawPath = String(command.path || '').trim();
+  const separatorIndex = rawPath.indexOf('/');
+  if (separatorIndex <= 0 || separatorIndex >= rawPath.length - 1) return null;
+  const extName = rawPath.slice(0, separatorIndex).trim();
+  const cmdName = rawPath.slice(separatorIndex + 1).trim();
   if (!extName || !cmdName) return null;
   return { extName, cmdName };
 }
@@ -847,7 +849,9 @@ const App: React.FC = () => {
   const uninstallExtensionCommand = useCallback(
     async (command: CommandInfo) => {
       if (command.category !== 'extension' || !command.path) return;
-      const [extName] = command.path.split('/');
+      const rawPath = String(command.path || '').trim();
+      const separatorIndex = rawPath.indexOf('/');
+      const extName = separatorIndex > 0 ? rawPath.slice(0, separatorIndex).trim() : '';
       if (!extName) return;
       await window.electron.uninstallExtension(extName);
       await updatePinnedCommands(pinnedCommands.filter((id) => id !== command.id));

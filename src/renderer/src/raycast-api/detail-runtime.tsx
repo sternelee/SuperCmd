@@ -23,7 +23,7 @@ type CreateDetailRuntimeDeps = {
   matchesShortcut: (event: KeyboardEvent, shortcut: any) => boolean;
   isMetaK: (event: KeyboardEvent) => boolean;
   renderShortcut: (shortcut: any) => React.ReactNode;
-  renderIcon: (icon: any, className?: string) => React.ReactNode;
+  renderIcon: (icon: any, className?: string, assetsPath?: string) => React.ReactNode;
   addHexAlpha: (color: string, alphaHex: string) => string | undefined;
 };
 
@@ -35,6 +35,8 @@ type DetailProps = {
   actions?: React.ReactElement;
   metadata?: React.ReactElement;
 };
+
+const DETAIL_METADATA_RUNTIME_MARKER = '__scDetailMetadataRuntime';
 
 function resolveMetadataText(input: unknown): { value: string; color?: string } {
   if (input == null) return { value: '' };
@@ -68,6 +70,36 @@ export function createDetailRuntime(deps: CreateDetailRuntimeDeps) {
     const { pop } = deps.useNavigation();
     const { collectedActions: detailActions, registryAPI: detailActionRegistry } = deps.useCollectedActions();
     const primaryAction = detailActions[0];
+
+    const { detailMetadata, detailChildren } = useMemo(() => {
+      if (metadata) {
+        return { detailMetadata: metadata, detailChildren: children };
+      }
+
+      const allChildren = React.Children.toArray(children);
+      if (allChildren.length === 0) {
+        return { detailMetadata: null, detailChildren: children };
+      }
+
+      const metadataNodes: React.ReactNode[] = [];
+      const contentNodes: React.ReactNode[] = [];
+
+      for (const node of allChildren) {
+        if (React.isValidElement(node)) {
+          const typeRecord = node.type as Record<string, unknown> | null;
+          if (typeRecord?.[DETAIL_METADATA_RUNTIME_MARKER] === true) {
+            metadataNodes.push(node);
+            continue;
+          }
+        }
+        contentNodes.push(node);
+      }
+
+      return {
+        detailMetadata: metadataNodes.length > 0 ? <>{metadataNodes}</> : null,
+        detailChildren: contentNodes.length > 0 ? contentNodes : null,
+      };
+    }, [children, metadata]);
 
     const extensionContext = deps.getExtensionContext();
     const footerTitle = navigationTitle || extInfo.extensionDisplayName || extensionContext.extensionDisplayName || extensionContext.extensionName || 'Extension';
@@ -120,13 +152,32 @@ export function createDetailRuntime(deps: CreateDetailRuntimeDeps) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3.5 py-3">
-          {isLoading ? <div className="h-full" /> : (
-            <>
-              {markdown && <div className="text-[var(--text-secondary)] text-sm leading-relaxed">{renderSimpleMarkdown(markdown, resolveMarkdownImageSrc)}</div>}
-              {metadata}
-              {children}
-            </>
+        <div className="flex-1 overflow-hidden">
+          {isLoading ? (
+            <div className="h-full" />
+          ) : detailMetadata ? (
+            <div className="flex h-full overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                {markdown ? (
+                  <div className="text-[var(--text-secondary)] text-sm leading-relaxed">
+                    {renderSimpleMarkdown(markdown, resolveMarkdownImageSrc)}
+                  </div>
+                ) : null}
+                {detailChildren}
+              </div>
+              <aside className="w-[34%] min-w-[280px] max-w-[380px] border-l border-[var(--ui-divider)] overflow-y-auto px-4 py-5">
+                {detailMetadata}
+              </aside>
+            </div>
+          ) : (
+            <div className="h-full overflow-y-auto px-4 py-4">
+              {markdown ? (
+                <div className="text-[var(--text-secondary)] text-sm leading-relaxed">
+                  {renderSimpleMarkdown(markdown, resolveMarkdownImageSrc)}
+                </div>
+              ) : null}
+              {detailChildren}
+            </div>
           )}
         </div>
 
@@ -170,34 +221,75 @@ export function createDetailRuntime(deps: CreateDetailRuntimeDeps) {
 
   const MetadataLabel = ({ title, text, icon }: { title: string; text?: unknown; icon?: any }) => {
     const normalized = resolveMetadataText(text);
+    const extInfo = useContext(deps.ExtensionInfoReactContext);
+    const extensionContext = deps.getExtensionContext();
+    const assetsPath = extInfo?.assetsPath || extensionContext?.assetsPath || '';
+    const hasValue = Boolean(normalized.value);
+
     return (
-      <div className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
-        <span className="text-[var(--text-subtle)]">{title}: </span>
-        {icon ? <span className="inline-flex items-center">{deps.renderIcon(icon, 'w-3 h-3')}</span> : null}
-        <span style={normalized.color ? { color: normalized.color } : undefined}>{normalized.value}</span>
+      <div className="space-y-1.5">
+        <div className="text-[12px] font-semibold text-[var(--text-subtle)]">{title}</div>
+        <div className="flex items-center gap-2 text-[14px] leading-6 text-[var(--text-primary)]">
+          {icon ? (
+            <span className="inline-flex items-center justify-center text-[var(--text-muted)]">
+              {deps.renderIcon(icon, 'w-4 h-4', assetsPath)}
+            </span>
+          ) : null}
+          <span style={normalized.color ? { color: normalized.color } : undefined}>
+            {hasValue ? normalized.value : '—'}
+          </span>
+        </div>
       </div>
     );
   };
 
-  const MetadataSeparator = () => <hr className="border-[var(--ui-divider)] my-2" />;
-  const MetadataLink = ({ title, target, text }: { title: string; target: string; text: string }) => (
-    <div className="text-xs"><span className="text-[var(--text-subtle)]">{title}: </span><a href={target} className="text-blue-400 hover:underline">{text}</a></div>
+  const MetadataSeparator = () => <hr className="border-[var(--ui-divider)] my-3" />;
+  const MetadataLink = ({ title, target, text }: { title: string; target: string; text?: string }) => (
+    <div className="space-y-1.5">
+      <div className="text-[12px] font-semibold text-[var(--text-subtle)]">{title}</div>
+      <a href={target} className="text-[14px] leading-6 text-blue-400 hover:underline">{text || target}</a>
+    </div>
   );
 
-  const MetadataTagListItem = ({ text, color }: { text: unknown; color?: unknown }) => {
+  const MetadataTagListItem = ({ text, color, icon }: { text: unknown; color?: unknown; icon?: any }) => {
     const normalized = resolveMetadataText(text);
     const tint = resolveTintColor(color) || normalized.color;
     const tagBg = tint ? (deps.addHexAlpha(tint, '22') || 'rgba(var(--on-surface-rgb), 0.1)') : 'rgba(var(--on-surface-rgb), 0.1)';
-    return <span className="text-xs px-1.5 py-0.5 rounded mr-1" style={{ background: tagBg, color: tint || 'rgba(var(--on-surface-rgb), 0.6)' }}>{normalized.value}</span>;
+    const extInfo = useContext(deps.ExtensionInfoReactContext);
+    const extensionContext = deps.getExtensionContext();
+    const assetsPath = extInfo?.assetsPath || extensionContext?.assetsPath || '';
+
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 text-[14px] leading-5 px-2 py-1 rounded-md"
+        style={{ background: tagBg, color: tint || 'rgba(var(--on-surface-rgb), 0.7)' }}
+      >
+        {icon ? (
+          <span className="inline-flex items-center justify-center text-current">
+            {deps.renderIcon(icon, 'w-3.5 h-3.5', assetsPath)}
+          </span>
+        ) : null}
+        {normalized.value}
+      </span>
+    );
   };
 
   const MetadataTagList = Object.assign(
-    ({ children, title }: { children?: React.ReactNode; title?: string }) => <div className="flex flex-wrap gap-1">{title ? <span className="text-xs text-[var(--text-subtle)] mr-1">{title}:</span> : null}{children}</div>,
+    ({ children, title }: { children?: React.ReactNode; title?: string }) => (
+      <div className="space-y-1.5">
+        {title ? <div className="text-[12px] font-semibold text-[var(--text-subtle)]">{title}</div> : null}
+        <div className="flex flex-wrap gap-2">{children}</div>
+      </div>
+    ),
     { Item: MetadataTagListItem }
   );
 
+  const MetadataComponent = ({ children }: { children?: React.ReactNode }) => <div className="space-y-4">{children}</div>;
+  (MetadataComponent as Record<string, unknown>)[DETAIL_METADATA_RUNTIME_MARKER] = true;
+  MetadataComponent.displayName = 'Detail.Metadata';
+
   const Metadata = Object.assign(
-    ({ children }: { children?: React.ReactNode }) => <div className="space-y-1 mt-3">{children}</div>,
+    MetadataComponent,
     { Label: MetadataLabel, Separator: MetadataSeparator, Link: MetadataLink, TagList: MetadataTagList }
   );
 

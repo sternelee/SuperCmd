@@ -3411,6 +3411,38 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, pop, navStack.length]);
 
+  // These memos must be declared before any conditional return to keep
+  // hook ordering stable when extension render errors toggle branches.
+  const extInfoValue = useMemo(() => ({
+    extId: `${extensionName}/${commandName}`,
+    assetsPath,
+    commandMode: (mode || 'view') as 'view' | 'no-view' | 'menu-bar',
+    extensionDisplayName: extensionDisplayName || extensionName,
+    extensionIconDataUrl: extensionIconDataUrl || '',
+  }), [extensionName, extensionDisplayName, extensionIconDataUrl, commandName, assetsPath, mode]);
+
+  const scopedCtx = useMemo<ExtensionContextType>(() => ({
+    extensionName,
+    extensionDisplayName,
+    extensionIconDataUrl,
+    commandName,
+    assetsPath,
+    supportPath,
+    owner,
+    preferences,
+    commandMode: mode as 'view' | 'no-view' | 'menu-bar',
+  }), [
+    extensionName,
+    extensionDisplayName,
+    extensionIconDataUrl,
+    commandName,
+    assetsPath,
+    supportPath,
+    owner,
+    preferences,
+    mode,
+  ]);
+
   if (error || !ExtExport) {
     const errorMessage = error || 'Failed to load extension. No valid export found.';
     return (
@@ -3467,37 +3499,6 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({
   // ─── View command: render as React component ──────────────────
   const currentView =
     navStack.length > 0 ? navStack[navStack.length - 1] : null;
-
-  // Per-extension React context (safe for concurrent menu-bar extensions)
-  const extInfoValue = useMemo(() => ({
-    extId: `${extensionName}/${commandName}`,
-    assetsPath,
-    commandMode: (mode || 'view') as 'view' | 'no-view' | 'menu-bar',
-    extensionDisplayName: extensionDisplayName || extensionName,
-    extensionIconDataUrl: extensionIconDataUrl || '',
-  }), [extensionName, extensionDisplayName, extensionIconDataUrl, commandName, assetsPath, mode]);
-
-  const scopedCtx = useMemo<ExtensionContextType>(() => ({
-    extensionName,
-    extensionDisplayName,
-    extensionIconDataUrl,
-    commandName,
-    assetsPath,
-    supportPath,
-    owner,
-    preferences,
-    commandMode: mode as 'view' | 'no-view' | 'menu-bar',
-  }), [
-    extensionName,
-    extensionDisplayName,
-    extensionIconDataUrl,
-    commandName,
-    assetsPath,
-    supportPath,
-    owner,
-    preferences,
-    mode,
-  ]);
 
   return (
     <ExtensionInfoReactContext.Provider value={extInfoValue}>
