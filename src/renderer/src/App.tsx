@@ -1377,6 +1377,48 @@ const App: React.FC = () => {
     },
     []
   );
+  const getInlineExtensionArgumentsForCommand = useCallback(
+    (command: CommandInfo): Record<string, string> => {
+      const definitions = (command.commandArgumentDefinitions || []).filter((definition) => definition?.name);
+      if (definitions.length === 0) return {};
+
+      const current = { ...(inlineExtensionArgumentValues[command.id] || {}) };
+      if (selectedCommand?.id === command.id) {
+        for (let index = 0; index < definitions.length; index += 1) {
+          const definition = definitions[index];
+          if (index >= MAX_INLINE_EXTENSION_ARGUMENTS) break;
+          const input = inlineArgumentInputRefs.current[index];
+          if (!input) continue;
+          current[definition.name] = String((input as HTMLInputElement | HTMLSelectElement).value ?? '');
+        }
+      }
+
+      const next = definitions.reduce((acc, definition) => {
+        acc[definition.name] = String(current[definition.name] ?? '');
+        return acc;
+      }, {} as Record<string, string>);
+
+      setInlineExtensionArgumentValues((prev) => {
+        const existing = prev[command.id] || {};
+        let changed = false;
+        for (const definition of definitions) {
+          const key = definition.name;
+          if (String(existing[key] ?? '') !== String(next[key] ?? '')) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) return prev;
+        return {
+          ...prev,
+          [command.id]: next,
+        };
+      });
+
+      return next;
+    },
+    [inlineExtensionArgumentValues, selectedCommand]
+  );
 
   const openFileResultByPath = useCallback(async (targetPath: string) => {
     if (!targetPath) return;
@@ -2020,7 +2062,7 @@ const App: React.FC = () => {
         const result = await window.electron.runExtension(extName, cmdName);
         if (result && result.code) {
           const hydrated = hydrateExtensionBundlePreferences(result);
-          const inlineArguments = inlineExtensionArgumentValues[command.id] || {};
+          const inlineArguments = getInlineExtensionArgumentsForCommand(command);
           const hydratedWithInlineArguments: ExtensionBundle = {
             ...hydrated,
             launchArguments: {

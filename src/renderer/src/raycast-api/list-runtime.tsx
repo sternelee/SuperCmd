@@ -232,7 +232,7 @@ export function createListRuntime(deps: ListRuntimeDeps) {
         ) : shouldUseEmojiGridValue ? (
           groupedItems.map((group, groupIndex) => (
             <div key={groupIndex} className="mb-2">
-              {group.title && <div className="px-4 pt-2 pb-1 text-[11px] uppercase tracking-wider text-[var(--text-subtle)] font-medium select-none">{group.title}<span className="ml-2 text-[var(--text-muted)] normal-case">{group.items.length}</span></div>}
+              {group.title && <div className="px-4 pt-2 pb-1 text-[11px] tracking-[0.08em] text-[var(--text-subtle)] font-medium select-none">{group.title}<span className="ml-2 text-[var(--text-muted)]">{group.items.length}</span></div>}
               <div className="px-2 pb-1 grid gap-2" style={{ gridTemplateColumns: `repeat(8, 1fr)` }}>
                 {group.items.map(({ item, globalIdx }) => {
                   const title = typeof item.props.title === 'string' ? item.props.title : (item.props.title as any)?.value || '';
@@ -267,7 +267,7 @@ export function createListRuntime(deps: ListRuntimeDeps) {
         ) : (
           groupedItems.map((group, groupIndex) => (
             <div key={groupIndex} className="mb-0">
-              {group.title && <div className="px-4 pt-0.5 pb-1 text-[11px] uppercase tracking-wider text-[var(--text-subtle)] font-medium select-none">{group.title}</div>}
+              {group.title && <div className="px-4 pt-0.5 pb-1 text-[11px] tracking-[0.08em] text-[var(--text-subtle)] font-medium select-none">{group.title}</div>}
               {group.items.map(({ item, globalIdx }) => (
                 <ListItemRenderer
                   key={item.id}
