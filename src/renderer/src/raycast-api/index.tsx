@@ -308,6 +308,7 @@ export namespace Alert {
     title: string;
     onAction?: () => void;
     style?: ActionStyle;
+    shortcut?: any;
   }
 
   export interface Options {
@@ -332,50 +333,418 @@ export enum ToastStyle {
 
 export class Toast {
   static Style = ToastStyle;
+  private static _activeToast: Toast | null = null;
 
-  public title: string = '';
-  public message?: string;
-  public style: ToastStyle = ToastStyle.Success;
-  public primaryAction?: Alert.ActionOptions;
-  public secondaryAction?: Alert.ActionOptions;
+  private _title = '';
+  private _message?: string;
+  private _style: ToastStyle = ToastStyle.Success;
+  private _primaryAction?: Alert.ActionOptions;
+  private _secondaryAction?: Alert.ActionOptions;
 
   private _el: HTMLDivElement | null = null;
+  private _menuEl: HTMLDivElement | null = null;
   private _timer: any = null;
+  private _keyHandler: ((event: KeyboardEvent) => void) | null = null;
+  private _actions: Alert.ActionOptions[] = [];
+  private _selectedActionIndex = 0;
+  private _hostEl: HTMLElement | null = null;
+  private _isInlineHost = false;
 
   constructor(options: Toast.Options) {
-    this.style = options.style as ToastStyle || ToastStyle.Success;
-    this.title = options.title || '';
-    this.message = options.message;
-    this.primaryAction = options.primaryAction;
-    this.secondaryAction = options.secondaryAction;
+    this._style = this.normalizeStyle(options.style);
+    this._title = options.title || '';
+    this._message = options.message;
+    this._primaryAction = options.primaryAction;
+    this._secondaryAction = options.secondaryAction;
+  }
+
+  public get title(): string {
+    return this._title;
+  }
+
+  public set title(value: string) {
+    this._title = String(value || '');
+    this.refresh();
+  }
+
+  public get message(): string | undefined {
+    return this._message;
+  }
+
+  public set message(value: string | undefined) {
+    this._message = value ? String(value) : undefined;
+    this.refresh();
+  }
+
+  public get style(): ToastStyle {
+    return this._style;
+  }
+
+  public set style(value: ToastStyle | Toast.Style | string) {
+    this._style = this.normalizeStyle(value);
+    this.refresh();
+  }
+
+  public get primaryAction(): Alert.ActionOptions | undefined {
+    return this._primaryAction;
+  }
+
+  public set primaryAction(value: Alert.ActionOptions | undefined) {
+    this._primaryAction = value;
+    this.refresh();
+  }
+
+  public get secondaryAction(): Alert.ActionOptions | undefined {
+    return this._secondaryAction;
+  }
+
+  public set secondaryAction(value: Alert.ActionOptions | undefined) {
+    this._secondaryAction = value;
+    this.refresh();
+  }
+
+  private normalizeStyle(value: ToastStyle | Toast.Style | string | undefined): ToastStyle {
+    if (value === ToastStyle.Animated || value === Toast.Style.Animated || value === 'animated') {
+      return ToastStyle.Animated;
+    }
+    if (value === ToastStyle.Failure || value === Toast.Style.Failure || value === 'failure') {
+      return ToastStyle.Failure;
+    }
+    if (value === ToastStyle.Success || value === Toast.Style.Success || value === 'success') {
+      return ToastStyle.Success;
+    }
+    return ToastStyle.Success;
+  }
+
+  private getClassName(): string {
+    return `sc-toast ${this._isInlineHost ? 'sc-toast-inline' : ''} ${
+      this._style === ToastStyle.Failure
+        ? 'sc-toast-failure'
+        : this._style === ToastStyle.Animated
+          ? 'sc-toast-animated'
+          : 'sc-toast-success'
+    }`;
+  }
+
+  private resolveInlineHost(): HTMLElement | null {
+    const footers = Array.from(document.querySelectorAll<HTMLElement>('.sc-glass-footer'));
+    for (let index = footers.length - 1; index >= 0; index -= 1) {
+      const footer = footers[index];
+      if (!footer) continue;
+      if (footer.getClientRects().length === 0) continue;
+      const style = window.getComputedStyle(footer);
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+      return footer;
+    }
+    return null;
+  }
+
+  private updateActions() {
+    this._actions = [this._primaryAction, this._secondaryAction]
+      .filter((action): action is Alert.ActionOptions => Boolean(action?.title));
+    if (this._selectedActionIndex >= this._actions.length) {
+      this._selectedActionIndex = Math.max(0, this._actions.length - 1);
+    }
+  }
+
+  private updateKeyboardHandler() {
+    if (this._actions.length === 0) {
+      if (this._keyHandler) {
+        window.removeEventListener('keydown', this._keyHandler, true);
+        this._keyHandler = null;
+      }
+      return;
+    }
+
+    if (this._keyHandler) return;
+
+    this._keyHandler = (event: KeyboardEvent) => {
+      const isToastMenuShortcut = event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey && String(event.key || '').toLowerCase() === 't';
+      if (isToastMenuShortcut && !event.repeat) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.toggleActionMenu();
+        return;
+      }
+
+      if (this._menuEl) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          this.closeActionMenu();
+          return;
+        }
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          this._selectedActionIndex = Math.min(this._selectedActionIndex + 1, this._actions.length - 1);
+          this.renderActionMenu();
+          return;
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          this._selectedActionIndex = Math.max(this._selectedActionIndex - 1, 0);
+          this.renderActionMenu();
+          return;
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          this.executeAction(this._actions[this._selectedActionIndex]);
+          return;
+        }
+      }
+
+      for (const action of this._actions) {
+        if (this.matchesActionShortcut(event, action)) {
+          event.preventDefault();
+          event.stopPropagation();
+          this.executeAction(action);
+          return;
+        }
+      }
+    };
+    window.addEventListener('keydown', this._keyHandler, true);
+  }
+
+  private renderToastBody() {
+    if (!this._el) return;
+    this._el.className = this.getClassName();
+    this._el.innerHTML = '';
+
+    const dotEl = document.createElement('span');
+    dotEl.className = 'sc-toast-dot';
+
+    const textWrapEl = document.createElement('span');
+    textWrapEl.className = 'sc-toast-main';
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'sc-toast-title';
+    titleEl.textContent = this._title || '';
+    textWrapEl.appendChild(titleEl);
+
+    if (this._message) {
+      const messageEl = document.createElement('span');
+      messageEl.className = 'sc-toast-message';
+      messageEl.textContent = `• ${this._message}`;
+      textWrapEl.appendChild(messageEl);
+    }
+
+    this._el.appendChild(dotEl);
+    this._el.appendChild(textWrapEl);
+
+    if (this._actions.length > 0) {
+      const hintEl = document.createElement('span');
+      hintEl.className = 'sc-toast-hint';
+      hintEl.innerHTML = `<kbd>⌘</kbd><kbd>T</kbd>`;
+      this._el.appendChild(hintEl);
+    }
+  }
+
+  private syncAutoHideTimer() {
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = null;
+    }
+    if (!this._el) return;
+    if (this._style === ToastStyle.Animated) return;
+    const timeoutMs = this._actions.length > 0 ? 6000 : 3000;
+    this._timer = setTimeout(() => this.hide(), timeoutMs);
+  }
+
+  private updateActionMenuPosition() {
+    if (!this._menuEl || !this._el) return;
+    const rect = this._el.getBoundingClientRect();
+    this._menuEl.style.right = '';
+    this._menuEl.style.top = '';
+    this._menuEl.style.left = `${rect.left}px`;
+    this._menuEl.style.bottom = `${Math.max(window.innerHeight - rect.top + 8, 12)}px`;
+  }
+
+  private refresh() {
+    if (!this._el) return;
+
+    this.updateActions();
+    this.updateKeyboardHandler();
+    this.renderToastBody();
+
+    if (this._actions.length === 0 && this._menuEl) {
+      this.closeActionMenu();
+    } else if (this._menuEl) {
+      this.updateActionMenuPosition();
+      this.renderActionMenu();
+    }
+
+    this.syncAutoHideTimer();
   }
 
   show() {
-    this.hide(); // clear any existing
+    this.hide(); // clear any existing instance of this toast
+    if (Toast._activeToast && Toast._activeToast !== this) {
+      void Toast._activeToast.hide();
+    }
+
+    this._hostEl = this.resolveInlineHost() || document.body;
+    this._isInlineHost = this._hostEl !== document.body;
+
     this._el = document.createElement('div');
-    const styleColor =
-      this.style === ToastStyle.Failure ? 'var(--toast-error-bg)' :
-      this.style === ToastStyle.Animated ? 'var(--toast-info-bg)' :
-      'var(--toast-success-bg)';
-
-    this._el.style.cssText =
-      'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);' +
-      'padding:8px 16px;border-radius:8px;font-size:13px;z-index:99999;' +
-      `color:var(--toast-fg);backdrop-filter:blur(20px);max-width:400px;text-align:center;background:${styleColor}`;
-
-    this._el.textContent = this.title + (this.message ? ` — ${this.message}` : '');
-    document.body.appendChild(this._el);
-
-    this._timer = setTimeout(() => this.hide(), 3000);
+    this._el.className = this.getClassName();
+    if (this._isInlineHost) {
+      this._hostEl.classList.add('sc-toast-active');
+      this._hostEl.insertBefore(this._el, this._hostEl.firstChild || null);
+    } else {
+      this._hostEl.appendChild(this._el);
+    }
+    Toast._activeToast = this;
+    this.refresh();
     return Promise.resolve();
+  }
+
+  private getActionShortcutLabel(action?: Alert.ActionOptions): string {
+    const shortcut = (action as any)?.shortcut;
+    if (!shortcut) return '';
+    const modifiers = Array.isArray(shortcut.modifiers) ? shortcut.modifiers : [];
+    const parts: string[] = [];
+    for (const mod of modifiers) {
+      if (mod === 'cmd') parts.push('⌘');
+      else if (mod === 'ctrl') parts.push('⌃');
+      else if (mod === 'opt') parts.push('⌥');
+      else if (mod === 'shift') parts.push('⇧');
+    }
+    const keyRaw = String(shortcut.key || '').toLowerCase();
+    if (keyRaw === 'return' || keyRaw === 'enter') parts.push('↩');
+    else if (keyRaw === 'delete' || keyRaw === 'backspace') parts.push('⌫');
+    else if (keyRaw === 'space') parts.push('Space');
+    else if (keyRaw) parts.push(keyRaw.length === 1 ? keyRaw.toUpperCase() : keyRaw);
+    return parts.join(' ');
+  }
+
+  private matchesActionShortcut(event: KeyboardEvent, action?: Alert.ActionOptions): boolean {
+    const shortcut = (action as any)?.shortcut;
+    if (!shortcut) return false;
+
+    const modifiers = Array.isArray(shortcut.modifiers)
+      ? shortcut.modifiers.map((mod: any) => String(mod || '').toLowerCase())
+      : [];
+
+    const expectsCmd = modifiers.includes('cmd');
+    const expectsCtrl = modifiers.includes('ctrl');
+    const expectsOpt = modifiers.includes('opt') || modifiers.includes('alt');
+    const expectsShift = modifiers.includes('shift');
+
+    if (expectsCmd !== event.metaKey) return false;
+    if (expectsCtrl !== event.ctrlKey) return false;
+    if (expectsOpt !== event.altKey) return false;
+    if (expectsShift !== event.shiftKey) return false;
+
+    const expectedKeyRaw = String(shortcut.key || '').trim().toLowerCase();
+    const pressedKeyRaw = String(event.key || '').trim().toLowerCase();
+
+    const normalize = (value: string) => {
+      if (value === 'return') return 'enter';
+      if (value === 'spacebar' || value === ' ') return 'space';
+      return value;
+    };
+
+    const expectedKey = normalize(expectedKeyRaw);
+    const pressedKey = normalize(pressedKeyRaw);
+    if (!expectedKey) return false;
+    return expectedKey === pressedKey;
+  }
+
+  private renderActionMenu() {
+    if (!this._menuEl) return;
+    this._menuEl.innerHTML = '';
+    if (this._actions.length === 0) return;
+    this._selectedActionIndex = Math.max(0, Math.min(this._selectedActionIndex, this._actions.length - 1));
+    this._actions.forEach((action, idx) => {
+      const itemEl = document.createElement('button');
+      itemEl.type = 'button';
+      itemEl.className = `sc-toast-menu-item ${idx === this._selectedActionIndex ? 'is-selected' : ''}`;
+      itemEl.addEventListener('mouseenter', () => {
+        this._selectedActionIndex = idx;
+        this.renderActionMenu();
+      });
+      itemEl.addEventListener('click', (event) => {
+        event.preventDefault();
+        this.executeAction(action);
+      });
+
+      const titleEl = document.createElement('span');
+      titleEl.className = 'sc-toast-menu-item-title';
+      titleEl.textContent = action.title;
+      itemEl.appendChild(titleEl);
+
+      const shortcutLabel = this.getActionShortcutLabel(action);
+      if (shortcutLabel) {
+        const shortcutEl = document.createElement('span');
+        shortcutEl.className = 'sc-toast-menu-item-shortcut';
+        shortcutEl.textContent = shortcutLabel;
+        itemEl.appendChild(shortcutEl);
+      }
+
+      this._menuEl?.appendChild(itemEl);
+    });
+  }
+
+  private openActionMenu() {
+    if (!this._el || this._actions.length === 0 || this._menuEl) return;
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = null;
+    }
+
+    const menuEl = document.createElement('div');
+    menuEl.className = 'sc-toast-menu';
+
+    this._selectedActionIndex = 0;
+    this._menuEl = menuEl;
+    this.updateActionMenuPosition();
+    this.renderActionMenu();
+    document.body.appendChild(menuEl);
+  }
+
+  private closeActionMenu(options?: { rescheduleAutoHide?: boolean }) {
+    if (!this._menuEl) return;
+    this._menuEl.remove();
+    this._menuEl = null;
+    if (options?.rescheduleAutoHide !== false) {
+      this.syncAutoHideTimer();
+    }
+  }
+
+  private toggleActionMenu() {
+    if (this._menuEl) {
+      this.closeActionMenu();
+    } else {
+      this.openActionMenu();
+    }
+  }
+
+  private executeAction(action?: Alert.ActionOptions) {
+    if (!action) return;
+    this.closeActionMenu();
+    try {
+      action.onAction?.();
+    } finally {
+      void this.hide();
+    }
   }
 
   hide() {
     if (this._timer) clearTimeout(this._timer);
+    if (this._keyHandler) {
+      window.removeEventListener('keydown', this._keyHandler, true);
+      this._keyHandler = null;
+    }
+    this.closeActionMenu({ rescheduleAutoHide: false });
     if (this._el) {
       this._el.remove();
       this._el = null;
     }
+    if (Toast._activeToast === this) {
+      Toast._activeToast = null;
+      this._hostEl?.classList.remove('sc-toast-active');
+    }
+    this._hostEl = null;
+    this._isInlineHost = false;
     return Promise.resolve();
   }
 }
@@ -411,7 +780,21 @@ function shouldSuppressBenignGitMissingPathToast(options: Toast.Options): boolea
   return /\b(stat|lstat|access|scandir)\b/.test(combined);
 }
 
-export async function showToast(options: Toast.Options): Promise<Toast> {
+export async function showToast(options: Toast.Options): Promise<Toast>;
+export async function showToast(style: ToastStyle | Toast.Style, title: string, message?: string): Promise<Toast>;
+export async function showToast(
+  optionsOrStyle: Toast.Options | ToastStyle | Toast.Style,
+  title?: string,
+  message?: string
+): Promise<Toast> {
+  const options: Toast.Options =
+    typeof optionsOrStyle === 'string'
+      ? {
+        style: optionsOrStyle,
+        title: String(title || ''),
+        message: message ? String(message) : undefined,
+      }
+      : optionsOrStyle;
   const t = new Toast(options);
   if (shouldSuppressBenignGitMissingPathToast(options)) {
     return t;

@@ -202,6 +202,13 @@ function resolvePhosphorIconFromRaycast(input: string): { icon: PhosphorIconComp
   const normalizedBase = normalizeIconName(baseIconName);
   const shouldUseFillWeight = /filled$/i.test(iconName);
 
+  if (normalized === 'dot' || normalizedBase === 'dot') {
+    const dotIcon = tryResolvePhosphorByName('Circle');
+    if (dotIcon) {
+      return { icon: dotIcon, weight: 'fill' };
+    }
+  }
+
   const directCandidates = [
     iconName,
     baseIconName,

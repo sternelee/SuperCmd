@@ -24,6 +24,29 @@ export function createListRenderers(deps: ListRendererDeps) {
   const { renderIcon, resolveTintColor, addHexAlpha } = deps;
   let itemOrderCounter = 0;
 
+  function normalizeIconToken(value: unknown): string {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  function isDotIcon(icon: unknown): boolean {
+    if (!icon) return false;
+    if (typeof icon === 'string') {
+      const token = normalizeIconToken(icon.replace(/^Icon\./, ''));
+      return token === 'dot' || token === 'dot16';
+    }
+    if (typeof icon === 'object') {
+      const source = (icon as { source?: unknown }).source;
+      if (typeof source === 'string') {
+        const token = normalizeIconToken(source.replace(/^Icon\./, ''));
+        return token === 'dot' || token === 'dot16';
+      }
+    }
+    return false;
+  }
+
   function ListItemComponent(props: ListItemProps) {
     const registry = useContext(ListRegistryContext);
     const sectionTitle = useContext(ListSectionTitleContext);
@@ -41,6 +64,9 @@ export function createListRenderers(deps: ListRendererDeps) {
   function ListItemRenderer({ title, subtitle, icon, accessories, isSelected, dataIdx, onSelect, onActivate, onContextAction, assetsPath }: ListItemProps & any) {
     const titleStr = typeof title === 'string' ? title : (title as any)?.value || '';
     const subtitleStr = typeof subtitle === 'string' ? subtitle : (subtitle as any)?.value || '';
+    const primaryText = titleStr || subtitleStr;
+    const secondaryText = titleStr ? subtitleStr : '';
+    const iconClassName = isDotIcon(icon) ? 'w-3 h-3' : 'w-5 h-5';
 
     return (
       <div
@@ -55,9 +81,9 @@ export function createListRenderers(deps: ListRendererDeps) {
         onContextMenu={onContextAction}
       >
         <div className="flex items-center gap-2 w-full">
-          {icon && <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-[var(--text-muted)] text-xs">{renderIcon(icon, 'w-5 h-5', assetsPath)}</div>}
-          <div className="flex-1 min-w-0"><span className="text-[13px] leading-[18px] truncate block" style={{ color: 'rgba(var(--on-surface-rgb), 0.9)' }}>{titleStr}</span></div>
-          {subtitleStr && <span className="text-[11px] leading-[16px] flex-shrink-0 truncate max-w-[220px]" style={{ color: 'var(--text-muted)' }}>{subtitleStr}</span>}
+          {icon && <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 text-[var(--text-muted)] text-xs">{renderIcon(icon, iconClassName, assetsPath)}</div>}
+          <div className="flex-1 min-w-0"><span className="text-[13px] leading-[18px] truncate block" style={{ color: 'rgba(var(--on-surface-rgb), 0.9)' }}>{primaryText}</span></div>
+          {secondaryText && <span className="text-[11px] leading-[16px] flex-shrink-0 truncate max-w-[220px]" style={{ color: 'var(--text-muted)' }}>{secondaryText}</span>}
           {accessories?.map((accessory, index) => {
             const accessoryText = typeof accessory?.text === 'string' ? accessory.text : typeof accessory?.text === 'object' ? accessory.text?.value || '' : '';
             const accessoryTextColorRaw = typeof accessory?.text === 'object' ? accessory.text?.color : undefined;

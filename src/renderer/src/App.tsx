@@ -245,6 +245,14 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const queueNoViewBundleRun = useCallback((
+    bundle: ExtensionBundle,
+    launchType: 'userInitiated' | 'background' = 'userInitiated'
+  ) => {
+    const runId = `${bundle.extensionName || bundle.extName}/${bundle.commandName || bundle.cmdName}/${Date.now()}`;
+    setBackgroundNoViewRuns((prev) => [...prev, { runId, bundle, launchType }]);
+  }, [setBackgroundNoViewRuns]);
+
   const onExitAiMode = useCallback(() => {
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
@@ -675,8 +683,7 @@ const App: React.FC = () => {
 
       if (launchType === 'background') {
         if (hydrated.mode === 'no-view') {
-          const runId = `${hydrated.extensionName || hydrated.extName}/${hydrated.commandName || hydrated.cmdName}/${Date.now()}`;
-          setBackgroundNoViewRuns((prev) => [...prev, { runId, bundle: hydrated }]);
+          queueNoViewBundleRun(hydrated, 'background');
         }
         return;
       }
@@ -694,6 +701,8 @@ const App: React.FC = () => {
           values: { ...(hydrated.preferences || {}) },
           argumentValues: { ...((hydrated as any).launchArguments || {}) },
         });
+      } else if (hydrated.mode === 'no-view') {
+        queueNoViewBundleRun(hydrated, 'userInitiated');
       } else {
         setShowFileSearch(false);
         setExtensionView(hydrated);
@@ -702,7 +711,7 @@ const App: React.FC = () => {
 
     window.addEventListener('sc-launch-extension-bundle', onLaunchBundle as EventListener);
     return () => window.removeEventListener('sc-launch-extension-bundle', onLaunchBundle as EventListener);
-  }, [upsertMenuBarExtension]);
+  }, [queueNoViewBundleRun, upsertMenuBarExtension]);
 
   useEffect(() => {
     const onRunScript = (event: Event) => {
@@ -1265,7 +1274,6 @@ const App: React.FC = () => {
     },
     [inlineQuickLinkDynamicFieldsById]
   );
-
   useEffect(() => {
     inlineArgumentInputRefs.current = inlineArgumentInputRefs.current.slice(
       0,
@@ -1368,6 +1376,48 @@ const App: React.FC = () => {
       }));
     },
     []
+  );
+  const getInlineExtensionArgumentsForCommand = useCallback(
+    (command: CommandInfo): Record<string, string> => {
+      const definitions = (command.commandArgumentDefinitions || []).filter((definition) => definition?.name);
+      if (definitions.length === 0) return {};
+
+      const current = { ...(inlineExtensionArgumentValues[command.id] || {}) };
+      if (selectedCommand?.id === command.id) {
+        for (let index = 0; index < definitions.length; index += 1) {
+          const definition = definitions[index];
+          if (index >= MAX_INLINE_EXTENSION_ARGUMENTS) break;
+          const input = inlineArgumentInputRefs.current[index];
+          if (!input) continue;
+          current[definition.name] = String((input as HTMLInputElement | HTMLSelectElement).value ?? '');
+        }
+      }
+
+      const next = definitions.reduce((acc, definition) => {
+        acc[definition.name] = String(current[definition.name] ?? '');
+        return acc;
+      }, {} as Record<string, string>);
+
+      setInlineExtensionArgumentValues((prev) => {
+        const existing = prev[command.id] || {};
+        let changed = false;
+        for (const definition of definitions) {
+          const key = definition.name;
+          if (String(existing[key] ?? '') !== String(next[key] ?? '')) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) return prev;
+        return {
+          ...prev,
+          [command.id]: next,
+        };
+      });
+
+      return next;
+    },
+    [inlineExtensionArgumentValues, selectedCommand]
   );
 
   const openFileResultByPath = useCallback(async (targetPath: string) => {
@@ -2012,7 +2062,7 @@ const App: React.FC = () => {
         const result = await window.electron.runExtension(extName, cmdName);
         if (result && result.code) {
           const hydrated = hydrateExtensionBundlePreferences(result);
-          const inlineArguments = inlineExtensionArgumentValues[command.id] || {};
+          const inlineArguments = getInlineExtensionArgumentsForCommand(command);
           const hydratedWithInlineArguments: ExtensionBundle = {
             ...hydrated,
             launchArguments: {
@@ -2049,6 +2099,12 @@ const App: React.FC = () => {
             window.electron.hideWindow();
             setSearchQuery('');
             setSelectedIndex(0);
+            await updateRecentCommands(command.id);
+            return;
+          }
+          if (hydratedWithInlineArguments.mode === 'no-view') {
+            queueNoViewBundleRun(hydratedWithInlineArguments, 'userInitiated');
+            localStorage.removeItem(LAST_EXT_KEY);
             await updateRecentCommands(command.id);
             return;
           }
@@ -2104,6 +2160,40 @@ const App: React.FC = () => {
       console.error('Failed to execute command:', error);
     }
   };
+  const handleCommandRowClick = useCallback(
+    async (command: CommandInfo, absoluteIndex: number) => {
+      const isAlreadySelected = absoluteIndex === selectedIndex;
+
+      const hasInlineExtensionArguments =
+        command.category === 'extension' &&
+        (command.commandArgumentDefinitions || []).some((definition) => Boolean(definition?.name));
+      if (!isAlreadySelected && hasInlineExtensionArguments) {
+        setSelectedIndex(absoluteIndex);
+        return;
+      }
+
+      const quickLinkId = getQuickLinkIdFromCommandId(command.id);
+      if (!isAlreadySelected && quickLinkId) {
+        const cachedFields = inlineQuickLinkDynamicFieldsById[quickLinkId];
+        const quickLinkFields =
+          cachedFields !== undefined ? cachedFields : await getDynamicFieldsForQuickLink(quickLinkId);
+        const hasInlineQuickLinkArguments =
+          quickLinkFields.length > 0 && quickLinkFields.length <= MAX_INLINE_QUICK_LINK_ARGUMENTS;
+        if (hasInlineQuickLinkArguments) {
+          setSelectedIndex(absoluteIndex);
+          return;
+        }
+      }
+
+      void handleCommandExecute(command);
+    },
+    [
+      getDynamicFieldsForQuickLink,
+      handleCommandExecute,
+      inlineQuickLinkDynamicFieldsById,
+      selectedIndex,
+    ]
+  );
 
   const getActionsForCommand = useCallback(
     (command: CommandInfo | null): LauncherAction[] => {
@@ -2320,7 +2410,7 @@ const App: React.FC = () => {
           launchArguments={(run.bundle as any).launchArguments}
           launchContext={(run.bundle as any).launchContext}
           fallbackText={(run.bundle as any).fallbackText}
-          launchType="background"
+          launchType={run.launchType}
           onClose={() => {
             setBackgroundNoViewRuns((prev) => prev.filter((item) => item.runId !== run.runId));
           }}
@@ -2460,6 +2550,11 @@ const App: React.FC = () => {
           setExtensionPreferenceSetup(null);
           setScriptCommandSetup(null);
           setScriptCommandOutput(null);
+          if (updatedBundle.mode === 'no-view') {
+            queueNoViewBundleRun(updatedBundle, 'userInitiated');
+            localStorage.removeItem(LAST_EXT_KEY);
+            return;
+          }
           setExtensionView(updatedBundle);
           const extName = updatedBundle.extName || (updatedBundle as any).extensionName || '';
           const cmdName = updatedBundle.cmdName || (updatedBundle as any).commandName || '';
@@ -2494,7 +2589,7 @@ const App: React.FC = () => {
       <>
         {alwaysMountedRunners}
         <div className="w-full h-full">
-          <div className="glass-effect overflow-hidden h-full flex flex-col">
+          <div className="glass-effect extension-runtime-shell overflow-hidden h-full flex flex-col">
             <ExtensionView
               code={extensionView.code}
               title={extensionView.title}
@@ -2910,7 +3005,9 @@ const App: React.FC = () => {
                           className={`command-item px-3 py-2 rounded-lg cursor-pointer ${
                             flatIndex + calcOffset === selectedIndex ? 'selected' : ''
                           }`}
-                          onClick={() => handleCommandExecute(command)}
+                          onClick={() => {
+                            void handleCommandRowClick(command, flatIndex + calcOffset);
+                          }}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setSelectedIndex(flatIndex + calcOffset);
@@ -2970,7 +3067,7 @@ const App: React.FC = () => {
             className="sc-glass-footer sc-launcher-footer absolute bottom-0 left-0 right-0 z-10 flex items-center px-4 py-2.5"
           >
             <div
-              className="flex items-center gap-2 text-xs flex-1 min-w-0 font-normal truncate text-[var(--text-subtle)]"
+              className="sc-footer-primary flex items-center gap-2 text-xs flex-1 min-w-0 font-normal truncate text-[var(--text-subtle)]"
             >
               {selectedCommand
                 ? (

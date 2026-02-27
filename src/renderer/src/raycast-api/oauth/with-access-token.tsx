@@ -14,24 +14,45 @@ let accessTokenType: 'oauth' | 'personal' | null = null;
 
 export function withAccessToken(options: any) {
   const shouldInvokeOnAuthorize = !(options instanceof OAuthService);
-  const mode = getOAuthRuntimeDeps().getExtensionContext().commandMode;
+  const authorizeForNoView = async (): Promise<void> => {
+    if (options instanceof OAuthService) {
+      if (options?.personalAccessToken) {
+        accessTokenValue = options.personalAccessToken;
+        accessTokenType = 'personal';
+        await Promise.resolve(options.onAuthorize?.({ token: accessTokenValue, type: 'personal' }));
+        return;
+      }
 
-  if (mode === 'no-view') {
-    return (fn: any) => {
-      return async (props: any) => {
-        const token = options?.personalAccessToken ?? (await options?.authorize?.());
-        if (token) {
-          accessTokenValue = token;
-          accessTokenType = options?.personalAccessToken ? 'personal' : 'oauth';
-          const idToken = (await options?.client?.getTokens?.())?.idToken;
-          if (shouldInvokeOnAuthorize) {
-            await Promise.resolve(options?.onAuthorize?.({ token, type: accessTokenType, idToken }));
-          }
+      let stored = await options.getStoredToken();
+      if (!stored?.token) {
+        const authorized = await options.beginAuthorization();
+        if (!authorized) {
+          throw new Error('OAuth authorization is required');
         }
-        return await fn(props);
-      };
-    };
-  }
+        stored = await options.getStoredToken();
+      }
+
+      if (!stored?.token) {
+        throw new Error('OAuth authorization failed');
+      }
+
+      accessTokenValue = stored.token;
+      accessTokenType = 'oauth';
+      await Promise.resolve(options.onAuthorize?.({ token: stored.token, type: 'oauth', idToken: stored.idToken }));
+      return;
+    }
+
+    const token = options?.personalAccessToken ?? (await options?.authorize?.());
+    if (!token) {
+      throw new Error('No access token returned');
+    }
+    accessTokenValue = token;
+    accessTokenType = options?.personalAccessToken ? 'personal' : 'oauth';
+    const idToken = (await options?.client?.getTokens?.())?.idToken;
+    if (shouldInvokeOnAuthorize) {
+      await Promise.resolve(options?.onAuthorize?.({ token, type: accessTokenType, idToken }));
+    }
+  };
 
   return (Component: any) => {
     const WrappedComponent: React.FC<any> = (props) => {
@@ -268,8 +289,19 @@ export function withAccessToken(options: any) {
       return <Component {...props} />;
     };
 
-    WrappedComponent.displayName = `withAccessToken(${Component?.displayName || Component?.name || 'Component'})`;
-    return WrappedComponent;
+    const WrappedNoViewOrComponent = (props: any) => {
+      const mode = getOAuthRuntimeDeps().getExtensionContext().commandMode;
+      if (mode === 'no-view') {
+        return (async () => {
+          await authorizeForNoView();
+          return await Component(props);
+        })();
+      }
+      return <WrappedComponent {...props} />;
+    };
+
+    WrappedNoViewOrComponent.displayName = `withAccessToken(${Component?.displayName || Component?.name || 'Component'})`;
+    return WrappedNoViewOrComponent;
   };
 }
 

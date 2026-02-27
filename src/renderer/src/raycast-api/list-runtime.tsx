@@ -232,7 +232,7 @@ export function createListRuntime(deps: ListRuntimeDeps) {
         ) : shouldUseEmojiGridValue ? (
           groupedItems.map((group, groupIndex) => (
             <div key={groupIndex} className="mb-2">
-              {group.title && <div className="px-4 pt-2 pb-1 text-[11px] uppercase tracking-wider text-[var(--text-subtle)] font-medium select-none">{group.title}<span className="ml-2 text-[var(--text-muted)] normal-case">{group.items.length}</span></div>}
+              {group.title && <div className="px-4 pt-2 pb-1 text-[11px] tracking-[0.08em] text-[var(--text-subtle)] font-medium select-none">{group.title}<span className="ml-2 text-[var(--text-muted)]">{group.items.length}</span></div>}
               <div className="px-2 pb-1 grid gap-2" style={{ gridTemplateColumns: `repeat(8, 1fr)` }}>
                 {group.items.map(({ item, globalIdx }) => {
                   const title = typeof item.props.title === 'string' ? item.props.title : (item.props.title as any)?.value || '';
@@ -267,7 +267,7 @@ export function createListRuntime(deps: ListRuntimeDeps) {
         ) : (
           groupedItems.map((group, groupIndex) => (
             <div key={groupIndex} className="mb-0">
-              {group.title && <div className="px-4 pt-0.5 pb-1 text-[11px] uppercase tracking-wider text-[var(--text-subtle)] font-medium select-none">{group.title}</div>}
+              {group.title && <div className="px-4 pt-0.5 pb-1 text-[11px] tracking-[0.08em] text-[var(--text-subtle)] font-medium select-none">{group.title}</div>}
               {group.items.map(({ item, globalIdx }) => (
                 <ListItemRenderer
                   key={item.id}
@@ -315,7 +315,7 @@ export function createListRuntime(deps: ListRuntimeDeps) {
           {isShowingDetail ? <div className="flex flex-1 overflow-hidden"><div className="w-1/3 flex flex-col overflow-hidden">{listContent}</div>{detailElement ? <div className="flex-1 border-l border-[var(--ui-divider)] overflow-hidden">{detailElement}</div> : null}</div> : listContent}
 
           <div className="sc-glass-footer flex items-center px-4 py-2.5">
-            <div className="flex items-center gap-2 text-[var(--text-subtle)] text-xs flex-1 min-w-0 font-normal">{footerIcon ? <img src={footerIcon} alt="" className="w-4 h-4 rounded-sm object-contain flex-shrink-0" /> : null}<span className="truncate">{footerTitle}</span></div>
+            <div className="sc-footer-primary flex items-center gap-2 text-[var(--text-subtle)] text-xs flex-1 min-w-0 font-normal">{footerIcon ? <img src={footerIcon} alt="" className="w-4 h-4 rounded-sm object-contain flex-shrink-0" /> : null}<span className="truncate">{footerTitle}</span></div>
             {primaryAction && <button type="button" onClick={() => primaryAction.execute()} className="flex items-center gap-2 mr-3 text-[var(--text-primary)] hover:text-[var(--text-secondary)] transition-colors"><span className="text-xs font-semibold">{primaryAction.title}</span><kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">↩</kbd></button>}
             <button onClick={() => setShowActions(true)} className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"><span className="text-xs font-normal">Actions</span><kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">⌘</kbd><kbd className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] text-[var(--text-subtle)] font-medium">K</kbd></button>
           </div>

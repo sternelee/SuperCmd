@@ -32,6 +32,7 @@ export interface MenuBarEntry {
 export interface BackgroundNoViewRun {
   runId: string;
   bundle: ExtensionBundle;
+  launchType: 'userInitiated' | 'background';
 }
 
 export interface UseMenuBarExtensionsReturn {
