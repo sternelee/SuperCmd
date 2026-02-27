@@ -69,6 +69,11 @@ type PlaceholderGroup = {
 const MAX_VISIBLE_ICON_RESULTS = 4;
 const MAX_INLINE_QUICK_LINK_ARGUMENTS = 3;
 
+function isMetaEnterKey(event: { key: string; code?: string; metaKey?: boolean }): boolean {
+  return Boolean(event.metaKey) &&
+    (event.key === 'Enter' || event.key === 'Return' || event.code === 'Enter' || event.code === 'NumpadEnter');
+}
+
 const BASE_PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
   {
     title: 'Dynamic Values',
@@ -284,6 +289,8 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   const [showApplicationMenu, setShowApplicationMenu] = useState(false);
   const [showIconMenu, setShowIconMenu] = useState(false);
   const [selectedPlaceholderIndex, setSelectedPlaceholderIndex] = useState(-1);
+  const [selectedApplicationIndex, setSelectedApplicationIndex] = useState(-1);
+  const [selectedIconIndex, setSelectedIconIndex] = useState(-1);
   const [applicationQuery, setApplicationQuery] = useState('');
   const [iconQuery, setIconQuery] = useState('');
   const [applicationIcons, setApplicationIcons] = useState<Record<string, string>>({});
@@ -313,7 +320,11 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
   const placeholderButtonRef = useRef<HTMLButtonElement>(null);
   const placeholderItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const applicationButtonRef = useRef<HTMLButtonElement>(null);
+  const applicationSearchRef = useRef<HTMLInputElement>(null);
+  const applicationItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const iconButtonRef = useRef<HTMLButtonElement>(null);
+  const iconSearchRef = useRef<HTMLInputElement>(null);
+  const iconItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     nameRef.current?.focus();
@@ -652,6 +663,59 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     }
     return list;
   }, [filteredIconOptions, iconQuery, selectedIconOption]);
+  const applicationMenuItems = useMemo(() => {
+    const normalizedQuery = applicationQuery.trim().toLowerCase();
+    const includeDefaultBrowser =
+      normalizedQuery.length === 0 ||
+      'default browser'.includes(normalizedQuery) ||
+      'browser'.includes(normalizedQuery);
+
+    const items = filteredApplications.map((app) => ({ type: 'app' as const, app }));
+    if (includeDefaultBrowser) {
+      items.unshift({ type: 'default' as const, app: null });
+    }
+    return items;
+  }, [applicationQuery, filteredApplications]);
+
+  useEffect(() => {
+    applicationItemRefs.current = applicationItemRefs.current.slice(0, applicationMenuItems.length);
+  }, [applicationMenuItems.length]);
+
+  useEffect(() => {
+    iconItemRefs.current = iconItemRefs.current.slice(0, visibleIconOptions.length);
+  }, [visibleIconOptions.length]);
+
+  useEffect(() => {
+    if (!showApplicationMenu) {
+      setSelectedApplicationIndex(-1);
+      return;
+    }
+    if (applicationMenuItems.length === 0) {
+      setSelectedApplicationIndex(-1);
+      return;
+    }
+
+    const boundedIndex = Math.min(Math.max(selectedApplicationIndex, 0), applicationMenuItems.length - 1);
+    if (boundedIndex !== selectedApplicationIndex) {
+      setSelectedApplicationIndex(boundedIndex);
+    }
+  }, [applicationMenuItems.length, selectedApplicationIndex, showApplicationMenu]);
+
+  useEffect(() => {
+    if (!showIconMenu) {
+      setSelectedIconIndex(-1);
+      return;
+    }
+    if (visibleIconOptions.length === 0) {
+      setSelectedIconIndex(-1);
+      return;
+    }
+
+    const boundedIndex = Math.min(Math.max(selectedIconIndex, 0), visibleIconOptions.length - 1);
+    if (boundedIndex !== selectedIconIndex) {
+      setSelectedIconIndex(boundedIndex);
+    }
+  }, [selectedIconIndex, showIconMenu, visibleIconOptions.length]);
 
   useEffect(() => {
     placeholderItemRefs.current = placeholderItemRefs.current.slice(0, placeholderMenuItems.length);
@@ -810,7 +874,151 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     }
   }, [handlePlaceholderSelection, placeholderMenuItems, selectedPlaceholderIndex, showPlaceholderMenu]);
 
+  const commitApplicationSelection = useCallback((index: number) => {
+    if (applicationMenuItems.length === 0) return;
+    const bounded = Math.min(Math.max(index, 0), Math.max(0, applicationMenuItems.length - 1));
+    const selectedEntry = applicationMenuItems[bounded];
+    if (!selectedEntry) return;
+    if (selectedEntry?.type === 'app' && selectedEntry.app?.path) {
+      setSelectedAppPath(selectedEntry.app.path);
+    } else {
+      setSelectedAppPath('');
+    }
+    setShowApplicationMenu(false);
+    requestAnimationFrame(() => {
+      applicationButtonRef.current?.focus();
+    });
+  }, [applicationMenuItems]);
+
+  const focusApplicationItem = useCallback((index: number) => {
+    requestAnimationFrame(() => {
+      const target = applicationItemRefs.current[index];
+      if (!target) return;
+      target.focus();
+      target.scrollIntoView({ block: 'nearest' });
+    });
+  }, []);
+
+  const handleApplicationMenuKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (!showApplicationMenu) return;
+    if (applicationMenuItems.length === 0) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setShowApplicationMenu(false);
+        requestAnimationFrame(() => {
+          applicationButtonRef.current?.focus();
+        });
+      }
+      return;
+    }
+    const maxIndex = Math.max(0, applicationMenuItems.length - 1);
+    const currentIndex = Math.min(Math.max(selectedApplicationIndex >= 0 ? selectedApplicationIndex : 0, 0), maxIndex);
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      event.stopPropagation();
+      const nextIndex = Math.min(currentIndex + 1, maxIndex);
+      setSelectedApplicationIndex(nextIndex);
+      focusApplicationItem(nextIndex);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      const nextIndex = Math.max(currentIndex - 1, 0);
+      setSelectedApplicationIndex(nextIndex);
+      focusApplicationItem(nextIndex);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      commitApplicationSelection(currentIndex);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      setShowApplicationMenu(false);
+      requestAnimationFrame(() => {
+        applicationButtonRef.current?.focus();
+      });
+    }
+  }, [applicationMenuItems.length, commitApplicationSelection, focusApplicationItem, selectedApplicationIndex, showApplicationMenu]);
+
+  const commitIconSelection = useCallback((index: number) => {
+    if (visibleIconOptions.length === 0) return;
+    const bounded = Math.min(Math.max(index, 0), Math.max(0, visibleIconOptions.length - 1));
+    const selectedOption = visibleIconOptions[bounded];
+    if (selectedOption) {
+      setIcon(selectedOption.value as QuickLinkIcon);
+    }
+    setShowIconMenu(false);
+    requestAnimationFrame(() => {
+      iconButtonRef.current?.focus();
+    });
+  }, [visibleIconOptions]);
+
+  const focusIconItem = useCallback((index: number) => {
+    requestAnimationFrame(() => {
+      const target = iconItemRefs.current[index];
+      if (!target) return;
+      target.focus();
+      target.scrollIntoView({ block: 'nearest' });
+    });
+  }, []);
+
+  const handleIconMenuKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (!showIconMenu) return;
+    if (visibleIconOptions.length === 0) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setShowIconMenu(false);
+        requestAnimationFrame(() => {
+          iconButtonRef.current?.focus();
+        });
+      }
+      return;
+    }
+    const maxIndex = Math.max(0, visibleIconOptions.length - 1);
+    const currentIndex = Math.min(Math.max(selectedIconIndex >= 0 ? selectedIconIndex : 0, 0), maxIndex);
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      event.stopPropagation();
+      const nextIndex = Math.min(currentIndex + 1, maxIndex);
+      setSelectedIconIndex(nextIndex);
+      focusIconItem(nextIndex);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      const nextIndex = Math.max(currentIndex - 1, 0);
+      setSelectedIconIndex(nextIndex);
+      focusIconItem(nextIndex);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      commitIconSelection(currentIndex);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      setShowIconMenu(false);
+      requestAnimationFrame(() => {
+        iconButtonRef.current?.focus();
+      });
+    }
+  }, [commitIconSelection, focusIconItem, selectedIconIndex, showIconMenu, visibleIconOptions.length]);
+
   const submit = async () => {
+    if (saving) return;
     const nextErrors: Record<string, string> = {};
     const trimmedName = name.trim();
     const trimmedTemplate = urlTemplate.trim();
@@ -849,8 +1057,21 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
     }
   };
 
+  useEffect(() => {
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
+      if (!isMetaEnterKey(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void submit();
+    };
+
+    window.addEventListener('keydown', onWindowKeyDown, true);
+    return () => window.removeEventListener('keydown', onWindowKeyDown, true);
+  }, [submit]);
+
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === 'Enter' && event.metaKey) {
+    if (isMetaEnterKey(event)) {
       event.preventDefault();
       void submit();
       return;
@@ -979,7 +1200,27 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                 onClick={() => {
                   refreshApplicationMenuPos();
                   setApplicationQuery('');
-                  setShowApplicationMenu((prev) => !prev);
+                  setShowApplicationMenu((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setSelectedApplicationIndex(0);
+                    }
+                    return next;
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    refreshApplicationMenuPos();
+                    setApplicationQuery('');
+                    setSelectedApplicationIndex(0);
+                    setShowApplicationMenu(true);
+                    return;
+                  }
+                  if (event.key === 'Escape' && showApplicationMenu) {
+                    event.preventDefault();
+                    setShowApplicationMenu(false);
+                  }
                 }}
                 className="flex-1 bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] outline-none hover:border-[var(--snippet-divider-strong)] transition-colors text-left flex items-center justify-between gap-2"
               >
@@ -1012,8 +1253,28 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
                 onClick={(event) => {
                   const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
                   refreshIconMenuPos(rect);
-                  setShowIconMenu((prev) => !prev);
+                  setShowIconMenu((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setSelectedIconIndex(0);
+                    }
+                    return next;
+                  });
                   setIconQuery('');
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    refreshIconMenuPos();
+                    setIconQuery('');
+                    setSelectedIconIndex(0);
+                    setShowIconMenu(true);
+                    return;
+                  }
+                  if (event.key === 'Escape' && showIconMenu) {
+                    event.preventDefault();
+                    setShowIconMenu(false);
+                  }
                 }}
                 className="flex-1 bg-white/[0.06] border border-[var(--snippet-divider)] rounded-lg px-2.5 py-1.5 text-white/90 text-[13px] outline-none hover:border-[var(--snippet-divider-strong)] transition-colors text-left flex items-center justify-between gap-2"
               >
@@ -1047,6 +1308,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
         <div
           id="quicklink-application-menu"
           className="fixed z-[120] rounded-lg overflow-hidden sc-dropdown-surface"
+          onKeyDown={handleApplicationMenuKeyDown}
           style={{
             top: applicationMenuPos.top,
             left: applicationMenuPos.left,
@@ -1055,57 +1317,50 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
         >
           <div className="px-2 py-1.5 border-b sc-dropdown-divider">
             <input
+              ref={applicationSearchRef}
               type="text"
               value={applicationQuery}
               onChange={(event) => setApplicationQuery(event.target.value)}
+              onKeyDown={handleApplicationMenuKeyDown}
               placeholder="Search applications..."
               className="w-full px-1.5 py-1 bg-transparent text-[13px] text-white/75 placeholder:text-[color:var(--text-subtle)] outline-none"
               autoFocus
             />
           </div>
           <div className="overflow-y-auto py-1" style={{ maxHeight: Math.min(applicationMenuPos.maxHeight, 180) }}>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedAppPath('');
-                setShowApplicationMenu(false);
-              }}
-              className="sc-dropdown-item w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 flex items-center gap-2"
-              aria-selected={!selectedAppPath}
-            >
-              <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
-                <Globe className="w-3.5 h-3.5 text-white/65" />
-              </span>
-              <span className="min-w-0 flex-1 truncate">Default Browser</span>
-              {!selectedAppPath ? <Check className="w-3.5 h-3.5 text-white/65 flex-shrink-0" /> : null}
-            </button>
-            {filteredApplications.map((app) => {
-              const iconDataUrl = applicationIcons[app.path] || app.iconDataUrl;
-              const isSelected = selectedAppPath === app.path;
+            {applicationMenuItems.map((entry, index) => {
+              const app = entry.type === 'app' ? entry.app : null;
+              const iconDataUrl = app ? (applicationIcons[app.path] || app.iconDataUrl) : null;
+              const isSelectedChoice = app ? selectedAppPath === app.path : !selectedAppPath;
+              const isHighlighted = selectedApplicationIndex === index;
               return (
                 <button
-                  key={app.path}
+                  key={app?.path || '__default_browser__'}
                   type="button"
-                  onClick={() => {
-                    setSelectedAppPath(app.path);
-                    setShowApplicationMenu(false);
+                  ref={(el) => {
+                    applicationItemRefs.current[index] = el;
                   }}
-                  className="sc-dropdown-item w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 flex items-center gap-2"
-                  aria-selected={isSelected}
+                  tabIndex={isHighlighted ? 0 : -1}
+                  onFocus={() => setSelectedApplicationIndex(index)}
+                  onMouseMove={() => setSelectedApplicationIndex(index)}
+                  onKeyDown={handleApplicationMenuKeyDown}
+                  onClick={() => commitApplicationSelection(index)}
+                  className="sc-dropdown-item w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 flex items-center gap-2 outline-none focus-visible:outline-none"
+                  aria-selected={isHighlighted}
                 >
                   <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
                     {iconDataUrl ? (
                       <img src={iconDataUrl} alt="" className="w-4 h-4 object-contain" draggable={false} />
                     ) : (
-                      <Globe className="w-3.5 h-3.5 text-white/55" />
+                      <Globe className="w-3.5 h-3.5 text-white/65" />
                     )}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{app.name}</span>
-                  {isSelected ? <Check className="w-3.5 h-3.5 text-white/65 flex-shrink-0" /> : null}
+                  <span className="min-w-0 flex-1 truncate">{app?.name || 'Default Browser'}</span>
+                  {isSelectedChoice ? <Check className="w-3.5 h-3.5 text-white/65 flex-shrink-0" /> : null}
                 </button>
               );
             })}
-            {filteredApplications.length === 0 ? (
+            {applicationMenuItems.length === 0 ? (
               <div className="px-2.5 py-2 text-xs text-white/35">No applications found</div>
             ) : null}
           </div>
@@ -1117,6 +1372,7 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
         <div
           id="quicklink-icon-menu"
           className="fixed z-[120] rounded-lg overflow-hidden sc-dropdown-surface"
+          onKeyDown={handleIconMenuKeyDown}
           style={{
             top: iconMenuPos.top,
             left: iconMenuPos.left,
@@ -1125,27 +1381,34 @@ const QuickLinkForm: React.FC<QuickLinkFormProps> = ({ quickLink, onSave, onCanc
         >
           <div className="px-2 py-1.5 border-b sc-dropdown-divider">
             <input
+              ref={iconSearchRef}
               type="text"
               value={iconQuery}
               onChange={(event) => setIconQuery(event.target.value)}
+              onKeyDown={handleIconMenuKeyDown}
               placeholder="Search icons..."
               className="w-full px-1.5 py-1 bg-transparent text-[13px] text-white/75 placeholder:text-[color:var(--text-subtle)] outline-none"
               autoFocus
             />
           </div>
           <div className="overflow-y-auto py-1" style={{ maxHeight: Math.min(iconMenuPos.maxHeight, 136) }}>
-            {visibleIconOptions.map((option) => {
+            {visibleIconOptions.map((option, index) => {
               const isSelected = icon === option.value;
+              const isHighlighted = selectedIconIndex === index;
               return (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => {
-                    setIcon(option.value as QuickLinkIcon);
-                    setShowIconMenu(false);
+                  ref={(el) => {
+                    iconItemRefs.current[index] = el;
                   }}
-                  className="sc-dropdown-item w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 flex items-center gap-2"
-                  aria-selected={isSelected}
+                  tabIndex={isHighlighted ? 0 : -1}
+                  onFocus={() => setSelectedIconIndex(index)}
+                  onMouseMove={() => setSelectedIconIndex(index)}
+                  onKeyDown={handleIconMenuKeyDown}
+                  onClick={() => commitIconSelection(index)}
+                  className="sc-dropdown-item w-full text-left px-2.5 py-1.5 text-[13px] text-white/85 flex items-center gap-2 outline-none focus-visible:outline-none"
+                  aria-selected={isHighlighted}
                 >
                   <span className="w-4 h-4 flex items-center justify-center overflow-hidden flex-shrink-0">
                     <QuickLinkIconPreview icon={option.value} appIconDataUrl={selectedAppResolvedIconDataUrl} />
@@ -1253,6 +1516,7 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
   const firstDynamicInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const actionsOverlayRef = useRef<HTMLDivElement>(null);
 
   const isGlassyTheme =
     document.documentElement.classList.contains('sc-glassy') ||
@@ -1304,11 +1568,25 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
     itemRefs.current = itemRefs.current.slice(0, filteredQuickLinks.length);
   }, [filteredQuickLinks.length]);
 
-  useEffect(() => {
-    if (!showActions) {
-      setSelectedActionIndex(0);
+  const focusActionsOverlay = useCallback(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+      active.blur();
     }
-  }, [showActions]);
+    actionsOverlayRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!showActions) return;
+    setSelectedActionIndex(0);
+    const timer = window.setTimeout(() => {
+      focusActionsOverlay();
+      requestAnimationFrame(() => {
+        focusActionsOverlay();
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [focusActionsOverlay, showActions]);
 
   const scrollToSelected = useCallback(() => {
     const selectedElement = itemRefs.current[selectedIndex];
@@ -1580,7 +1858,17 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
   const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (event.key === 'k' && event.metaKey && !event.repeat) {
       event.preventDefault();
-      setShowActions((prev) => !prev);
+      event.stopPropagation();
+      setShowActions((prev) => {
+        const next = !prev;
+        if (next) {
+          const active = document.activeElement as HTMLElement | null;
+          if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+            active.blur();
+          }
+        }
+        return next;
+      });
       return;
     }
 
@@ -1750,6 +2038,9 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
                       }));
                     }}
                     onKeyDown={(event) => {
+                      if (showActions) {
+                        return;
+                      }
                       if (event.key === 'Tab') {
                         event.preventDefault();
                         event.stopPropagation();
@@ -2019,7 +2310,9 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
           style={{ background: 'var(--bg-scrim)' }}
         >
           <div
-            className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl"
+            ref={actionsOverlayRef}
+            className="absolute bottom-12 right-3 w-80 max-h-[65vh] rounded-xl overflow-hidden flex flex-col shadow-2xl outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0"
+            tabIndex={0}
             style={
               isNativeLiquidGlass
                 ? {
@@ -2043,37 +2336,62 @@ const QuickLinkManager: React.FC<QuickLinkManagerProps> = ({ onClose, initialVie
                     border: '1px solid var(--border-primary)',
                   }
             }
+            onFocus={(e) => {
+              (e.currentTarget as HTMLDivElement).style.outline = 'none';
+            }}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex-1 overflow-y-auto py-1">
               {actions.map((action, index) => (
-                <button
-                  key={action.title}
+                <div
+                  key={`${action.title}-${index}`}
+                  className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
+                    index === selectedActionIndex
+                      ? action.style === 'destructive'
+                        ? 'bg-[var(--action-menu-selected-bg)] text-[var(--status-danger-faded)]'
+                        : 'bg-[var(--action-menu-selected-bg)] text-[var(--text-primary)]'
+                      : ''
+                  } ${
+                    action.style === 'destructive'
+                      ? 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--status-danger-faded)]'
+                      : 'hover:bg-[var(--overlay-item-hover-bg)] text-[var(--text-secondary)]'
+                  }`}
+                  style={
+                    index === selectedActionIndex
+                      ? {
+                          background: 'var(--action-menu-selected-bg)',
+                          borderColor: 'var(--action-menu-selected-border)',
+                          boxShadow: 'var(--action-menu-selected-shadow)',
+                        }
+                      : undefined
+                  }
+                  onMouseMove={() => setSelectedActionIndex(index)}
                   onClick={() => {
                     void Promise.resolve(action.execute());
                     setShowActions(false);
                   }}
-                  className={`w-full px-3 py-2 text-left flex items-center justify-between gap-3 transition-colors ${
-                    index === selectedActionIndex ? 'bg-white/[0.1]' : 'hover:bg-white/[0.06]'
-                  } ${action.style === 'destructive' ? 'text-red-300' : 'text-white/85'}`}
                 >
-                  <span className="flex items-center gap-2 text-sm">
-                    {action.icon}
-                    <span>{action.title}</span>
+                  {action.icon ? (
+                    <span className={action.style === 'destructive' ? 'text-[var(--status-danger-faded)]' : 'text-[var(--text-muted)]'}>
+                      {action.icon}
+                    </span>
+                  ) : null}
+                  <span className="flex-1 text-sm truncate">
+                    {action.title}
                   </span>
                   {action.shortcut ? (
-                    <span className="flex items-center gap-1">
-                      {action.shortcut.map((key) => (
+                    <span className="flex items-center gap-0.5">
+                      {action.shortcut.map((key, keyIdx) => (
                         <kbd
-                          key={`${action.title}-${key}`}
-                          className="inline-flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded bg-[var(--kbd-bg)] text-[10px] text-[var(--text-muted)] font-medium"
+                          key={`${index}-${key}-${keyIdx}`}
+                          className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded bg-[var(--kbd-bg)] text-[11px] font-medium text-[var(--text-muted)]"
                         >
                           {key}
                         </kbd>
                       ))}
                     </span>
                   ) : null}
-                </button>
+                </div>
               ))}
             </div>
           </div>

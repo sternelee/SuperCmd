@@ -82,6 +82,7 @@ const MAX_LAUNCHER_FILE_RESULTS = 30;
 const MAX_LAUNCHER_FILE_RESULT_ICONS = MAX_LAUNCHER_FILE_RESULTS;
 const MIN_LAUNCHER_FILE_QUERY_LENGTH = 2;
 const MAX_INLINE_EXTENSION_ARGUMENTS = 3;
+const MAX_INLINE_QUICK_LINK_ARGUMENTS = 3;
 
 function asTildePath(filePath: string, homeDir: string): string {
   if (!homeDir) return filePath;
@@ -131,6 +132,22 @@ function isEditableElement(element: Element | null): boolean {
     tagName === 'TEXTAREA' ||
     tagName === 'SELECT'
   );
+}
+
+function normalizeQuickLinkDynamicFields(fields: QuickLinkDynamicField[]): QuickLinkDynamicField[] {
+  const map = new Map<string, QuickLinkDynamicField>();
+  for (const field of fields || []) {
+    const rawKey = String(field?.key || field?.name || '').trim();
+    if (!rawKey) continue;
+    const normalizedKey = rawKey.toLowerCase();
+    if (map.has(normalizedKey)) continue;
+    map.set(normalizedKey, {
+      key: rawKey,
+      name: String(field?.name || rawKey),
+      defaultValue: field?.defaultValue,
+    });
+  }
+  return Array.from(map.values());
 }
 
 const App: React.FC = () => {
@@ -1192,7 +1209,7 @@ const App: React.FC = () => {
     [inlineQuickLinkDynamicFieldsById, selectedQuickLinkId]
   );
   const selectedInlineQuickLinkDynamicFields = useMemo(
-    () => selectedQuickLinkDynamicFields.slice(0, MAX_INLINE_EXTENSION_ARGUMENTS),
+    () => selectedQuickLinkDynamicFields.slice(0, MAX_INLINE_QUICK_LINK_ARGUMENTS),
     [selectedQuickLinkDynamicFields]
   );
   const selectedInlineQuickLinkDynamicValues = useMemo(
@@ -1221,14 +1238,17 @@ const App: React.FC = () => {
     [selectedCommand]
   );
   const getDynamicFieldsForQuickLink = useCallback(
-    async (quickLinkId: string): Promise<QuickLinkDynamicField[]> => {
+    async (
+      quickLinkId: string,
+      options?: { forceRefresh?: boolean }
+    ): Promise<QuickLinkDynamicField[]> => {
       const normalizedId = String(quickLinkId || '').trim();
       if (!normalizedId) return [];
       const cached = inlineQuickLinkDynamicFieldsById[normalizedId];
-      if (cached) return cached;
+      if (cached && !options?.forceRefresh) return cached;
       try {
         const fetched = await window.electron.quickLinkGetDynamicFields(normalizedId);
-        const normalizedFields = (Array.isArray(fetched) ? fetched : []).filter((field) => field?.key);
+        const normalizedFields = normalizeQuickLinkDynamicFields(Array.isArray(fetched) ? fetched : []);
         setInlineQuickLinkDynamicFieldsById((prev) => ({
           ...prev,
           [normalizedId]: normalizedFields,
@@ -1277,7 +1297,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!isLauncherModeActive || !selectedQuickLinkId) return;
-    void getDynamicFieldsForQuickLink(selectedQuickLinkId);
+    void getDynamicFieldsForQuickLink(selectedQuickLinkId, { forceRefresh: true });
   }, [getDynamicFieldsForQuickLink, isLauncherModeActive, selectedQuickLinkId]);
 
   useEffect(() => {
@@ -1842,7 +1862,7 @@ const App: React.FC = () => {
       const quickLinkId = getQuickLinkIdFromCommandId(command.id);
       if (!quickLinkId) return false;
 
-      const fields = await getDynamicFieldsForQuickLink(quickLinkId);
+      const fields = await getDynamicFieldsForQuickLink(quickLinkId, { forceRefresh: true });
       const inlineValues = { ...(inlineQuickLinkDynamicValuesById[quickLinkId] || {}) };
       if (selectedQuickLinkId === quickLinkId && selectedInlineQuickLinkDynamicFields.length > 0) {
         selectedInlineQuickLinkDynamicFields.forEach((field, index) => {
@@ -1861,7 +1881,7 @@ const App: React.FC = () => {
 
       if (!options?.skipPrompt) {
         if (fields.length > 0) {
-          if (fields.length <= MAX_INLINE_EXTENSION_ARGUMENTS) {
+          if (fields.length <= MAX_INLINE_QUICK_LINK_ARGUMENTS) {
             const openedInline = await window.electron.quickLinkOpen(quickLinkId, resolvedValuesFromInline);
             if (!openedInline) return false;
             setQuickLinkDynamicPrompt(null);
