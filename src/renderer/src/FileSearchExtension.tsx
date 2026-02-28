@@ -272,8 +272,24 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
     const timer = window.setTimeout(async () => {
       setIsLoading(true);
       try {
-        const indexed = await window.electron.searchIndexedFiles(trimmed, { limit: 220 });
+        let indexed = await window.electron.searchIndexedFiles(trimmed, { limit: 1200 });
         if (searchRequestRef.current !== requestId) return;
+
+        if (indexed.length === 0) {
+          const status = await window.electron.getFileSearchIndexStatus().catch(() => null);
+          if (searchRequestRef.current !== requestId) return;
+
+          if (status && !status.ready && !status.indexing) {
+            await window.electron.refreshFileSearchIndex('file-search-query').catch(() => null);
+          }
+
+          if (status && (!status.ready || status.indexing)) {
+            await new Promise((resolve) => window.setTimeout(resolve, 220));
+            if (searchRequestRef.current !== requestId) return;
+            indexed = await window.electron.searchIndexedFiles(trimmed, { limit: 1200 });
+            if (searchRequestRef.current !== requestId) return;
+          }
+        }
 
         const terms = getNormalizedTerms(trimmed);
         const scopePrefix = `${currentScope.path.replace(/\/$/, '')}/`;
@@ -542,7 +558,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
 
   return (
     <div className="w-full h-full flex flex-col relative" onKeyDown={handleKeyDown} tabIndex={-1}>
-      <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-[var(--ui-divider)]">
+      <div className="flex items-center gap-2 px-3.5 py-2 border-b border-[var(--ui-divider)]">
         <button
           onClick={() => {
             if (showDetails) {
@@ -572,12 +588,12 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
               className="flex-1 bg-transparent border-none outline-none text-white/90 placeholder-white/35 text-[13px] font-medium tracking-wide min-w-0"
               autoFocus
             />
-            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] text-[var(--text-secondary)] min-w-[170px] justify-between">
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] text-[var(--text-secondary)] min-w-[160px] justify-between">
               <span className="text-[10px] uppercase tracking-wide text-white/45">Scope</span>
               <select
                 value={scopeId}
                 onChange={(e) => setScopeId(e.target.value)}
-                className="bg-transparent border-none outline-none focus:outline-none text-[12px] font-medium text-[var(--text-primary)] pr-4 appearance-none"
+                className="bg-transparent border-none outline-none focus:outline-none text-[11px] font-medium text-[var(--text-primary)] pr-4 appearance-none"
               >
                 {scopes.map((scope) => (
                   <option key={scope.id} value={scope.id} className="bg-[var(--bg-overlay)]">
@@ -592,12 +608,12 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
       </div>
 
       {showDetails ? (
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3.5">
           {selectedPath ? (
             <>
-              <div className="flex justify-center mb-4">
+              <div className="flex justify-center mb-3">
                 {selectedImagePreviewSrc ? (
-                  <div className="w-full max-w-[620px] h-[320px] rounded-2xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] overflow-hidden flex items-center justify-center p-3">
+                  <div className="w-full max-w-[520px] h-[220px] rounded-xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] overflow-hidden flex items-center justify-center p-2.5">
                     <img
                       src={selectedImagePreviewSrc}
                       alt={basename(selectedPath)}
@@ -607,20 +623,20 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                     />
                   </div>
                 ) : iconsByPath[selectedPath] ? (
-                  <img src={iconsByPath[selectedPath]} alt="" className="w-40 h-40 object-contain" draggable={false} />
+                  <img src={iconsByPath[selectedPath]} alt="" className="w-20 h-20 object-contain" draggable={false} />
                 ) : (
-                  <div className="w-40 h-40 rounded-2xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] flex items-center justify-center">
-                    <FolderOpen className="w-8 h-8 text-white/30" />
+                  <div className="w-20 h-20 rounded-xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] flex items-center justify-center">
+                    <FolderOpen className="w-5 h-5 text-white/30" />
                   </div>
                 )}
               </div>
-              <div className="text-[18px] font-semibold text-white/90 mb-3">Metadata</div>
+              <div className="text-[15px] font-semibold text-white/90 mb-2">Metadata</div>
               {metadataRows.length > 0 ? (
                 <div className="space-y-1">
                   {metadataRows.map(([label, value]) => (
-                    <div key={label} className="grid grid-cols-[120px_1fr] items-center gap-2 pb-2 border-b border-[var(--ui-divider)]">
-                      <div className="text-white/55 text-[12px] font-semibold">{label}</div>
-                      <div className="text-white/92 text-[13px] font-semibold text-right truncate">{value}</div>
+                    <div key={label} className="grid grid-cols-[100px_1fr] items-center gap-2 pb-1.5 border-b border-[var(--ui-divider)]">
+                      <div className="text-white/55 text-[11px] font-semibold">{label}</div>
+                      <div className="text-white/92 text-[12px] font-semibold text-right truncate">{value}</div>
                     </div>
                   ))}
                 </div>
@@ -644,7 +660,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                 {indexStatus?.indexing ? 'Indexing in progress. Results will improve shortly.' : 'No files found'}
               </div>
             ) : (
-              <div className="p-2 space-y-1">
+              <div className="p-1.5 space-y-0.5">
                 <div className="px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-white/45 font-semibold">Files</div>
                 <div className="space-y-0.5">
                   {visibleResults.map((filePath, index) => {
@@ -660,17 +676,17 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                         tabIndex={-1}
                         onClick={() => setSelectedIndex(index)}
                         onDoubleClick={() => openSelectedFile()}
-                        className={`w-full text-left px-2 py-1.5 rounded-md border border-transparent cursor-pointer select-none transition-colors ${
+                        className={`w-full text-left px-2 py-1.5 rounded-md border cursor-pointer select-none transition-colors ${
                           selected
-                            ? 'bg-[var(--launcher-card-selected-bg)]'
-                            : 'bg-transparent hover:bg-[var(--launcher-card-hover-bg)]'
+                            ? 'bg-[var(--launcher-card-selected-bg)] border-[var(--launcher-card-border)]'
+                            : 'bg-transparent border-transparent hover:bg-[var(--launcher-card-hover-bg)] hover:border-[var(--launcher-card-border)]'
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           {icon ? (
-                            <img src={icon} alt="" className="w-5 h-5 object-contain flex-shrink-0" draggable={false} />
+                            <img src={icon} alt="" className="w-[18px] h-[18px] object-contain flex-shrink-0" draggable={false} />
                           ) : (
-                            <div className="w-5 h-5 rounded-md bg-[var(--launcher-card-bg)] flex items-center justify-center flex-shrink-0">
+                            <div className="w-[18px] h-[18px] rounded-md bg-[var(--launcher-card-bg)] flex items-center justify-center flex-shrink-0">
                               <Search className="w-3 h-3 text-white/35" />
                             </div>
                           )}
@@ -687,12 +703,12 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3.5">
             {selectedPath ? (
               <>
-                <div className="flex justify-center mb-4">
+                <div className="flex justify-center mb-3">
                   {selectedImagePreviewSrc ? (
-                    <div className="w-full max-w-[360px] h-52 rounded-2xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] overflow-hidden flex items-center justify-center p-2.5">
+                    <div className="w-full max-w-[320px] h-36 rounded-xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] overflow-hidden flex items-center justify-center p-2">
                       <img
                         src={selectedImagePreviewSrc}
                         alt={basename(selectedPath)}
@@ -702,20 +718,20 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                       />
                     </div>
                   ) : iconsByPath[selectedPath] ? (
-                    <img src={iconsByPath[selectedPath]} alt="" className="w-28 h-28 object-contain" draggable={false} />
+                    <img src={iconsByPath[selectedPath]} alt="" className="w-14 h-14 object-contain" draggable={false} />
                   ) : (
-                    <div className="w-28 h-28 rounded-2xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] flex items-center justify-center">
-                      <FolderOpen className="w-7 h-7 text-white/30" />
+                    <div className="w-14 h-14 rounded-xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] flex items-center justify-center">
+                      <FolderOpen className="w-[18px] h-[18px] text-white/30" />
                     </div>
                   )}
                 </div>
-                <div className="text-[18px] font-semibold text-white/90 mb-3">Metadata</div>
+                <div className="text-[14px] font-semibold text-white/90 mb-2">Metadata</div>
                 {metadataRows.length > 0 ? (
                   <div className="space-y-1">
                     {metadataRows.map(([label, value]) => (
-                      <div key={label} className="grid grid-cols-[96px_1fr] items-center gap-2 pb-1.5 border-b border-[var(--ui-divider)]">
-                        <div className="text-white/55 text-[11px] font-semibold">{label}</div>
-                        <div className="text-white/92 text-[12px] font-semibold text-right truncate">{value}</div>
+                      <div key={label} className="grid grid-cols-[84px_1fr] items-center gap-2 pb-1 border-b border-[var(--ui-divider)]">
+                        <div className="text-white/55 text-[10px] font-semibold">{label}</div>
+                        <div className="text-white/90 text-[11px] font-semibold text-right truncate">{value}</div>
                       </div>
                     ))}
                   </div>
@@ -752,12 +768,19 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
       />
 
       {showActions ? (
-        <div className="absolute inset-0 bg-black/30 flex items-center justify-center" onClick={() => setShowActions(false)}>
+        <div
+          className="fixed inset-0 z-50"
+          style={{ background: 'var(--bg-scrim)' }}
+          onClick={() => setShowActions(false)}
+        >
           <div
-            className="w-[380px] rounded-xl border p-1.5"
+            className="absolute w-[380px] max-h-[65vh] rounded-xl border p-1.5 overflow-y-auto custom-scrollbar"
             style={
               isGlassyTheme
                 ? {
+                    right: '12px',
+                    bottom: '52px',
+                    maxWidth: 'calc(100vw - 24px)',
                     background:
                       'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
                     backdropFilter: 'blur(96px) saturate(190%)',
@@ -765,6 +788,9 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
                     borderColor: 'rgba(var(--on-surface-rgb), 0.05)',
                   }
                 : {
+                    right: '12px',
+                    bottom: '52px',
+                    maxWidth: 'calc(100vw - 24px)',
                     background: 'var(--card-bg)',
                     backdropFilter: 'blur(40px)',
                     WebkitBackdropFilter: 'blur(40px)',

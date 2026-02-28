@@ -524,6 +524,24 @@ html {
     rgba(var(--surface-base-rgb), 0.3);
 }
 
+.sc-native-liquid-glass {
+  --glass-outline: rgba(var(--on-surface-rgb), 0.1);
+  --ui-divider: rgba(var(--on-surface-rgb), 0.12);
+  --ui-panel-border: rgba(var(--on-surface-rgb), 0.16);
+  --ui-segment-border: rgba(var(--on-surface-rgb), 0.18);
+}
+
+.dark.sc-native-liquid-glass {
+  --glass-outline: rgba(255, 255, 255, 0.045);
+  --ui-divider: rgba(255, 255, 255, 0.05);
+  --ui-panel-border: rgba(255, 255, 255, 0.07);
+  --ui-segment-border: rgba(255, 255, 255, 0.08);
+}
+
+.sc-native-liquid-glass .glass-effect::after {
+  border-color: var(--glass-outline);
+}
+
 .sc-native-liquid-glass .sc-glass-footer {
   position: relative;
   overflow: hidden;

@@ -40,7 +40,7 @@ type IndexSnapshot = {
 
 const SEARCH_TOKEN_SPLIT_REGEX = /[^a-z0-9]+/g;
 const MAX_PREFIX_LENGTH = 12;
-const MAX_INDEX_ENTRIES = 300_000;
+const MAX_INDEX_ENTRIES = 800_000;
 const DEFAULT_MAX_RESULTS = 80;
 const MIN_REBUILD_GAP_MS = 45_000;
 const DEFAULT_REFRESH_INTERVAL_MS = 8 * 60_000;
@@ -77,8 +77,6 @@ export const FILE_SEARCH_INDEX_EXCLUDED_DIRECTORY_NAMES = [
 
 // Keep indexing inside user content areas and avoid macOS/system-heavy trees.
 export const FILE_SEARCH_INDEX_EXCLUDED_HOME_TOP_LEVEL_DIRECTORIES = [
-  'Library',
-  'Applications',
   '.Trash',
 ] as const;
 
@@ -205,15 +203,18 @@ async function buildIndexSnapshot(homeDir: string): Promise<IndexSnapshot> {
     builtAt: Date.now(),
   };
 
-  const walkStack: string[] = [...includeRoots];
+  // Breadth-first traversal avoids over-indexing one deep subtree first.
+  const walkQueue: string[] = [...includeRoots];
+  let queueIndex = 0;
   let scannedDirectories = 0;
 
-  while (walkStack.length > 0) {
+  while (queueIndex < walkQueue.length) {
     if (snapshot.entries.length >= MAX_INDEX_ENTRIES) {
       break;
     }
 
-    const currentDir = walkStack.pop();
+    const currentDir = walkQueue[queueIndex];
+    queueIndex += 1;
     if (!currentDir) break;
 
     let dirents: fs.Dirent[] = [];
@@ -239,7 +240,7 @@ async function buildIndexSnapshot(homeDir: string): Promise<IndexSnapshot> {
           parentPath: currentDir,
           isDirectory: true,
         });
-        walkStack.push(absolutePath);
+        walkQueue.push(absolutePath);
         continue;
       }
 

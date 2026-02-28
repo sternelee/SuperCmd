@@ -79,7 +79,7 @@ function getQuickLinkIdFromCommandId(commandId: string): string | null {
 
 const FILE_RESULT_COMMAND_PREFIX = 'system-file-result:';
 const MAX_LAUNCHER_FILE_RESULTS = 30;
-const MAX_LAUNCHER_FILE_CANDIDATE_RESULTS = 220;
+const MAX_LAUNCHER_FILE_CANDIDATE_RESULTS = 1200;
 const MAX_LAUNCHER_FILE_RESULT_ICONS = MAX_LAUNCHER_FILE_RESULTS;
 const MIN_LAUNCHER_FILE_QUERY_LENGTH = 2;
 const MAX_INLINE_EXTENSION_ARGUMENTS = 3;
@@ -3442,13 +3442,7 @@ const App: React.FC = () => {
                     : undefined
                 }
                 onClick={async () => {
-                  console.log('[CTX-MENU] clicked action:', action.id, action.title);
-                  try {
-                    await Promise.resolve(action.execute());
-                    console.log('[CTX-MENU] action executed successfully');
-                  } catch (err) {
-                    console.error('[CTX-MENU] action.execute() threw:', err);
-                  }
+                  await Promise.resolve(action.execute());
                   setContextMenu(null);
                   restoreLauncherFocus();
                 }}
