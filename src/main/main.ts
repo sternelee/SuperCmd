@@ -847,7 +847,7 @@ function computeDetachedPopupPosition(
   if (popupName === DETACHED_WINDOW_MANAGER_WINDOW_NAME) {
     return {
       x: workArea.x + workArea.width - width - 20,
-      y: workArea.y + 16,
+      y: workArea.y + workArea.height - height - 20,
     };
   }
 
@@ -2442,7 +2442,7 @@ function scrubInternalClipboardProbe(reason: string): void {
   }
 }
 
-type OnboardingPermissionTarget = 'accessibility' | 'input-monitoring' | 'microphone' | 'speech-recognition';
+type OnboardingPermissionTarget = 'accessibility' | 'input-monitoring' | 'microphone' | 'speech-recognition' | 'home-folder';
 type OnboardingPermissionResult = {
   granted: boolean;
   requested: boolean;
@@ -2459,6 +2459,10 @@ type MicrophonePermissionResult = {
   status: MicrophoneAccessStatus;
   canPrompt: boolean;
   error?: string;
+};
+type HomeFolderAccessProbeResult = {
+  granted: boolean;
+  deniedPaths: string[];
 };
 
 function describeMicrophoneStatus(status: MicrophoneAccessStatus): string {
@@ -2489,6 +2493,80 @@ function readMicrophoneAccessStatus(): MicrophoneAccessStatus {
     return 'unknown';
   } catch {
     return 'unknown';
+  }
+}
+
+function formatHomeScopedPath(candidatePath: string, homeDir: string): string {
+  if (!candidatePath) return '';
+  if (candidatePath === homeDir) return '~';
+  if (candidatePath.startsWith(`${homeDir}${path.sep}`)) {
+    return `~${candidatePath.slice(homeDir.length)}`;
+  }
+  return candidatePath;
+}
+
+async function probeHomeFolderAccess(): Promise<HomeFolderAccessProbeResult> {
+  if (process.platform !== 'darwin') {
+    return { granted: true, deniedPaths: [] };
+  }
+
+  const homeDir = app.getPath('home');
+  const targets = [homeDir];
+  for (const name of ['Desktop', 'Documents', 'Downloads', 'Pictures']) {
+    const targetPath = path.join(homeDir, name);
+    if (fs.existsSync(targetPath)) {
+      targets.push(targetPath);
+    }
+  }
+
+  const deniedPaths: string[] = [];
+  for (const targetPath of targets) {
+    try {
+      await fs.promises.readdir(targetPath);
+    } catch (error: any) {
+      const code = String(error?.code || '').toUpperCase();
+      if (code === 'EACCES' || code === 'EPERM') {
+        deniedPaths.push(targetPath);
+      }
+    }
+  }
+
+  return {
+    granted: deniedPaths.length === 0,
+    deniedPaths,
+  };
+}
+
+async function promptForHomeFolderAccess(): Promise<{ requested: boolean; selectedHomeFolder: boolean; error?: string }> {
+  const homeDir = app.getPath('home');
+  try {
+    const hostWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const result = await dialog.showOpenDialog(hostWindow, {
+      title: 'Allow Home Folder Access',
+      message: 'Select your Home folder to let SuperCmd index files for Search Files.',
+      defaultPath: homeDir,
+      buttonLabel: 'Select Home Folder',
+      properties: ['openDirectory', 'dontAddToRecent'],
+    });
+    if (result.canceled || !result.filePaths?.length) {
+      return { requested: false, selectedHomeFolder: false };
+    }
+    const selectedPath = path.resolve(String(result.filePaths[0] || ''));
+    const selectedHomeFolder = selectedPath === path.resolve(homeDir);
+    if (selectedHomeFolder) {
+      return { requested: true, selectedHomeFolder: true };
+    }
+    return {
+      requested: true,
+      selectedHomeFolder: false,
+      error: 'Please select your Home folder to grant file search access.',
+    };
+  } catch (error: any) {
+    return {
+      requested: false,
+      selectedHomeFolder: false,
+      error: String(error?.message || error || 'Failed to request Home folder access.'),
+    };
   }
 }
 
@@ -2720,10 +2798,78 @@ async function checkInputMonitoringAccess(): Promise<boolean> {
 
 async function requestOnboardingPermissionAccess(target: OnboardingPermissionTarget): Promise<OnboardingPermissionResult> {
   if (process.platform !== 'darwin') {
+    if (target === 'home-folder') {
+      saveSettings({ fileSearchProtectedRootsEnabled: true });
+      startFileSearchIndexing({
+        homeDir: app.getPath('home'),
+        includeProtectedHomeRoots: true,
+      });
+      return {
+        granted: true,
+        requested: false,
+        mode: 'already-granted',
+        status: 'granted',
+        canPrompt: false,
+      };
+    }
     if (target === 'microphone' || target === 'speech-recognition') {
       return { granted: true, requested: false, mode: 'already-granted', status: 'granted', canPrompt: false };
     }
     return { granted: false, requested: false, mode: 'manual' };
+  }
+
+  if (target === 'home-folder') {
+    const before = await probeHomeFolderAccess();
+    if (before.granted) {
+      saveSettings({ fileSearchProtectedRootsEnabled: true });
+      startFileSearchIndexing({
+        homeDir: app.getPath('home'),
+        includeProtectedHomeRoots: true,
+      });
+      return {
+        granted: true,
+        requested: false,
+        mode: 'already-granted',
+        status: 'granted',
+        canPrompt: false,
+      };
+    }
+
+    const promptResult = await promptForHomeFolderAccess();
+    const after = await probeHomeFolderAccess();
+    if (after.granted) {
+      saveSettings({ fileSearchProtectedRootsEnabled: true });
+      startFileSearchIndexing({
+        homeDir: app.getPath('home'),
+        includeProtectedHomeRoots: true,
+      });
+      void rebuildFileSearchIndex('home-folder-permission').catch(() => {});
+      return {
+        granted: true,
+        requested: promptResult.requested || promptResult.selectedHomeFolder,
+        mode: promptResult.requested ? 'prompted' : 'already-granted',
+        status: 'granted',
+        canPrompt: false,
+      };
+    }
+
+    const homeDir = app.getPath('home');
+    const deniedSummary = after.deniedPaths
+      .slice(0, 3)
+      .map((candidate) => formatHomeScopedPath(candidate, homeDir))
+      .join(', ');
+    const deniedMessage = deniedSummary ? `Blocked folders: ${deniedSummary}. ` : '';
+
+    return {
+      granted: false,
+      requested: promptResult.requested,
+      mode: promptResult.requested ? 'prompted' : 'manual',
+      status: 'not-determined',
+      canPrompt: true,
+      error:
+        promptResult.error ||
+        `${deniedMessage}Allow SuperCmd in System Settings -> Privacy & Security -> Files and Folders, then request again.`,
+    };
   }
 
   if (target === 'accessibility') {
@@ -8303,7 +8449,10 @@ app.whenReady().then(async () => {
   const settings = loadSettings();
   applyOpenAtLogin(Boolean((settings as any).openAtLogin));
   ensureAppUpdaterConfigured();
-  startFileSearchIndexing({ homeDir: app.getPath('home') });
+  startFileSearchIndexing({
+    homeDir: app.getPath('home'),
+    includeProtectedHomeRoots: Boolean(settings.fileSearchProtectedRootsEnabled),
+  });
   // Daily background update check (once every 24h).
   void runBackgroundAppUpdaterCheck();
 
@@ -8702,6 +8851,12 @@ app.whenReady().then(async () => {
           console.error('Failed to rebuild extensions after updating custom folders:', error);
         }
       }
+      if (patch.fileSearchProtectedRootsEnabled !== undefined) {
+        startFileSearchIndexing({
+          homeDir: app.getPath('home'),
+          includeProtectedHomeRoots: Boolean(result.fileSearchProtectedRootsEnabled),
+        });
+      }
       if (patch.openAtLogin !== undefined) {
         applyOpenAtLogin(Boolean(patch.openAtLogin));
       }
@@ -8792,6 +8947,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('check-onboarding-permissions', async () => {
     const statuses: Record<string, boolean> = {};
     if (process.platform === 'darwin') {
+      statuses['home-folder'] = Boolean(loadSettings().fileSearchProtectedRootsEnabled);
       try {
         statuses['accessibility'] = systemPreferences.isTrustedAccessibilityClient(false);
       } catch {}

@@ -79,7 +79,7 @@ function getQuickLinkIdFromCommandId(commandId: string): string | null {
 
 const FILE_RESULT_COMMAND_PREFIX = 'system-file-result:';
 const MAX_LAUNCHER_FILE_RESULTS = 30;
-const MAX_LAUNCHER_FILE_CANDIDATE_RESULTS = 1200;
+const MAX_LAUNCHER_FILE_CANDIDATE_RESULTS = 3000;
 const MAX_LAUNCHER_FILE_RESULT_ICONS = MAX_LAUNCHER_FILE_RESULTS;
 const MIN_LAUNCHER_FILE_QUERY_LENGTH = 2;
 const MAX_INLINE_EXTENSION_ARGUMENTS = 3;
@@ -107,6 +107,34 @@ function getLauncherFileSearchTerms(rawQuery: string): string[] {
     .split(/\s+/)
     .map((term) => term.trim())
     .filter(Boolean);
+}
+
+function normalizeLauncherPathForMatch(value: string): string {
+  return String(value || '').normalize('NFKD').toLowerCase().replace(/\\/g, '/');
+}
+
+function isPathLikeLauncherFileQuery(rawQuery: string): boolean {
+  const trimmed = String(rawQuery || '').trim();
+  return trimmed.includes('/') || trimmed.startsWith('~');
+}
+
+function matchesLauncherPathQuery(filePath: string, rawQuery: string, homeDir: string): boolean {
+  const trimmed = String(rawQuery || '').trim();
+  if (!trimmed) return true;
+  const normalizedPath = normalizeLauncherPathForMatch(filePath);
+  const normalizedRawQuery = normalizeLauncherPathForMatch(trimmed);
+  if (!normalizedRawQuery) return true;
+
+  if (normalizedPath.includes(normalizedRawQuery)) return true;
+
+  if (trimmed.startsWith('~') && homeDir) {
+    const expanded = `${homeDir}${trimmed.slice(1)}`;
+    const normalizedExpanded = normalizeLauncherPathForMatch(expanded);
+    if (normalizedExpanded && normalizedPath.includes(normalizedExpanded)) return true;
+  }
+
+  const tildePath = normalizeLauncherPathForMatch(asTildePath(filePath, homeDir));
+  return Boolean(tildePath && tildePath.includes(normalizedRawQuery));
 }
 
 function splitLauncherFileNameTokens(fileName: string): string[] {
@@ -348,7 +376,7 @@ const App: React.FC = () => {
     title: 'SuperCmd Window Manager',
     width: 380,
     height: 276,
-    anchor: 'top-right',
+    anchor: 'bottom-right',
     onClosed: () => {
       setShowWindowManager(false);
     },
@@ -997,9 +1025,11 @@ const App: React.FC = () => {
     fileSearchRequestSeqRef.current += 1;
     const requestSeq = fileSearchRequestSeqRef.current;
     const trimmed = searchQuery.trim();
-    const terms = getLauncherFileSearchTerms(trimmed);
+    const pathLikeQuery = isPathLikeLauncherFileQuery(trimmed);
+    const terms = pathLikeQuery ? [] : getLauncherFileSearchTerms(trimmed);
+    const minimumQueryLength = pathLikeQuery ? 1 : MIN_LAUNCHER_FILE_QUERY_LENGTH;
 
-    if (!shouldKeepLauncherSearchResults || trimmed.length < MIN_LAUNCHER_FILE_QUERY_LENGTH) {
+    if (!shouldKeepLauncherSearchResults || trimmed.length < minimumQueryLength) {
       setLauncherFileResults([]);
       return;
     }
@@ -1030,7 +1060,11 @@ const App: React.FC = () => {
           for (const candidate of candidates) {
             const candidatePath = String(candidate?.path || '').trim();
             if (!candidatePath || seenPaths.has(candidatePath)) continue;
-            if (!matchesLauncherFileNameTerms(String(candidate?.name || ''), terms)) continue;
+            if (pathLikeQuery) {
+              if (!matchesLauncherPathQuery(candidatePath, trimmed, homeDir)) continue;
+            } else if (!matchesLauncherFileNameTerms(String(candidate?.name || ''), terms)) {
+              continue;
+            }
             seenPaths.add(candidatePath);
             results.push(candidate);
             if (results.length >= MAX_LAUNCHER_FILE_RESULTS) break;
@@ -1070,7 +1104,7 @@ const App: React.FC = () => {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [searchQuery, shouldKeepLauncherSearchResults]);
+  }, [searchQuery, shouldKeepLauncherSearchResults, homeDir]);
 
   useEffect(() => {
     if (!isLauncherModeActive) return;

@@ -7,6 +7,7 @@ import {
   Clipboard,
   ExternalLink,
   FileText,
+  FolderOpen,
   Keyboard,
   Mic,
   Shield,
@@ -26,7 +27,7 @@ interface OnboardingExtensionProps {
   onClose: () => void;
 }
 
-type PermissionTargetId = 'accessibility' | 'input-monitoring' | 'speech-recognition' | 'microphone';
+type PermissionTargetId = 'accessibility' | 'input-monitoring' | 'speech-recognition' | 'microphone' | 'home-folder';
 
 const STEPS = [
   'Welcome',
@@ -56,6 +57,15 @@ const permissionTargets: Array<{
   iconTone: string;
   iconBg: string;
 }> = [
+  {
+    id: 'home-folder',
+    title: 'Home Folder (File Search)',
+    description: 'Required to index files in Documents, Desktop, Downloads, and Pictures.',
+    url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders',
+    icon: FolderOpen,
+    iconTone: 'text-blue-100',
+    iconBg: 'bg-blue-500/22 border-blue-100/30',
+  },
   {
     id: 'accessibility',
     title: 'Accessibility',
@@ -484,6 +494,15 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
             [id]: 'Permission prompt did not appear. Open Whisper once and press this again.',
           }));
         }
+      } else if (id === 'home-folder') {
+        if (latestError) {
+          setPermissionNotes((prev) => ({ ...prev, [id]: latestError }));
+        } else if (!requested || mode === 'manual' || status === 'not-determined') {
+          setPermissionNotes((prev) => ({
+            ...prev,
+            [id]: 'Select your Home folder when prompted, then enable SuperCmd under Files and Folders if needed.',
+          }));
+        }
       }
       if (id === 'microphone') {
         await new Promise((resolve) => setTimeout(resolve, 350));
@@ -494,6 +513,8 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
           ? [url, 'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_SpeechRecognition']
           : id === 'input-monitoring'
             ? [url, 'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ListenEvent']
+            : id === 'home-folder'
+              ? [url, 'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_FilesAndFolders']
           : [url];
       let ok = false;
       for (const candidate of candidateUrls) {
@@ -804,6 +825,11 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
                         {target.id === 'input-monitoring' ? (
                           <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-100/85">
                             If SuperCmd is not visible here, click + and manually add SuperCmd from the Applications folder.
+                          </p>
+                        ) : null}
+                        {target.id === 'home-folder' ? (
+                          <p className="mt-1 text-[11px] text-white/52">
+                            Pick your Home folder when prompted. This powers Search Files and launcher file results.
                           </p>
                         ) : null}
                         {!isDone && note ? (

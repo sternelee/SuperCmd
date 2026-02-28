@@ -52,6 +52,7 @@ export interface AppSettings {
   recentCommandLaunchCounts: Record<string, number>;
   hasSeenOnboarding: boolean;
   hasSeenWhisperOnboarding: boolean;
+  fileSearchProtectedRootsEnabled: boolean;
   ai: AISettings;
   commandMetadata?: Record<string, { subtitle?: string }>;
   debugMode: boolean;
@@ -150,6 +151,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   recentCommandLaunchCounts: {},
   hasSeenOnboarding: false,
   hasSeenWhisperOnboarding: false,
+  fileSearchProtectedRootsEnabled: false,
   ai: { ...DEFAULT_AI_SETTINGS },
   debugMode: false,
   fontSize: 'medium',
@@ -317,6 +319,8 @@ export function loadSettings(): AppSettings {
         parsed.hasSeenOnboarding ?? true,
       hasSeenWhisperOnboarding:
         parsed.hasSeenWhisperOnboarding ?? false,
+      fileSearchProtectedRootsEnabled:
+        parsed.fileSearchProtectedRootsEnabled ?? DEFAULT_SETTINGS.fileSearchProtectedRootsEnabled,
       ai: { ...DEFAULT_AI_SETTINGS, ...parsed.ai },
       commandMetadata: parsed.commandMetadata ?? {},
       debugMode: parsed.debugMode ?? DEFAULT_SETTINGS.debugMode,

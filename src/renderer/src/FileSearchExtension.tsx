@@ -42,6 +42,7 @@ const IMAGE_FILE_EXTENSIONS = new Set([
   '.heic',
   '.avif',
 ]);
+const FILE_SEARCH_CANDIDATE_LIMIT = 5000;
 
 function basename(filePath: string): string {
   const normalized = filePath.replace(/\/$/, '');
@@ -131,6 +132,38 @@ function matchesFileNameTerms(filePath: string, terms: string[]): boolean {
   });
 }
 
+function normalizePathForMatch(value: string): string {
+  return String(value || '').normalize('NFKD').toLowerCase().replace(/\\/g, '/');
+}
+
+function isPathLikeQuery(rawQuery: string): boolean {
+  const trimmed = String(rawQuery || '').trim();
+  return trimmed.includes('/') || trimmed.startsWith('~');
+}
+
+function matchesPathQuery(filePath: string, rawQuery: string, homeDir: string): boolean {
+  const trimmed = String(rawQuery || '').trim();
+  if (!trimmed) return true;
+  const normalizedPath = normalizePathForMatch(filePath);
+  const normalizedRawQuery = normalizePathForMatch(trimmed);
+  if (!normalizedRawQuery) return true;
+
+  if (normalizedPath.includes(normalizedRawQuery)) {
+    return true;
+  }
+
+  if (trimmed.startsWith('~') && homeDir) {
+    const expanded = `${homeDir}${trimmed.slice(1)}`;
+    const normalizedExpanded = normalizePathForMatch(expanded);
+    if (normalizedExpanded && normalizedPath.includes(normalizedExpanded)) {
+      return true;
+    }
+  }
+
+  const tildePath = normalizePathForMatch(asTildePath(filePath, homeDir));
+  return Boolean(tildePath && tildePath.includes(normalizedRawQuery));
+}
+
 const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose, initialDetailPath }) => {
   const [query, setQuery] = useState('');
   const [scopes, setScopes] = useState<SearchScope[]>([]);
@@ -203,10 +236,15 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose, init
   );
 
   const visibleResults = useMemo(() => {
-    const terms = getNormalizedTerms(query.trim());
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return results;
+    if (isPathLikeQuery(trimmedQuery)) {
+      return results.filter((filePath) => matchesPathQuery(filePath, trimmedQuery, selectedScope?.path || ''));
+    }
+    const terms = getNormalizedTerms(trimmedQuery);
     if (terms.length === 0) return results;
     return results.filter((filePath) => matchesFileNameTerms(filePath, terms));
-  }, [results, query]);
+  }, [results, query, selectedScope]);
 
   const selectedPath = visibleResults[selectedIndex] || null;
   const selectedImagePreviewSrc = useMemo(() => {
@@ -304,7 +342,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose, init
     const timer = window.setTimeout(async () => {
       setIsLoading(true);
       try {
-        let indexed = await window.electron.searchIndexedFiles(trimmed, { limit: 1200 });
+        let indexed = await window.electron.searchIndexedFiles(trimmed, { limit: FILE_SEARCH_CANDIDATE_LIMIT });
         if (searchRequestRef.current !== requestId) return;
 
         if (indexed.length === 0) {
@@ -318,17 +356,22 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose, init
           if (status && (!status.ready || status.indexing)) {
             await new Promise((resolve) => window.setTimeout(resolve, 220));
             if (searchRequestRef.current !== requestId) return;
-            indexed = await window.electron.searchIndexedFiles(trimmed, { limit: 1200 });
+            indexed = await window.electron.searchIndexedFiles(trimmed, { limit: FILE_SEARCH_CANDIDATE_LIMIT });
             if (searchRequestRef.current !== requestId) return;
           }
         }
 
-        const terms = getNormalizedTerms(trimmed);
+        const pathLikeQuery = isPathLikeQuery(trimmed);
+        const terms = pathLikeQuery ? [] : getNormalizedTerms(trimmed);
         const scopePrefix = `${currentScope.path.replace(/\/$/, '')}/`;
         const strictNameMatches = indexed
           .map((entry) => entry.path)
           .filter((filePath) => filePath.startsWith(scopePrefix) || filePath === currentScope.path)
-          .filter((filePath) => matchesFileNameTerms(filePath, terms));
+          .filter((filePath) =>
+            pathLikeQuery
+              ? matchesPathQuery(filePath, trimmed, currentScope.path)
+              : matchesFileNameTerms(filePath, terms)
+          );
 
         let deduped = Array.from(new Set(strictNameMatches));
         if (seededDetailPath && (showDetails || trimmed === basename(seededDetailPath))) {
@@ -710,6 +753,8 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose, init
                         role="button"
                         tabIndex={-1}
                         onClick={() => setSelectedIndex(index)}
+                        onMouseEnter={() => setSelectedIndex(index)}
+                        onMouseMove={() => setSelectedIndex(index)}
                         onDoubleClick={() => openSelectedFile()}
                         className={`w-full text-left px-2 py-1.5 rounded-md border cursor-pointer select-none transition-colors ${
                           selected
@@ -738,16 +783,16 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose, init
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-3.5">
+          <div className="flex-1 min-h-0 p-3.5 flex flex-col">
             {selectedPath ? (
               <>
-                <div className="flex justify-center mb-3">
+                <div className="flex-1 min-h-0 flex items-center justify-center">
                   {selectedImagePreviewSrc ? (
-                    <div className="w-full max-w-[320px] h-36 rounded-xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] overflow-hidden flex items-center justify-center p-2">
+                    <div className="w-full h-full rounded-xl bg-[var(--launcher-card-bg)] border border-[var(--ui-divider)] overflow-hidden flex items-center justify-center p-2">
                       <img
                         src={selectedImagePreviewSrc}
                         alt={basename(selectedPath)}
-                        className="max-w-full max-h-full object-contain"
+                        className="w-full h-full object-contain"
                         draggable={false}
                         onError={handleSelectedImagePreviewError}
                       />
@@ -760,17 +805,19 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose, init
                     </div>
                   )}
                 </div>
-                <div className="text-[14px] font-semibold text-white/90 mb-2">Metadata</div>
-                {metadataRows.length > 0 ? (
-                  <div className="space-y-1">
-                    {metadataRows.map(([label, value]) => (
-                      <div key={label} className="grid grid-cols-[84px_1fr] items-center gap-2 pb-1 border-b border-[var(--ui-divider)]">
-                        <div className="text-white/55 text-[10px] font-semibold">{label}</div>
-                        <div className="text-white/90 text-[11px] font-semibold text-right truncate">{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                <div className="shrink-0 pt-2.5 mt-2 border-t border-[var(--ui-divider)]">
+                  <div className="text-[14px] font-semibold text-white/90 mb-2">Metadata</div>
+                  {metadataRows.length > 0 ? (
+                    <div className="space-y-1">
+                      {metadataRows.map(([label, value]) => (
+                        <div key={label} className="grid grid-cols-[84px_1fr] items-center gap-2 pb-1 border-b border-[var(--ui-divider)]">
+                          <div className="text-white/55 text-[10px] font-semibold">{label}</div>
+                          <div className="text-white/90 text-[11px] font-semibold text-right truncate">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </>
             ) : (
               <div className="h-full flex items-center justify-center text-white/35 text-sm">Select a file to view details</div>
@@ -845,6 +892,8 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose, init
                     await Promise.resolve(action.execute());
                     setShowActions(false);
                   }}
+                  onMouseEnter={() => setSelectedActionIndex(index)}
+                  onMouseMove={() => setSelectedActionIndex(index)}
                   className={`w-full px-2.5 py-1.5 rounded-md border border-transparent text-left flex items-center justify-between transition-colors ${
                     index === selectedActionIndex
                       ? 'bg-white/[0.18] text-white'
