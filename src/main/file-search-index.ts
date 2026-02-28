@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 
 export type IndexedFileSearchResult = {
   path: string;
@@ -48,6 +50,10 @@ const DEFAULT_MAX_RESULTS = 80;
 const MAX_QUERY_RESULTS = 5_000;
 const MIN_REBUILD_GAP_MS = 45_000;
 const DEFAULT_REFRESH_INTERVAL_MS = 8 * 60_000;
+const MAX_SPOTLIGHT_CANDIDATES = 10_000;
+const SPOTLIGHT_SEARCH_TIMEOUT_MS = 2_400;
+
+const execFileAsync = promisify(execFile);
 
 // Explicitly skip noisy/unhelpful build and dependency folders.
 export const FILE_SEARCH_INDEX_EXCLUDED_DIRECTORY_NAMES = [
@@ -567,80 +573,205 @@ export async function searchIndexedFiles(
   const terms = tokenizeSearchText(rawQuery);
   if (!pathLikeQuery && (!normalizedQuery || terms.length === 0)) return [];
 
-  if (!activeIndex && !rebuildPromise) {
-    requestFileSearchIndexRefresh('query-bootstrap');
-    return [];
-  }
-  if (!activeIndex) return [];
-
-  const snapshot = activeIndex;
   const limit = Math.max(1, Math.min(MAX_QUERY_RESULTS, Number(options?.limit) || DEFAULT_MAX_RESULTS));
 
-  if (pathLikeQuery) {
-    const rawNeedle = normalizePathSearchText(trimmedQuery);
-    if (!rawNeedle) return [];
-    const expandedNeedle = trimmedQuery.startsWith('~') && configuredHomeDir
-      ? normalizePathSearchText(`${configuredHomeDir}${trimmedQuery.slice(1)}`)
-      : rawNeedle;
+  if (!activeIndex && !rebuildPromise) {
+    requestFileSearchIndexRefresh('query-bootstrap');
+  }
 
-    const scored: Array<{ entry: IndexedEntry; score: number }> = [];
-    for (const entry of snapshot.entries) {
-      const pathIndex = entry.normalizedPath.indexOf(expandedNeedle);
-      const tildePath = normalizePathSearchText(asTildePath(entry.path, configuredHomeDir));
-      const tildeIndex = tildePath.indexOf(rawNeedle);
+  const indexedResults: IndexedFileSearchResult[] = [];
+  const snapshot = activeIndex;
+  if (snapshot) {
+    if (pathLikeQuery) {
+      const rawNeedle = normalizePathSearchText(trimmedQuery);
+      if (rawNeedle) {
+        const expandedNeedle = trimmedQuery.startsWith('~') && configuredHomeDir
+          ? normalizePathSearchText(`${configuredHomeDir}${trimmedQuery.slice(1)}`)
+          : rawNeedle;
+
+        const scored: Array<{ entry: IndexedEntry; score: number }> = [];
+        for (const entry of snapshot.entries) {
+          const pathIndex = entry.normalizedPath.indexOf(expandedNeedle);
+          const tildePath = normalizePathSearchText(asTildePath(entry.path, configuredHomeDir));
+          const tildeIndex = tildePath.indexOf(rawNeedle);
+          const matchIndex = pathIndex >= 0 ? pathIndex : tildeIndex;
+          if (matchIndex < 0) continue;
+
+          let score = 1000 - Math.min(420, matchIndex);
+          if (entry.normalizedPath.endsWith(`/${expandedNeedle}`) || entry.normalizedPath.endsWith(expandedNeedle)) {
+            score += 180;
+          }
+          if (entry.isDirectory) {
+            score -= 10;
+          } else {
+            score += 12;
+          }
+          score -= Math.min(120, Math.floor(entry.path.length / 4));
+          scored.push({ entry, score });
+        }
+
+        scored.sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (a.entry.path.length !== b.entry.path.length) return a.entry.path.length - b.entry.path.length;
+          return a.entry.name.localeCompare(b.entry.name);
+        });
+
+        indexedResults.push(
+          ...scored.slice(0, limit).map(({ entry }) => ({
+            path: entry.path,
+            name: entry.name,
+            parentPath: entry.parentPath,
+            displayPath: asTildePath(entry.parentPath, configuredHomeDir),
+            isDirectory: entry.isDirectory,
+          }))
+        );
+      }
+    } else {
+      const candidateIds = resolveCandidateIds(snapshot, terms);
+      if (candidateIds.length > 0) {
+        const scored: Array<{ entry: IndexedEntry; score: number }> = [];
+        for (const entryId of candidateIds) {
+          const entry = snapshot.entries[entryId];
+          if (!entry) continue;
+          const score = scoreEntryMatch(entry, normalizedQuery, terms);
+          if (score <= 0) continue;
+          scored.push({ entry, score });
+        }
+
+        scored.sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          return a.entry.name.localeCompare(b.entry.name);
+        });
+
+        indexedResults.push(
+          ...scored.slice(0, limit).map(({ entry }) => ({
+            path: entry.path,
+            name: entry.name,
+            parentPath: entry.parentPath,
+            displayPath: asTildePath(entry.parentPath, configuredHomeDir),
+            isDirectory: entry.isDirectory,
+          }))
+        );
+      }
+    }
+  }
+
+  if (process.platform !== 'darwin') {
+    return indexedResults;
+  }
+  if (!configuredHomeDir) {
+    return indexedResults;
+  }
+  if (indexedResults.length >= limit) {
+    return indexedResults;
+  }
+
+  const existingPaths = new Set(indexedResults.map((entry) => entry.path));
+  const spotlightSearchTerm = pathLikeQuery
+    ? (() => {
+        const normalized = trimmedQuery
+          .replace(/\\/g, '/')
+          .replace(/^~\//, '')
+          .replace(/^~$/, '')
+          .replace(/\/+$/, '');
+        if (!normalized) return '';
+        return path.posix.basename(normalized);
+      })()
+    : trimmedQuery;
+
+  const spotlightTerm = String(spotlightSearchTerm || '').trim();
+  if (!spotlightTerm) return indexedResults;
+
+  let spotlightStdout = '';
+  try {
+    const { stdout } = await execFileAsync('/usr/bin/mdfind', ['-onlyin', configuredHomeDir, '-name', spotlightTerm], {
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: SPOTLIGHT_SEARCH_TIMEOUT_MS,
+    });
+    spotlightStdout = String(stdout || '');
+  } catch (error: any) {
+    spotlightStdout = String(error?.stdout || '');
+  }
+
+  if (!spotlightStdout) return indexedResults;
+
+  const rawNeedle = pathLikeQuery ? normalizePathSearchText(trimmedQuery) : '';
+  const expandedNeedle = pathLikeQuery && trimmedQuery.startsWith('~') && configuredHomeDir
+    ? normalizePathSearchText(`${configuredHomeDir}${trimmedQuery.slice(1)}`)
+    : rawNeedle;
+  const spotlightScored: Array<{ path: string; score: number }> = [];
+  const spotlightCandidateLimit = Math.min(MAX_SPOTLIGHT_CANDIDATES, Math.max(320, limit * 8));
+
+  for (const line of spotlightStdout.split(/\r?\n/)) {
+    if (spotlightScored.length >= spotlightCandidateLimit) break;
+    const candidateRawPath = String(line || '').trim();
+    if (!candidateRawPath) continue;
+
+    const candidatePath = path.resolve(candidateRawPath);
+    if (existingPaths.has(candidatePath)) continue;
+    if (!isPathWithinRoot(candidatePath, configuredHomeDir)) continue;
+
+    const candidateName = path.basename(candidatePath);
+    if (!candidateName) continue;
+    if (shouldSkipFile(candidateName)) continue;
+
+    let score = 0;
+    if (pathLikeQuery) {
+      const normalizedPath = normalizePathSearchText(candidatePath);
+      const tildePath = normalizePathSearchText(asTildePath(candidatePath, configuredHomeDir));
+      const pathIndex = expandedNeedle ? normalizedPath.indexOf(expandedNeedle) : -1;
+      const tildeIndex = rawNeedle ? tildePath.indexOf(rawNeedle) : -1;
       const matchIndex = pathIndex >= 0 ? pathIndex : tildeIndex;
       if (matchIndex < 0) continue;
 
-      let score = 1000 - Math.min(420, matchIndex);
-      if (entry.normalizedPath.endsWith(`/${expandedNeedle}`) || entry.normalizedPath.endsWith(expandedNeedle)) {
-        score += 180;
+      score = 960 - Math.min(420, matchIndex);
+      if (normalizedPath.endsWith(`/${expandedNeedle}`) || normalizedPath.endsWith(expandedNeedle)) {
+        score += 140;
       }
-      if (entry.isDirectory) {
-        score -= 10;
-      } else {
-        score += 12;
-      }
-      score -= Math.min(120, Math.floor(entry.path.length / 4));
-      scored.push({ entry, score });
+      score -= Math.min(120, Math.floor(candidatePath.length / 4));
+    } else {
+      const normalizedName = normalizeSearchText(candidateName);
+      if (!normalizedName) continue;
+      const pseudoEntry: IndexedEntry = {
+        path: candidatePath,
+        name: candidateName,
+        parentPath: path.dirname(candidatePath),
+        normalizedName,
+        normalizedPath: normalizePathSearchText(candidatePath),
+        compactName: normalizedName.replace(/\s+/g, ''),
+        tokens: tokenizeSearchText(candidateName),
+        isDirectory: false,
+      };
+      score = scoreEntryMatch(pseudoEntry, normalizedQuery, terms);
+      if (score <= 0) continue;
+      // Keep index-backed results ahead of Spotlight when ranking is similar.
+      score -= 5;
     }
 
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (a.entry.path.length !== b.entry.path.length) return a.entry.path.length - b.entry.path.length;
-      return a.entry.name.localeCompare(b.entry.name);
-    });
-
-    return scored.slice(0, limit).map(({ entry }) => ({
-      path: entry.path,
-      name: entry.name,
-      parentPath: entry.parentPath,
-      displayPath: asTildePath(entry.parentPath, configuredHomeDir),
-      isDirectory: entry.isDirectory,
-    }));
+    existingPaths.add(candidatePath);
+    spotlightScored.push({ path: candidatePath, score });
   }
 
-  const candidateIds = resolveCandidateIds(snapshot, terms);
-  if (candidateIds.length === 0) return [];
+  if (spotlightScored.length === 0) return indexedResults;
 
-  const scored: Array<{ entry: IndexedEntry; score: number }> = [];
-  for (const entryId of candidateIds) {
-    const entry = snapshot.entries[entryId];
-    if (!entry) continue;
-    const score = scoreEntryMatch(entry, normalizedQuery, terms);
-    if (score <= 0) continue;
-    scored.push({ entry, score });
-  }
-
-  scored.sort((a, b) => {
+  spotlightScored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    return a.entry.name.localeCompare(b.entry.name);
+    if (a.path.length !== b.path.length) return a.path.length - b.path.length;
+    return a.path.localeCompare(b.path);
   });
 
-  return scored.slice(0, limit).map(({ entry }) => ({
-    path: entry.path,
-    name: entry.name,
-    parentPath: entry.parentPath,
-    displayPath: asTildePath(entry.parentPath, configuredHomeDir),
-    isDirectory: entry.isDirectory,
-  }));
+  const merged = [...indexedResults];
+  for (const candidate of spotlightScored) {
+    if (merged.length >= limit) break;
+    const parentPath = path.dirname(candidate.path);
+    merged.push({
+      path: candidate.path,
+      name: path.basename(candidate.path),
+      parentPath,
+      displayPath: asTildePath(parentPath, configuredHomeDir),
+      isDirectory: false,
+    });
+  }
+
+  return merged;
 }
