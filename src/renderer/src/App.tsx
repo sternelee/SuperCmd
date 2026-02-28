@@ -2822,7 +2822,7 @@ const App: React.FC = () => {
       <>
         {alwaysMountedRunners}
         <div className="w-full h-full">
-          <div className="glass-effect overflow-hidden h-full flex flex-col">
+          <div className="overflow-hidden h-full flex flex-col">
             <CameraExtension
               onClose={() => {
                 setShowCamera(false);

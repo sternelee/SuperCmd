@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Camera, RefreshCw, Settings, Video, X } from 'lucide-react';
+import { ArrowLeft, Camera, RefreshCw, RotateCcw, Settings, Video, X } from 'lucide-react';
 import ExtensionActionFooter from './components/ExtensionActionFooter';
 
 interface CameraExtensionProps {
@@ -74,14 +74,18 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
   const [showActions, setShowActions] = useState(false);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
   const [capturePreviewDataUrl, setCapturePreviewDataUrl] = useState<string | null>(null);
+  const [capturePreviewVisible, setCapturePreviewVisible] = useState(false);
   const [captureNotice, setCaptureNotice] = useState('');
   const [flashVisible, setFlashVisible] = useState(false);
+  const [isVerticallyFlipped, setIsVerticallyFlipped] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
   const captureNoticeTimerRef = useRef<number | null>(null);
   const flashTimerRef = useRef<number | null>(null);
+  const capturePreviewFadeTimerRef = useRef<number | null>(null);
+  const capturePreviewClearTimerRef = useRef<number | null>(null);
   const startRequestIdRef = useRef(0);
   const unmountedRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
@@ -94,6 +98,14 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
     if (flashTimerRef.current != null) {
       window.clearTimeout(flashTimerRef.current);
       flashTimerRef.current = null;
+    }
+    if (capturePreviewFadeTimerRef.current != null) {
+      window.clearTimeout(capturePreviewFadeTimerRef.current);
+      capturePreviewFadeTimerRef.current = null;
+    }
+    if (capturePreviewClearTimerRef.current != null) {
+      window.clearTimeout(capturePreviewClearTimerRef.current);
+      capturePreviewClearTimerRef.current = null;
     }
   }, []);
 
@@ -208,7 +220,7 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
     onClose();
   }, [assignStream, onClose]);
 
-  const handleFlipCamera = useCallback(async () => {
+  const handleSwitchCamera = useCallback(async () => {
     if (cameraDevices.length <= 1 || isStarting) {
       showCaptureNotice('Only one camera is available.');
       return;
@@ -220,6 +232,10 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
     if (!nextDevice?.deviceId) return;
     await startCamera(nextDevice.deviceId);
   }, [activeDeviceId, cameraDevices, isStarting, showCaptureNotice, startCamera]);
+
+  const handleFlipCamera = useCallback(() => {
+    setIsVerticallyFlipped((prev) => !prev);
+  }, []);
 
   const handleTakePicture = useCallback(async () => {
     const video = videoRef.current;
@@ -233,9 +249,32 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
 
     const context = canvas.getContext('2d');
     if (!context) return;
-    context.drawImage(video, 0, 0, width, height);
+    if (isVerticallyFlipped) {
+      context.save();
+      context.translate(0, height);
+      context.scale(1, -1);
+      context.drawImage(video, 0, 0, width, height);
+      context.restore();
+    } else {
+      context.drawImage(video, 0, 0, width, height);
+    }
 
     setCapturePreviewDataUrl(canvas.toDataURL('image/png'));
+    setCapturePreviewVisible(true);
+    if (capturePreviewFadeTimerRef.current != null) {
+      window.clearTimeout(capturePreviewFadeTimerRef.current);
+    }
+    if (capturePreviewClearTimerRef.current != null) {
+      window.clearTimeout(capturePreviewClearTimerRef.current);
+    }
+    capturePreviewFadeTimerRef.current = window.setTimeout(() => {
+      setCapturePreviewVisible(false);
+      capturePreviewFadeTimerRef.current = null;
+    }, 5000);
+    capturePreviewClearTimerRef.current = window.setTimeout(() => {
+      setCapturePreviewDataUrl(null);
+      setCapturePreviewClearTimerRef.current = null;
+    }, 5300);
     setFlashVisible(true);
     if (flashTimerRef.current != null) {
       window.clearTimeout(flashTimerRef.current);
@@ -269,7 +308,7 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
     }
 
     showCaptureNotice(copiedToClipboard ? 'Picture captured and copied to clipboard.' : 'Picture captured.');
-  }, [showCaptureNotice, stream]);
+  }, [isVerticallyFlipped, showCaptureNotice, stream]);
 
   const openSystemCameraSettings = useCallback(async () => {
     try {
@@ -330,10 +369,19 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
       },
       {
         title: 'Flip Camera',
-        icon: <RefreshCw className="w-4 h-4" />,
+        icon: <RotateCcw className="w-4 h-4" />,
         shortcut: ['⌘', 'F'],
         execute: () => {
-          void handleFlipCamera();
+          handleFlipCamera();
+        },
+        disabled: permissionState !== 'granted' || isStarting,
+      },
+      {
+        title: 'Switch Camera',
+        icon: <RefreshCw className="w-4 h-4" />,
+        shortcut: ['⌘', '⇧', 'F'],
+        execute: () => {
+          void handleSwitchCamera();
         },
         disabled: permissionState !== 'granted' || cameraDevices.length <= 1 || isStarting,
       },
@@ -345,7 +393,7 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
         style: 'destructive',
       },
     ],
-    [cameraDevices.length, closeCamera, handleFlipCamera, handleTakePicture, isStarting, permissionState]
+    [cameraDevices.length, closeCamera, handleFlipCamera, handleSwitchCamera, handleTakePicture, isStarting, permissionState]
   );
 
   const primaryAction = actions[0];
@@ -400,7 +448,11 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
 
       if (event.metaKey && key === 'f' && !event.repeat) {
         event.preventDefault();
-        void handleFlipCamera();
+        if (event.shiftKey) {
+          void handleSwitchCamera();
+        } else {
+          handleFlipCamera();
+        }
         return;
       }
 
@@ -423,17 +475,18 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
         closeCamera();
       }
     },
-    [actions, closeCamera, executeAction, handleFlipCamera, primaryAction, selectedActionIndex, showActions]
+    [actions, closeCamera, executeAction, handleFlipCamera, handleSwitchCamera, primaryAction, selectedActionIndex, showActions]
   );
 
   const renderMainContent = () => {
     if (permissionState === 'granted') {
       return (
         <div className="h-full flex flex-col gap-3">
-          <div className="relative flex-1 min-h-0 rounded-xl border border-[var(--ui-divider)] overflow-hidden bg-black">
+          <div className="relative flex-1 min-h-0 overflow-hidden bg-black">
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
+              style={isVerticallyFlipped ? { transform: 'scaleY(-1)' } : undefined}
               playsInline
               autoPlay
               muted
@@ -447,7 +500,11 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
             </div>
 
             {capturePreviewDataUrl ? (
-              <div className="absolute right-3 bottom-3 w-28 h-20 rounded-lg border border-white/20 overflow-hidden bg-black/80 shadow-xl">
+              <div
+                className={`absolute right-3 bottom-3 w-28 h-20 rounded-lg border border-white/20 overflow-hidden bg-black/80 shadow-xl transition-opacity duration-300 ${
+                  capturePreviewVisible ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
                 <img
                   src={capturePreviewDataUrl}
                   alt="Latest capture"
@@ -458,13 +515,7 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
             ) : null}
           </div>
 
-          {captureNotice ? (
-            <div className="text-xs text-[var(--text-muted)]">{captureNotice}</div>
-          ) : (
-            <div className="text-xs text-[var(--text-subtle)]">
-              Press <kbd className="px-1.5 py-0.5 rounded bg-[var(--kbd-bg)] text-[11px]">Enter</kbd> to capture.
-            </div>
-          )}
+          {captureNotice ? <div className="px-3 text-xs text-[var(--text-muted)]">{captureNotice}</div> : null}
         </div>
       );
     }
@@ -519,22 +570,20 @@ const CameraExtension: React.FC<CameraExtensionProps> = ({ onClose }) => {
   return (
     <div
       ref={rootRef}
-      className="w-full h-full flex flex-col"
+      className="relative w-full h-full flex flex-col"
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      <div className="flex items-center gap-2 px-5 py-3.5 border-b border-[var(--ui-divider)]">
-        <button
-          onClick={closeCamera}
-          className="text-[var(--text-subtle)] hover:text-[var(--text-muted)] transition-colors"
-          aria-label="Back"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <span className="text-sm text-[var(--text-primary)]">Camera</span>
-      </div>
+      <button
+        type="button"
+        onClick={closeCamera}
+        className="absolute left-3 top-3 z-20 w-9 h-9 rounded-full bg-black/45 hover:bg-black/60 text-white/90 flex items-center justify-center backdrop-blur-md transition-colors"
+        aria-label="Back"
+      >
+        <ArrowLeft className="w-4 h-4" />
+      </button>
 
-      <div className="flex-1 min-h-0 p-4">
+      <div className="flex-1 min-h-0">
         {renderMainContent()}
       </div>
 
