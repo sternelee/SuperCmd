@@ -357,6 +357,8 @@ export interface ElectronAPI {
   onAppUpdaterStatus: (callback: (status: AppUpdaterStatus) => void) => (() => void);
   saveSettings: (patch: Partial<AppSettings>) => Promise<AppSettings>;
   getAllCommands: () => Promise<CommandInfo[]>;
+  captureGlobalHotkey: (options?: { timeoutMs?: number }) => Promise<string>;
+  cancelGlobalHotkeyCapture: () => Promise<void>;
   updateGlobalShortcut: (shortcut: string) => Promise<boolean>;
   setOpenAtLogin: (enabled: boolean) => Promise<boolean>;
   replaceSpotlightWithSuperCmdShortcut: () => Promise<boolean>;
