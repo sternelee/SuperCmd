@@ -54,24 +54,84 @@ extensions/      Installed/managed extension data
 dist/            Build output
 ```
 
-## How To Run
+## Install
+
+### Download the app
+
+Download the latest `.dmg` from the [Releases page](https://github.com/SuperCmdLabs/SuperCmd/releases/latest):
+
+- **Apple Silicon (M1/M2/M3/M4):** `SuperCmd-x.x.x-arm64.dmg`
+- **Intel Mac:** `SuperCmd-x.x.x.dmg`
+
+Open the `.dmg`, drag SuperCmd to your Applications folder, and launch it.
+
+> **Note:** On first launch, macOS may warn that the app is from an unidentified developer. Go to System Settings → Privacy & Security and click "Open Anyway".
+
+### macOS Permissions
+
+SuperCmd needs the following permissions to work properly. The app will prompt you on first use, or you can enable them manually in **System Settings → Privacy & Security**:
+
+| Permission | Why | Required for |
+|---|---|---|
+| **Accessibility** | Window management, keystroke injection | Window tiling, snippet expansion |
+| **Input Monitoring** | Global hotkey detection (hold-to-speak, launcher shortcut) | Core launcher functionality |
+| **Microphone** | Voice dictation (speech-to-text) | Optional — only if using voice features |
+| **Automation (AppleScript)** | Selected text capture, system automation | Extension actions |
+
+> You may need to restart the app after granting permissions.
+
+### Auto-updates
+
+SuperCmd includes a built-in auto-updater. You can also check for updates manually from the launcher (search "Check for Updates").
+
+---
+
+## Development Setup
+
+Want to build from source or contribute? Follow these steps.
 
 ### Prerequisites
 
-- macOS (required for native Swift modules)
-- Node.js 22+
-- npm
-- Xcode Command Line Tools (`swiftc` available)
-- brew installed
+- **macOS** (required — native Swift modules won't compile on Linux/Windows)
+- **Node.js 22+** — check with `node -v`
+- **npm** — comes with Node.js
+- **Xcode Command Line Tools** — required for `swiftc` (Swift compiler)
+- **Homebrew** — used at runtime to resolve `git` and `npm` for extension installation (see `extension-registry.ts`)
 
-### Install
+### 1. Install system dependencies
 
+If you don't have Xcode Command Line Tools:
 ```bash
+xcode-select --install
+```
+
+Verify Swift is available:
+```bash
+swiftc --version
+```
+
+If you don't have Homebrew (required for extension management — SuperCmd uses brew-resolved `git` to clone extensions from GitHub):
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+### 2. Clone and install
+```bash
+git clone https://github.com/SuperCmdLabs/SuperCmd.git
+cd SuperCmd
 npm install
 ```
 
-### Development
+### 3. Build native modules
 
+The `dev` script does **not** compile the Swift native helpers — you need to build them once before your first run:
+```bash
+npm run build:native
+```
+
+This compiles the Swift binaries (color picker, hotkey monitor, speech recognizer, window manager, etc.) into `dist/native/`.
+
+### 4. Run in development mode
 ```bash
 npm run dev
 ```
@@ -82,19 +142,32 @@ This starts:
 - Vite dev server for renderer
 - Electron app in development mode
 
-### Build
-
+### 5. Build for production
 ```bash
 npm run build
 ```
 
-### Package App
+This runs `build:main` + `build:renderer` + `build:native` in sequence.
 
+### 6. Package the app
 ```bash
 npm run package
 ```
 
 Output artifacts are generated under `out/`.
+
+### Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `swiftc: command not found` | Run `xcode-select --install` and restart your terminal |
+| `npm install` fails on native modules | Ensure Xcode CLT is installed and up to date: `softwareupdate --install -a` |
+| App launches but hotkeys don't work | Grant **Input Monitoring** permission (not just Accessibility) and restart the app |
+| Window management doesn't work | Grant **Accessibility** permission — `window-adjust.swift` checks `AXIsProcessTrusted()` |
+| Extensions fail to install | Verify Homebrew is installed (`brew --version`) — SuperCmd needs brew-resolved `git` to clone extensions |
+| `node-gyp` build errors | Check Node.js version (`node -v`) — requires 22+. Try deleting `node_modules` and re-running `npm install` |
+| Apple Silicon (M1/M2/M3) issues | Ensure you're running the arm64 version of Node.js, not the x64 version via Rosetta |
+| Native features missing after `npm run dev` | Run `npm run build:native` first — the dev script doesn't compile Swift binaries |
 
 ## AI + Memory Setup (Detailed)
 
