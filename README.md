@@ -195,16 +195,6 @@ Quick version:
 2. Make your changes, keeping Raycast extension compatibility in mind.
 3. Run `npm run build` to verify.
 4. Open a PR with a clear description of what, why, and how you tested.
-## What's Pending
-
-Current pending/roadmap items:
-
-- Complete OAuth implementation in the Raycast API compatibility layer
-- Expand `BrowserExtension` support beyond current stubs
-- Improve selected text/Finder item behavior with macOS permissions handling
-- Harden asset loading/path resolution for extension assets
-- Add a broader automated test suite (unit + integration + compatibility)
-- Continue parity work for edge-case Raycast APIs and behaviors
 
 ## Useful Commands
 
