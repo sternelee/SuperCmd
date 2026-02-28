@@ -5,6 +5,7 @@ import type { FileSearchIndexStatus } from '../types/electron';
 
 interface FileSearchExtensionProps {
   onClose: () => void;
+  initialDetailPath?: string | null;
 }
 
 interface SearchScope {
@@ -130,13 +131,14 @@ function matchesFileNameTerms(filePath: string, terms: string[]): boolean {
   });
 }
 
-const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) => {
+const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose, initialDetailPath }) => {
   const [query, setQuery] = useState('');
   const [scopes, setScopes] = useState<SearchScope[]>([]);
   const [scopeId, setScopeId] = useState('home');
   const [results, setResults] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [seededDetailPath, setSeededDetailPath] = useState<string | null>(null);
   const [showActions, setShowActions] = useState(false);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
@@ -161,6 +163,17 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
     setScopeId('home');
     inputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    const normalized = String(initialDetailPath || '').trim();
+    if (!normalized) return;
+    setSeededDetailPath(normalized);
+    setQuery(basename(normalized));
+    setResults((prev) => [normalized, ...prev.filter((value) => value !== normalized)]);
+    setSelectedIndex(0);
+    setShowDetails(true);
+    setIsLoading(false);
+  }, [initialDetailPath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +250,13 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
     }
   }, [showDetails]);
 
+  useEffect(() => {
+    if (!seededDetailPath || showDetails) return;
+    const trimmed = query.trim();
+    if (!trimmed || trimmed === basename(seededDetailPath)) return;
+    setSeededDetailPath(null);
+  }, [query, seededDetailPath, showDetails]);
+
   const scrollToSelected = useCallback(() => {
     const selectedElement = itemRefs.current[selectedIndex];
     const scrollContainer = listRef.current;
@@ -262,9 +282,21 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
     searchRequestRef.current += 1;
     const requestId = searchRequestRef.current;
 
-    if (!currentScope || !trimmed) {
+    if (!currentScope) {
       setResults([]);
       setSelectedIndex(0);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!trimmed) {
+      if (seededDetailPath && showDetails) {
+        setResults([seededDetailPath]);
+        setSelectedIndex(0);
+      } else {
+        setResults([]);
+        setSelectedIndex(0);
+      }
       setIsLoading(false);
       return;
     }
@@ -298,7 +330,10 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
           .filter((filePath) => filePath.startsWith(scopePrefix) || filePath === currentScope.path)
           .filter((filePath) => matchesFileNameTerms(filePath, terms));
 
-        const deduped = Array.from(new Set(strictNameMatches));
+        let deduped = Array.from(new Set(strictNameMatches));
+        if (seededDetailPath && (showDetails || trimmed === basename(seededDetailPath))) {
+          deduped = [seededDetailPath, ...deduped.filter((value) => value !== seededDetailPath)];
+        }
         setResults(deduped);
         setSelectedIndex(0);
 
@@ -336,7 +371,7 @@ const FileSearchExtension: React.FC<FileSearchExtensionProps> = ({ onClose }) =>
     }, 140);
 
     return () => window.clearTimeout(timer);
-  }, [query, selectedScope]);
+  }, [query, selectedScope, seededDetailPath, showDetails]);
 
   useEffect(() => {
       const filePath = selectedPath;

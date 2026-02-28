@@ -201,6 +201,7 @@ const App: React.FC = () => {
   >({});
   const [launcherFileResults, setLauncherFileResults] = useState<IndexedFileSearchResult[]>([]);
   const [launcherFileIcons, setLauncherFileIcons] = useState<Record<string, string>>({});
+  const [fileSearchInitialDetailPath, setFileSearchInitialDetailPath] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const homeDir = String((window.electron as any).homeDir || '');
@@ -1334,6 +1335,13 @@ const App: React.FC = () => {
     () => getFileResultPathFromCommand(selectedCommand),
     [selectedCommand]
   );
+
+  useEffect(() => {
+    if (!showFileSearch && fileSearchInitialDetailPath) {
+      setFileSearchInitialDetailPath(null);
+    }
+  }, [showFileSearch, fileSearchInitialDetailPath]);
+
   const getDynamicFieldsForQuickLink = useCallback(
     async (
       quickLinkId: string,
@@ -1532,6 +1540,15 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const showFileResultDetailsByPath = useCallback(
+    (targetPath: string) => {
+      if (!targetPath) return;
+      setFileSearchInitialDetailPath(targetPath);
+      openFileSearch();
+    },
+    [openFileSearch]
+  );
+
   const togglePinSelectedCommand = useCallback(async () => {
     if (!selectedCommand) return;
     await pinToggleForCommand(selectedCommand);
@@ -1624,6 +1641,11 @@ const App: React.FC = () => {
           if (contextMenu) setContextMenu(null);
           restoreLauncherFocus();
         }
+        return;
+      }
+      if (selectedFileResultPath && e.metaKey && !e.shiftKey && !e.altKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        showFileResultDetailsByPath(selectedFileResultPath);
         return;
       }
       if (selectedFileResultPath && e.metaKey && e.key === 'Enter') {
@@ -1751,6 +1773,7 @@ const App: React.FC = () => {
       uninstallSelectedExtension,
       moveSelectedPinnedCommand,
       selectedFileResultPath,
+      showFileResultDetailsByPath,
       revealFileResultByPath,
       copyFileResultPath,
       selectedCommand,
@@ -2299,6 +2322,12 @@ const App: React.FC = () => {
             execute: () => openFileResultByPath(filePath),
           },
           {
+            id: 'show-file-details',
+            title: 'Show Details',
+            shortcut: 'Cmd+D',
+            execute: () => showFileResultDetailsByPath(filePath),
+          },
+          {
             id: 'reveal-file',
             title: 'Reveal in Finder',
             shortcut: 'Cmd+Enter',
@@ -2370,6 +2399,7 @@ const App: React.FC = () => {
       uninstallExtensionCommand,
       movePinnedCommand,
       openFileResultByPath,
+      showFileResultDetailsByPath,
       revealFileResultByPath,
       copyFileResultPath,
     ]
@@ -2806,8 +2836,10 @@ const App: React.FC = () => {
         <div className="w-full h-full">
           <div className="glass-effect overflow-hidden h-full flex flex-col">
             <FileSearchExtension
+              initialDetailPath={fileSearchInitialDetailPath}
               onClose={() => {
                 setShowFileSearch(false);
+                setFileSearchInitialDetailPath(null);
                 setSearchQuery('');
                 setSelectedIndex(0);
                 setTimeout(() => inputRef.current?.focus(), 50);
