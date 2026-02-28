@@ -43,6 +43,8 @@ export interface FileSearchIndexStatus {
   includeRoots: string[];
   excludedDirectoryNames: string[];
   excludedTopLevelDirectories: string[];
+  protectedTopLevelDirectories: string[];
+  includeProtectedHomeRoots: boolean;
   lastError: string | null;
 }
 
@@ -187,6 +189,7 @@ export interface AppSettings {
   recentCommandLaunchCounts: Record<string, number>;
   hasSeenOnboarding: boolean;
   hasSeenWhisperOnboarding: boolean;
+  fileSearchProtectedRootsEnabled: boolean;
   ai: AISettings;
   commandMetadata?: Record<string, { subtitle?: string }>;
   debugMode: boolean;
@@ -383,7 +386,7 @@ export interface ElectronAPI {
   enableFnWatcherForOnboarding: () => Promise<void>;
   disableFnWatcherForOnboarding: () => Promise<void>;
   onboardingRequestPermission: (
-    target: 'accessibility' | 'input-monitoring' | 'microphone' | 'speech-recognition'
+    target: 'accessibility' | 'input-monitoring' | 'microphone' | 'speech-recognition' | 'home-folder'
   ) => Promise<{
     granted: boolean;
     requested: boolean;

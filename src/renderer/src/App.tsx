@@ -79,6 +79,7 @@ function getQuickLinkIdFromCommandId(commandId: string): string | null {
 
 const FILE_RESULT_COMMAND_PREFIX = 'system-file-result:';
 const MAX_LAUNCHER_FILE_RESULTS = 30;
+const MAX_LAUNCHER_FILE_CANDIDATE_RESULTS = 3000;
 const MAX_LAUNCHER_FILE_RESULT_ICONS = MAX_LAUNCHER_FILE_RESULTS;
 const MIN_LAUNCHER_FILE_QUERY_LENGTH = 2;
 const MAX_INLINE_EXTENSION_ARGUMENTS = 3;
@@ -95,6 +96,64 @@ function asTildePath(filePath: string, homeDir: string): string {
 
 function buildFileResultCommandId(filePath: string): string {
   return `${FILE_RESULT_COMMAND_PREFIX}${encodeURIComponent(filePath)}`;
+}
+
+function normalizeLauncherFileSearchText(value: string): string {
+  return String(value || '').normalize('NFKD').toLowerCase();
+}
+
+function getLauncherFileSearchTerms(rawQuery: string): string[] {
+  return normalizeLauncherFileSearchText(rawQuery)
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+}
+
+function normalizeLauncherPathForMatch(value: string): string {
+  return String(value || '').normalize('NFKD').toLowerCase().replace(/\\/g, '/');
+}
+
+function isPathLikeLauncherFileQuery(rawQuery: string): boolean {
+  const trimmed = String(rawQuery || '').trim();
+  return trimmed.includes('/') || trimmed.startsWith('~');
+}
+
+function matchesLauncherPathQuery(filePath: string, rawQuery: string, homeDir: string): boolean {
+  const trimmed = String(rawQuery || '').trim();
+  if (!trimmed) return true;
+  const normalizedPath = normalizeLauncherPathForMatch(filePath);
+  const normalizedRawQuery = normalizeLauncherPathForMatch(trimmed);
+  if (!normalizedRawQuery) return true;
+
+  if (normalizedPath.includes(normalizedRawQuery)) return true;
+
+  if (trimmed.startsWith('~') && homeDir) {
+    const expanded = `${homeDir}${trimmed.slice(1)}`;
+    const normalizedExpanded = normalizeLauncherPathForMatch(expanded);
+    if (normalizedExpanded && normalizedPath.includes(normalizedExpanded)) return true;
+  }
+
+  const tildePath = normalizeLauncherPathForMatch(asTildePath(filePath, homeDir));
+  return Boolean(tildePath && tildePath.includes(normalizedRawQuery));
+}
+
+function splitLauncherFileNameTokens(fileName: string): string[] {
+  return normalizeLauncherFileSearchText(fileName)
+    .split(/[^a-z0-9]+/g)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function matchesLauncherFileNameTerms(fileName: string, terms: string[]): boolean {
+  if (terms.length === 0) return true;
+  const normalizedName = normalizeLauncherFileSearchText(fileName);
+  const tokens = splitLauncherFileNameTokens(fileName);
+  return terms.every((term) => {
+    if (/[^a-z0-9]/i.test(term)) {
+      return normalizedName.includes(term);
+    }
+    return tokens.some((token) => token.startsWith(term));
+  });
 }
 
 function getFileResultPathFromCommand(command: CommandInfo | null | undefined): string | null {
@@ -170,6 +229,7 @@ const App: React.FC = () => {
   >({});
   const [launcherFileResults, setLauncherFileResults] = useState<IndexedFileSearchResult[]>([]);
   const [launcherFileIcons, setLauncherFileIcons] = useState<Record<string, string>>({});
+  const [fileSearchInitialDetailPath, setFileSearchInitialDetailPath] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const homeDir = String((window.electron as any).homeDir || '');
@@ -238,6 +298,8 @@ const App: React.FC = () => {
   const inlineQuickLinkInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const fileSearchRequestSeqRef = useRef(0);
   const commandsRef = useRef<CommandInfo[]>([]);
+  const showActionsRef = useRef(false);
+  const selectedCommandRef = useRef<CommandInfo | null>(null);
   commandsRef.current = commands;
 
   const restoreLauncherFocus = useCallback(() => {
@@ -314,7 +376,7 @@ const App: React.FC = () => {
     title: 'SuperCmd Window Manager',
     width: 380,
     height: 276,
-    anchor: 'top-right',
+    anchor: 'bottom-right',
     onClosed: () => {
       setShowWindowManager(false);
     },
@@ -918,6 +980,13 @@ const App: React.FC = () => {
   }, [showActions]);
 
   useEffect(() => {
+    showActionsRef.current = showActions;
+    if (!showActions) {
+      setActionsCommand(null);
+    }
+  }, [showActions]);
+
+  useEffect(() => {
     if (!contextMenu) return;
     setSelectedContextActionIndex(0);
     setTimeout(() => contextMenuRef.current?.focus(), 0);
@@ -956,8 +1025,11 @@ const App: React.FC = () => {
     fileSearchRequestSeqRef.current += 1;
     const requestSeq = fileSearchRequestSeqRef.current;
     const trimmed = searchQuery.trim();
+    const pathLikeQuery = isPathLikeLauncherFileQuery(trimmed);
+    const terms = pathLikeQuery ? [] : getLauncherFileSearchTerms(trimmed);
+    const minimumQueryLength = pathLikeQuery ? 1 : MIN_LAUNCHER_FILE_QUERY_LENGTH;
 
-    if (!shouldKeepLauncherSearchResults || trimmed.length < MIN_LAUNCHER_FILE_QUERY_LENGTH) {
+    if (!shouldKeepLauncherSearchResults || trimmed.length < minimumQueryLength) {
       setLauncherFileResults([]);
       return;
     }
@@ -965,7 +1037,39 @@ const App: React.FC = () => {
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
-          const results = await window.electron.searchIndexedFiles(trimmed, { limit: MAX_LAUNCHER_FILE_RESULTS });
+          let candidates = await window.electron.searchIndexedFiles(trimmed, { limit: MAX_LAUNCHER_FILE_CANDIDATE_RESULTS });
+          if (fileSearchRequestSeqRef.current !== requestSeq) return;
+
+          if (candidates.length === 0) {
+            const status = await window.electron.getFileSearchIndexStatus().catch(() => null);
+            if (fileSearchRequestSeqRef.current !== requestSeq) return;
+
+            if (status && !status.ready && !status.indexing) {
+              await window.electron.refreshFileSearchIndex('launcher-query').catch(() => null);
+            }
+
+            if (status && (!status.ready || status.indexing)) {
+              await new Promise((resolve) => window.setTimeout(resolve, 220));
+              if (fileSearchRequestSeqRef.current !== requestSeq) return;
+              candidates = await window.electron.searchIndexedFiles(trimmed, { limit: MAX_LAUNCHER_FILE_CANDIDATE_RESULTS });
+            }
+          }
+
+          const seenPaths = new Set<string>();
+          const results: IndexedFileSearchResult[] = [];
+          for (const candidate of candidates) {
+            const candidatePath = String(candidate?.path || '').trim();
+            if (!candidatePath || seenPaths.has(candidatePath)) continue;
+            if (pathLikeQuery) {
+              if (!matchesLauncherPathQuery(candidatePath, trimmed, homeDir)) continue;
+            } else if (!matchesLauncherFileNameTerms(String(candidate?.name || ''), terms)) {
+              continue;
+            }
+            seenPaths.add(candidatePath);
+            results.push(candidate);
+            if (results.length >= MAX_LAUNCHER_FILE_RESULTS) break;
+          }
+
           if (fileSearchRequestSeqRef.current !== requestSeq) return;
           setLauncherFileResults(results);
 
@@ -1000,7 +1104,7 @@ const App: React.FC = () => {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [searchQuery, shouldKeepLauncherSearchResults]);
+  }, [searchQuery, shouldKeepLauncherSearchResults, homeDir]);
 
   useEffect(() => {
     if (!isLauncherModeActive) return;
@@ -1017,8 +1121,17 @@ const App: React.FC = () => {
 
       e.preventDefault();
       e.stopPropagation();
+      if (showActionsRef.current) {
+        setShowActions(false);
+        return;
+      }
+
+      const command = selectedCommandRef.current;
+      if (!command) return;
       setContextMenu(null);
-      setShowActions((prev) => !prev);
+      setActionsCommand(command);
+      setSelectedActionIndex(0);
+      setShowActions(true);
     };
 
     window.addEventListener('keydown', onWindowKeyDown, true);
@@ -1199,6 +1312,9 @@ const App: React.FC = () => {
     selectedIndex >= calcOffset
       ? displayCommands[selectedIndex - calcOffset]
       : null;
+  useEffect(() => {
+    selectedCommandRef.current = selectedCommand;
+  }, [selectedCommand]);
   const selectedExtensionArgumentDefinitions = useMemo(
     () =>
       selectedCommand?.category === 'extension'
@@ -1253,6 +1369,13 @@ const App: React.FC = () => {
     () => getFileResultPathFromCommand(selectedCommand),
     [selectedCommand]
   );
+
+  useEffect(() => {
+    if (!showFileSearch && fileSearchInitialDetailPath) {
+      setFileSearchInitialDetailPath(null);
+    }
+  }, [showFileSearch, fileSearchInitialDetailPath]);
+
   const getDynamicFieldsForQuickLink = useCallback(
     async (
       quickLinkId: string,
@@ -1451,6 +1574,15 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const showFileResultDetailsByPath = useCallback(
+    (targetPath: string) => {
+      if (!targetPath) return;
+      setFileSearchInitialDetailPath(targetPath);
+      openFileSearch();
+    },
+    [openFileSearch]
+  );
+
   const togglePinSelectedCommand = useCallback(async () => {
     if (!selectedCommand) return;
     await pinToggleForCommand(selectedCommand);
@@ -1511,8 +1643,15 @@ const App: React.FC = () => {
 
       if (e.metaKey && (e.key === 'k' || e.key === 'K') && !e.repeat) {
         e.preventDefault();
-        setShowActions((prev) => !prev);
+        if (showActions) {
+          setShowActions(false);
+          return;
+        }
+        if (!selectedCommand) return;
         setContextMenu(null);
+        setActionsCommand(selectedCommand);
+        setSelectedActionIndex(0);
+        setShowActions(true);
         return;
       }
 
@@ -1536,6 +1675,11 @@ const App: React.FC = () => {
           if (contextMenu) setContextMenu(null);
           restoreLauncherFocus();
         }
+        return;
+      }
+      if (selectedFileResultPath && e.metaKey && !e.shiftKey && !e.altKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        showFileResultDetailsByPath(selectedFileResultPath);
         return;
       }
       if (selectedFileResultPath && e.metaKey && e.key === 'Enter') {
@@ -1663,6 +1807,7 @@ const App: React.FC = () => {
       uninstallSelectedExtension,
       moveSelectedPinnedCommand,
       selectedFileResultPath,
+      showFileResultDetailsByPath,
       revealFileResultByPath,
       copyFileResultPath,
       selectedCommand,
@@ -2211,6 +2356,12 @@ const App: React.FC = () => {
             execute: () => openFileResultByPath(filePath),
           },
           {
+            id: 'show-file-details',
+            title: 'Show Details',
+            shortcut: 'Cmd+D',
+            execute: () => showFileResultDetailsByPath(filePath),
+          },
+          {
             id: 'reveal-file',
             title: 'Reveal in Finder',
             shortcut: 'Cmd+Enter',
@@ -2282,6 +2433,7 @@ const App: React.FC = () => {
       uninstallExtensionCommand,
       movePinnedCommand,
       openFileResultByPath,
+      showFileResultDetailsByPath,
       revealFileResultByPath,
       copyFileResultPath,
     ]
@@ -2291,13 +2443,14 @@ const App: React.FC = () => {
     () => getActionsForCommand(selectedCommand),
     [getActionsForCommand, selectedCommand]
   );
+  const actionsOverlayActions = useMemo(
+    () => getActionsForCommand(actionsCommand),
+    [actionsCommand, getActionsForCommand]
+  );
 
   const contextCommand = useMemo(
-    () =>
-      contextMenu
-        ? displayCommands.find((cmd) => cmd.id === contextMenu.commandId) || null
-        : null,
-    [contextMenu, displayCommands]
+    () => (contextMenu ? contextMenu.command : null),
+    [contextMenu]
   );
 
   const contextActions = useMemo(
@@ -2307,12 +2460,12 @@ const App: React.FC = () => {
 
   const handleActionsOverlayKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (selectedActions.length === 0) return;
+      if (actionsOverlayActions.length === 0) return;
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
           setSelectedActionIndex((prev) =>
-            Math.min(prev + 1, selectedActions.length - 1)
+            Math.min(prev + 1, actionsOverlayActions.length - 1)
           );
           break;
         case 'ArrowUp':
@@ -2321,7 +2474,7 @@ const App: React.FC = () => {
           break;
         case 'Enter':
           e.preventDefault();
-          await Promise.resolve(selectedActions[selectedActionIndex]?.execute());
+          await Promise.resolve(actionsOverlayActions[selectedActionIndex]?.execute());
           setShowActions(false);
           restoreLauncherFocus();
           break;
@@ -2332,7 +2485,7 @@ const App: React.FC = () => {
           break;
       }
     },
-    [selectedActions, selectedActionIndex, restoreLauncherFocus]
+    [actionsOverlayActions, selectedActionIndex, restoreLauncherFocus]
   );
 
   const handleContextMenuKeyDown = useCallback(
@@ -2717,8 +2870,10 @@ const App: React.FC = () => {
         <div className="w-full h-full">
           <div className="glass-effect overflow-hidden h-full flex flex-col">
             <FileSearchExtension
+              initialDetailPath={fileSearchInitialDetailPath}
               onClose={() => {
                 setShowFileSearch(false);
+                setFileSearchInitialDetailPath(null);
                 setSearchQuery('');
                 setSelectedIndex(0);
                 setTimeout(() => inputRef.current?.focus(), 50);
@@ -3018,7 +3173,7 @@ const App: React.FC = () => {
                             setContextMenu({
                               x: e.clientX,
                               y: e.clientY,
-                              commandId: command.id,
+                              command,
                             });
                           }}
                         >
@@ -3100,7 +3255,10 @@ const App: React.FC = () => {
             )}
             <button
               onClick={() => {
+                if (!selectedCommand) return;
                 setContextMenu(null);
+                setActionsCommand(selectedCommand);
+                setSelectedActionIndex(0);
                 setShowActions(true);
               }}
               className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
@@ -3198,7 +3356,7 @@ const App: React.FC = () => {
         </div>
       </div>
     )}
-    {showActions && selectedActions.length > 0 && (
+    {showActions && actionsOverlayActions.length > 0 && (
       <div
         className="fixed inset-0 z-50"
         onClick={() => setShowActions(false)}
@@ -3240,7 +3398,7 @@ const App: React.FC = () => {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex-1 overflow-y-auto py-1">
-            {selectedActions.map((action, idx) => (
+            {actionsOverlayActions.map((action, idx) => (
               <div
                 key={action.id}
                 className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
@@ -3350,13 +3508,7 @@ const App: React.FC = () => {
                     : undefined
                 }
                 onClick={async () => {
-                  console.log('[CTX-MENU] clicked action:', action.id, action.title);
-                  try {
-                    await Promise.resolve(action.execute());
-                    console.log('[CTX-MENU] action executed successfully');
-                  } catch (err) {
-                    console.error('[CTX-MENU] action.execute() threw:', err);
-                  }
+                  await Promise.resolve(action.execute());
                   setContextMenu(null);
                   restoreLauncherFocus();
                 }}

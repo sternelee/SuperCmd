@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-type DetachedWindowAnchor = 'center' | 'center-bottom' | 'top-right' | 'caret';
+type DetachedWindowAnchor = 'center' | 'center-bottom' | 'top-right' | 'bottom-right' | 'caret';
 
 interface DetachedPortalWindowOptions {
   name: string;
@@ -20,15 +20,60 @@ interface DetachedPortalWindowOptions {
 const PORTAL_ROOT_ID = '__sc_detached_portal_root__';
 
 function computeWindowPosition(anchor: DetachedWindowAnchor, width: number, height: number): { left: number; top: number } {
-  const screenLeft = window.screen?.availLeft ?? 0;
-  const screenTop = window.screen?.availTop ?? 0;
-  const availWidth = window.screen?.availWidth || window.outerWidth || window.innerWidth || width;
-  const availHeight = window.screen?.availHeight || window.outerHeight || window.innerHeight || height;
+  const screenObj = window.screen as (Screen & { availLeft?: number; availTop?: number; left?: number; top?: number }) | undefined;
+  const firstFinite = (...values: Array<number | undefined | null>): number | null => {
+    for (const value of values) {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+    }
+    return null;
+  };
+  const firstPositive = (...values: Array<number | undefined | null>): number | null => {
+    for (const value of values) {
+      if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
+    }
+    return null;
+  };
+
+  const screenLeft = firstFinite(
+    screenObj?.availLeft,
+    screenObj?.left,
+    (window as any).screenX,
+    (window as any).screenLeft,
+    0
+  ) ?? 0;
+  const screenTop = firstFinite(
+    screenObj?.availTop,
+    screenObj?.top,
+    (window as any).screenY,
+    (window as any).screenTop,
+    0
+  ) ?? 0;
+  const availWidth = firstPositive(
+    screenObj?.availWidth,
+    screenObj?.width,
+    window.innerWidth,
+    window.outerWidth,
+    width
+  ) ?? width;
+  const availHeight = firstPositive(
+    screenObj?.availHeight,
+    screenObj?.height,
+    window.innerHeight,
+    window.outerHeight,
+    height
+  ) ?? height;
 
   if (anchor === 'top-right') {
     return {
       left: Math.round(screenLeft + availWidth - width - 20),
       top: Math.round(screenTop + 16),
+    };
+  }
+
+  if (anchor === 'bottom-right') {
+    return {
+      left: Math.round(screenLeft + availWidth - width - 20),
+      top: Math.round(screenTop + availHeight - height - 20),
     };
   }
 

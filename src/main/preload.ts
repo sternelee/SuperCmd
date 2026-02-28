@@ -241,7 +241,7 @@ contextBridge.exposeInMainWorld('electron', {
   disableFnWatcherForOnboarding: (): Promise<void> =>
     ipcRenderer.invoke('disable-fn-watcher-for-onboarding'),
   onboardingRequestPermission: (
-    target: 'accessibility' | 'input-monitoring' | 'microphone' | 'speech-recognition'
+    target: 'accessibility' | 'input-monitoring' | 'microphone' | 'speech-recognition' | 'home-folder'
   ): Promise<{
     granted: boolean;
     requested: boolean;
@@ -456,6 +456,8 @@ contextBridge.exposeInMainWorld('electron', {
     includeRoots: string[];
     excludedDirectoryNames: string[];
     excludedTopLevelDirectories: string[];
+    protectedTopLevelDirectories: string[];
+    includeProtectedHomeRoots: boolean;
     lastError: string | null;
   }> => ipcRenderer.invoke('file-search-status'),
   refreshFileSearchIndex: (reason?: string): Promise<{
@@ -467,6 +469,8 @@ contextBridge.exposeInMainWorld('electron', {
     includeRoots: string[];
     excludedDirectoryNames: string[];
     excludedTopLevelDirectories: string[];
+    protectedTopLevelDirectories: string[];
+    includeProtectedHomeRoots: boolean;
     lastError: string | null;
   }> => ipcRenderer.invoke('file-search-refresh', reason),
 
