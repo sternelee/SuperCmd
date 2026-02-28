@@ -187,34 +187,14 @@ Important fields inside `settings.json`:
 
 ## Contributing
 
-1. Fork the repository and create a feature branch.
-2. Keep compatibility with existing Raycast extensions.
-3. Follow current code organization:
-   - API/runtime work in `src/renderer/src/raycast-api/`
-   - System-level logic in `src/main/`
-   - UI views/hooks in `src/renderer/src/`
-4. Run build checks before opening a PR:
+We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines on development setup, code architecture, PR conventions, and more.
 
-```bash
-npm run build
-```
+Quick version:
 
-5. In your PR, include:
-   - What changed
-   - Why it changed
-   - Compatibility impact (if any)
-   - How you tested it
-
-## What's Pending
-
-Current pending/roadmap items:
-
-- Complete OAuth implementation in the Raycast API compatibility layer
-- Expand `BrowserExtension` support beyond current stubs
-- Improve selected text/Finder item behavior with macOS permissions handling
-- Harden asset loading/path resolution for extension assets
-- Add a broader automated test suite (unit + integration + compatibility)
-- Continue parity work for edge-case Raycast APIs and behaviors
+1. Fork the repo and create a feature branch.
+2. Make your changes, keeping Raycast extension compatibility in mind.
+3. Run `npm run build` to verify.
+4. Open a PR with a clear description of what, why, and how you tested.
 
 ## Useful Commands
 
