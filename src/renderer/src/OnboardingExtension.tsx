@@ -348,7 +348,7 @@ const OnboardingExtension: React.FC<OnboardingExtensionProps> = ({
   useEffect(() => {
     if (step !== STEPS.length - 1) return;
     finalStepHotkeyBaselineRef.current = onboardingHotkeyPresses;
-  }, [step, onboardingHotkeyPresses]);
+  }, [step]);
 
   useEffect(() => {
     if (step !== STEPS.length - 1) return;
