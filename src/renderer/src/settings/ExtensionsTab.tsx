@@ -22,6 +22,8 @@ import {
   Link2,
   ListFilter,
   Check,
+  Plus,
+  X,
 } from 'lucide-react';
 import supercmdLogo from '../../../../supercmd.svg';
 import HotkeyRecorder from './HotkeyRecorder';
@@ -1401,6 +1403,21 @@ const ExtensionsTab: React.FC<{
                   </div>
                 ) : null}
 
+                {selectedCommandInfo?.id === 'system-clipboard-manager' ? (
+                  <ClipboardSettingsSection
+                    retentionDays={settings?.clipboardHistoryRetentionDays ?? null}
+                    onRetentionChange={async (next) => {
+                      await window.electron.saveSettings({ clipboardHistoryRetentionDays: next });
+                      setSettings((prev) => (prev ? { ...prev, clipboardHistoryRetentionDays: next } : prev));
+                    }}
+                    blacklist={settings?.clipboardAppBlacklist ?? []}
+                    onBlacklistChange={async (next) => {
+                      await window.electron.saveSettings({ clipboardAppBlacklist: next });
+                      setSettings((prev) => (prev ? { ...prev, clipboardAppBlacklist: next } : prev));
+                    }}
+                  />
+                ) : null}
+
                 <PreferenceSection
                   title={t('settings.extensions.extensionPreferences')}
                   extName={selectedSchema.extName}
@@ -1620,6 +1637,283 @@ const PreferenceSection: React.FC<{
           </div>
         );
       })}
+    </div>
+  );
+};
+
+type InstalledAppEntry = {
+  name: string;
+  path: string;
+  bundleId?: string;
+  iconDataUrl?: string;
+};
+
+const CLIPBOARD_RETENTION_OPTIONS: { value: number | null; labelKey: string }[] = [
+  { value: 1, labelKey: 'settings.advanced.clipboardRetention.option.1day' },
+  { value: 7, labelKey: 'settings.advanced.clipboardRetention.option.7days' },
+  { value: 30, labelKey: 'settings.advanced.clipboardRetention.option.1month' },
+  { value: 90, labelKey: 'settings.advanced.clipboardRetention.option.3months' },
+  { value: 180, labelKey: 'settings.advanced.clipboardRetention.option.6months' },
+  { value: 365, labelKey: 'settings.advanced.clipboardRetention.option.1year' },
+  { value: null, labelKey: 'settings.advanced.clipboardRetention.option.never' },
+];
+
+const ClipboardSettingsSection: React.FC<{
+  retentionDays: number | null;
+  onRetentionChange: (next: number | null) => Promise<void>;
+  blacklist: string[];
+  onBlacklistChange: (next: string[]) => Promise<void>;
+}> = ({ retentionDays, onRetentionChange, blacklist, onBlacklistChange }) => {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <div className="text-[11px] uppercase tracking-wider text-[var(--text-subtle)]">
+          {t('settings.advanced.clipboardRetention.title')}
+        </div>
+        <p className="text-[11px] text-[var(--text-subtle)] leading-snug">
+          {t('settings.advanced.clipboardRetention.description')}
+        </p>
+        <div className="w-full max-w-[320px]">
+          <select
+            value={retentionDays == null ? 'never' : String(retentionDays)}
+            onChange={(event) => {
+              const raw = event.target.value;
+              const next = raw === 'never' ? null : Number(raw);
+              void onRetentionChange(next);
+            }}
+            className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2.5 py-2 text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500/50"
+          >
+            {CLIPBOARD_RETENTION_OPTIONS.map((opt) => (
+              <option
+                key={opt.value == null ? 'never' : String(opt.value)}
+                value={opt.value == null ? 'never' : String(opt.value)}
+              >
+                {t(opt.labelKey)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <ClipboardBlacklistSection blacklist={blacklist} onChange={onBlacklistChange} />
+    </div>
+  );
+};
+
+const ClipboardBlacklistSection: React.FC<{
+  blacklist: string[];
+  onChange: (next: string[]) => Promise<void>;
+}> = ({ blacklist, onChange }) => {
+  const { t } = useI18n();
+  const [apps, setApps] = useState<InstalledAppEntry[]>([]);
+  const [appsLoaded, setAppsLoaded] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const installed = await window.electron.getApplications();
+        if (cancelled) return;
+        setApps(
+          (installed || [])
+            .filter((entry) => Boolean(entry?.bundleId))
+            .sort((a, b) => a.name.localeCompare(b.name))
+        );
+      } catch {
+        if (!cancelled) setApps([]);
+      } finally {
+        if (!cancelled) setAppsLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onMouseDown = (event: MouseEvent) => {
+      if (pickerRef.current?.contains(event.target as Node)) return;
+      setPickerOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPickerOpen(false);
+    };
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKeyDown);
+    const focusTimer = window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKeyDown);
+      window.clearTimeout(focusTimer);
+    };
+  }, [pickerOpen]);
+
+  const appByBundleId = useMemo(() => {
+    const map = new Map<string, InstalledAppEntry>();
+    for (const entry of apps) {
+      const key = String(entry.bundleId || '').toLowerCase();
+      if (key) map.set(key, entry);
+    }
+    return map;
+  }, [apps]);
+
+  const blacklistedEntries = useMemo(() => {
+    return blacklist.map((bundleId) => {
+      const match = appByBundleId.get(String(bundleId || '').toLowerCase());
+      return {
+        bundleId,
+        name: match?.name || bundleId,
+        iconDataUrl: match?.iconDataUrl,
+      };
+    });
+  }, [blacklist, appByBundleId]);
+
+  const selectableApps = useMemo(() => {
+    const already = new Set(blacklist.map((b) => String(b || '').toLowerCase()));
+    const q = pickerSearch.trim().toLowerCase();
+    return apps.filter((entry) => {
+      const key = String(entry.bundleId || '').toLowerCase();
+      if (!key || already.has(key)) return false;
+      if (!q) return true;
+      return (
+        entry.name.toLowerCase().includes(q) ||
+        key.includes(q)
+      );
+    });
+  }, [apps, blacklist, pickerSearch]);
+
+  const handleAdd = async (bundleId: string) => {
+    const normalized = String(bundleId || '').trim();
+    if (!normalized) return;
+    if (blacklist.some((b) => String(b || '').toLowerCase() === normalized.toLowerCase())) return;
+    const next = [...blacklist, normalized];
+    setPickerOpen(false);
+    setPickerSearch('');
+    await onChange(next);
+  };
+
+  const handleRemove = async (bundleId: string) => {
+    const next = blacklist.filter((b) => b !== bundleId);
+    await onChange(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[11px] uppercase tracking-wider text-[var(--text-subtle)]">
+          {t('settings.extensions.clipboardBlacklist.title')}
+        </div>
+        <div className="relative" ref={pickerRef}>
+          <button
+            type="button"
+            onClick={() => setPickerOpen((prev) => !prev)}
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--ui-segment-border)] bg-[var(--ui-segment-bg)] px-2 py-1 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--ui-segment-hover-bg)] transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+            {t('settings.extensions.clipboardBlacklist.add')}
+          </button>
+          {pickerOpen ? (
+            <div
+              className="absolute right-0 top-full mt-1 w-72 max-h-[320px] rounded-lg border border-[var(--ui-panel-border)] shadow-2xl overflow-hidden z-20 flex flex-col"
+              style={{
+                background:
+                  'linear-gradient(160deg, rgba(var(--on-surface-rgb), 0.08), rgba(var(--on-surface-rgb), 0.01)), rgba(var(--surface-base-rgb), 0.42)',
+                backdropFilter: 'blur(96px) saturate(190%)',
+                WebkitBackdropFilter: 'blur(96px) saturate(190%)',
+                borderColor: 'rgba(var(--on-surface-rgb), 0.05)',
+              }}
+            >
+              <div className="p-1.5 border-b border-[var(--ui-divider)]">
+                <input
+                  ref={searchInputRef}
+                  value={pickerSearch}
+                  onChange={(event) => setPickerSearch(event.target.value)}
+                  placeholder={t('settings.extensions.clipboardBlacklist.searchPlaceholder')}
+                  className="w-full bg-[var(--ui-segment-bg)] border border-[var(--ui-divider)] rounded-md px-2 py-1 text-[12px] text-[var(--text-secondary)] placeholder:text-[color:var(--text-subtle)] outline-none"
+                />
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+                {!appsLoaded ? (
+                  <div className="px-2.5 py-2 text-[11px] text-[var(--text-subtle)]">
+                    {t('settings.extensions.clipboardBlacklist.loading')}
+                  </div>
+                ) : selectableApps.length === 0 ? (
+                  <div className="px-2.5 py-2 text-[11px] text-[var(--text-subtle)]">
+                    {t('settings.extensions.clipboardBlacklist.noApps')}
+                  </div>
+                ) : (
+                  selectableApps.map((entry) => (
+                    <button
+                      key={entry.bundleId}
+                      type="button"
+                      onClick={() => {
+                        if (entry.bundleId) void handleAdd(entry.bundleId);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left hover:bg-[var(--ui-segment-hover-bg)] transition-colors"
+                    >
+                      {entry.iconDataUrl ? (
+                        <img
+                          src={entry.iconDataUrl}
+                          alt=""
+                          className="w-4 h-4 rounded-sm object-contain flex-shrink-0"
+                          draggable={false}
+                        />
+                      ) : (
+                        <TerminalSquare className="w-4 h-4 text-[var(--text-subtle)] flex-shrink-0" />
+                      )}
+                      <span className="text-[12px] text-[var(--text-secondary)] truncate">{entry.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <p className="text-[11px] text-[var(--text-subtle)] leading-snug">
+        {t('settings.extensions.clipboardBlacklist.description')}
+      </p>
+      {blacklistedEntries.length === 0 ? (
+        <div className="rounded-md border border-dashed border-[var(--ui-divider)] px-3 py-3 text-[11px] text-[var(--text-subtle)]">
+          {t('settings.extensions.clipboardBlacklist.empty')}
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {blacklistedEntries.map((entry) => (
+            <div
+              key={entry.bundleId}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--ui-divider)] bg-[var(--ui-segment-bg)] pl-1.5 pr-1 py-1"
+              title={entry.bundleId}
+            >
+              {entry.iconDataUrl ? (
+                <img
+                  src={entry.iconDataUrl}
+                  alt=""
+                  className="w-3.5 h-3.5 rounded-sm object-contain"
+                  draggable={false}
+                />
+              ) : (
+                <TerminalSquare className="w-3.5 h-3.5 text-[var(--text-subtle)]" />
+              )}
+              <span className="text-[11px] text-[var(--text-secondary)] max-w-[180px] truncate">{entry.name}</span>
+              <button
+                type="button"
+                onClick={() => void handleRemove(entry.bundleId)}
+                className="p-0.5 rounded-sm text-[var(--text-subtle)] hover:text-red-300/90 hover:bg-[var(--ui-segment-hover-bg)]"
+                aria-label={t('settings.extensions.clipboardBlacklist.remove')}
+                title={t('settings.extensions.clipboardBlacklist.remove')}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
