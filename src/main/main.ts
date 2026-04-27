@@ -7008,6 +7008,11 @@ function createWindow(): void {
     vibrancy: false,
     transparent: true,
     backgroundColor: '#00000000',
+    // Without this, macOS eats the first mouse-down on the panel to activate
+    // the window — so a click only registers if the window is already key.
+    // Mouse users (e.g. Mac mini, multi-monitor) hit this constantly because
+    // the cursor often sits on another display when the launcher pops in.
+    acceptFirstMouse: true,
     ...(useDarwinLauncherPanel
       ? {
           // Use AppKit's panel-backed window on macOS for launcher semantics.
@@ -8014,6 +8019,14 @@ async function showWindow(options?: { systemCommandId?: string }): Promise<void>
   if (shouldActivateLauncherWindow) {
     mainWindow.focus();
   } else {
+    // On macOS Tahoe (26), NSPanel.show() no longer implicitly makes the
+    // panel the key window. Without being key, the panel does not receive
+    // mouseMoved/mouseDown events (no hover, no clicks) — though scroll and
+    // webContents-focused keyboard input still work, which matches the
+    // reported symptom. Calling focus() on a non-activating panel triggers
+    // makeKeyAndOrderFront without activating the app, so the previously
+    // frontmost app stays "active" for selection capture.
+    try { mainWindow.focus(); } catch {}
     try { (mainWindow as any).focusOnWebView?.(); } catch {}
     try { mainWindow.webContents.focus(); } catch {}
   }
@@ -8045,6 +8058,9 @@ async function showWindow(options?: { systemCommandId?: string }): Promise<void>
       if (shouldActivateLauncherWindow) {
         mainWindow.focus();
       } else {
+        // See note above: required on macOS Tahoe to make the NSPanel key
+        // so it receives mouse-moved/mouse-down events.
+        try { mainWindow.focus(); } catch {}
         try { (mainWindow as any).focusOnWebView?.(); } catch {}
         try { mainWindow.webContents.focus(); } catch {}
       }
