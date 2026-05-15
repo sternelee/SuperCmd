@@ -175,6 +175,13 @@
         "title": "Informazioni",
         "description": "Informazioni sulla versione.",
         "version": "SuperCmd v{version}"
+      },
+      "autoQuit": {
+        "title": "Chiusura automatica",
+        "timeout": "Timeout predefinito",
+        "description": "Le app con chiusura automatica attivata verranno chiuse dopo questo periodo di inattività",
+        "minute": "minuto",
+        "minutes": "minuti"
       }
     },
     "ai": {
@@ -771,8 +778,8 @@
       "showInFinder": "Mostra in Finder",
       "revealInFinder": "Mostra in Finder",
       "getInfo": "Ottieni informazioni",
-      "quit": "Esci",
-      "forceQuit": "Uscita forzata",
+      "quit": "Esci dall'applicazione",
+      "forceQuit": "Uscita forzata dell'applicazione",
       "quitApp": "Esci da {appName}",
       "forceQuitApp": "Uscita forzata da {appName}",
       "failedQuitting": "Chiusura di {appName} non riuscita",
@@ -788,7 +795,10 @@
       "disableCommand": "Disabilita comando",
       "moveUp": "Sposta su",
       "moveDown": "Sposta giù",
-      "uninstallApplication": "Disinstalla applicazione"
+      "uninstallApplication": "Disinstalla applicazione",
+      "enableAutoQuit": "Attiva chiusura automatica",
+      "disableAutoQuit": "Disattiva chiusura automatica",
+      "disableApplication": "Disabilita applicazione"
     },
     "empty": {
       "noResults": "Nessun risultato trovato",

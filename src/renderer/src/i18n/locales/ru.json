@@ -115,8 +115,8 @@
       "showInFinder": "Показать в Finder",
       "revealInFinder": "Открыть в Finder",
       "getInfo": "Свойства",
-      "quit": "Выйти",
-      "forceQuit": "Завершить принудительно",
+      "quit": "Завершить приложение",
+      "forceQuit": "Принудительно завершить приложение",
       "quitApp": "Завершить {appName}",
       "forceQuitApp": "Принудительно завершить {appName}",
       "failedQuitting": "Не удалось завершить {appName}",
@@ -132,7 +132,10 @@
       "disableCommand": "Отключить команду",
       "moveUp": "Переместить вверх",
       "moveDown": "Переместить вниз",
-      "uninstallApplication": "Удалить приложение"
+      "uninstallApplication": "Удалить приложение",
+      "enableAutoQuit": "Включить автозавершение",
+      "disableAutoQuit": "Отключить автозавершение",
+      "disableApplication": "Отключить приложение"
     },
     "empty": {
       "noResults": "Ничего не найдено",
@@ -195,6 +198,13 @@
         "es": "Испанский",
         "ru": "Русский",
         "it": "Итальянский"
+      },
+      "autoQuit": {
+        "title": "Автозавершение",
+        "timeout": "Тайм-аут по умолчанию",
+        "description": "Приложения с включённым автозавершением закроются после этого периода бездействия",
+        "minute": "минута",
+        "minutes": "минут"
       }
     },
     "advanced": {

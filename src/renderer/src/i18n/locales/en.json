@@ -176,6 +176,13 @@
         "title": "About",
         "description": "Version information.",
         "version": "SuperCmd v{version}"
+      },
+      "autoQuit": {
+        "title": "Auto Quit",
+        "timeout": "Default Timeout",
+        "description": "Apps with Auto Quit enabled will quit after this duration of inactivity",
+        "minute": "minute",
+        "minutes": "minutes"
       }
     },
     "ai": {
@@ -780,8 +787,8 @@
       "showInFinder": "Show in Finder",
       "revealInFinder": "Reveal in Finder",
       "getInfo": "Get Info",
-      "quit": "Quit",
-      "forceQuit": "Force Quit",
+      "quit": "Quit Application",
+      "forceQuit": "Force Quit Application",
       "quitApp": "Quit {appName}",
       "forceQuitApp": "Force quit {appName}",
       "failedQuitting": "Failed quitting {appName}",
@@ -797,7 +804,10 @@
       "disableCommand": "Disable Command",
       "moveUp": "Move Up",
       "moveDown": "Move Down",
-      "uninstallApplication": "Uninstall Application"
+      "uninstallApplication": "Uninstall Application",
+      "enableAutoQuit": "Enable Auto Quit",
+      "disableAutoQuit": "Disable Auto Quit",
+      "disableApplication": "Disable Application"
     },
     "empty": {
       "noResults": "No results found",

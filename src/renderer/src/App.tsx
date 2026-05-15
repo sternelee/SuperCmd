@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, ArrowRight, ArrowUp, ArrowDown, CornerDownLeft, ExternalLink, Plus, Pencil, Files, Trash2, Download, BellOff, Info, FolderOpen, Copy, Pin, Link, EyeOff, Play, XCircle } from 'lucide-react';
+import { X, Sparkles, ArrowRight, ArrowUp, ArrowDown, CornerDownLeft, ExternalLink, Plus, Pencil, Files, Trash2, Download, BellOff, Info, FolderOpen, Copy, Pin, Link, EyeOff, Play, XCircle, Timer } from 'lucide-react';
 import supercmdLogo from '../../../supercmd.png';
 import type {
   CommandInfo,
@@ -363,6 +363,7 @@ const App: React.FC = () => {
     DEFAULT_LAUNCHER_BACKGROUND_OPACITY_PERCENT
   );
   const [searchQuery, setSearchQuery] = useState('');
+  const [autoQuitAppPaths, setAutoQuitAppPaths] = useState<Set<string>>(new Set());
   const browserSearch = useBrowserSearch(searchQuery);
   const [browserSearchSkipAutoComplete, setBrowserSearchSkipAutoComplete] = useState(false);
   const [inlineExtensionArgumentValues, setInlineExtensionArgumentValues] = useState<
@@ -695,6 +696,9 @@ const App: React.FC = () => {
       applyUiStyle(settings.uiStyle || 'default');
       applyBaseColor(settings.baseColor || '#101113');
       setNavigationStyle(settings.navigationStyle === 'macos' ? 'macos' : 'vim');
+      // Load auto-quit app paths
+      const aqApps = settings.autoQuitApps || [];
+      setAutoQuitAppPaths(new Set(aqApps.map((a: any) => a.appPath)));
       const popToRootSeconds = Number(settings.popToRootSearchTimeoutSeconds);
       popToRootTimeoutMsRef.current = (Number.isFinite(popToRootSeconds) ? Math.max(0, popToRootSeconds) : DEFAULT_POP_TO_ROOT_TIMEOUT_SECONDS) * 1000;
       const shouldShowOnboarding = !settings.hasSeenOnboarding;
@@ -3363,9 +3367,24 @@ const App: React.FC = () => {
             execute: () => pinToggleForFile(filePath),
           },
           ...(filePath.endsWith('.app') ? [{
+            id: 'toggle-auto-quit',
+            title: autoQuitAppPaths.has(filePath) ? t('launcher.actions.disableAutoQuit') : t('launcher.actions.enableAutoQuit'),
+            icon: <Timer className="w-4 h-4" />,
+            execute: async () => {
+              if (autoQuitAppPaths.has(filePath)) {
+                await window.electron.autoQuitRemoveApp(filePath);
+                setAutoQuitAppPaths(prev => { const next = new Set(prev); next.delete(filePath); return next; });
+              } else {
+                const timeout = await window.electron.autoQuitGetDefaultTimeout();
+                await window.electron.autoQuitAddApp({ appPath: filePath, appName: command.title, timeoutSeconds: timeout });
+                setAutoQuitAppPaths(prev => new Set(prev).add(filePath));
+              }
+            },
+          }, {
             id: 'quit-app',
             title: t('launcher.actions.quit'),
             shortcut: 'Ctrl+Shift+Q',
+            separatorBefore: true,
             icon: <XCircle className="w-4 h-4" />,
             execute: async () => {
               const appName = filePath.split('/').pop()?.replace('.app', '') || '';
@@ -3456,7 +3475,7 @@ const App: React.FC = () => {
       const pinnedIndex = pinnedCommands.indexOf(command.id);
       const hasDeeplink = Boolean(String(command.deeplink || '').trim());
       const isApp = command.category === 'app' && Boolean(command.path?.endsWith('.app'));
-      return [
+      return ([
         {
           id: 'open',
           title: t('launcher.actions.openCommand'),
@@ -3487,6 +3506,7 @@ const App: React.FC = () => {
           id: 'quit-app',
           title: t('launcher.actions.quit'),
           shortcut: 'Ctrl+Shift+Q',
+          separatorBefore: true,
           icon: <XCircle className="w-4 h-4" />,
           execute: async () => {
             const ok = await window.electron.quitApp(command.path!);
@@ -3510,9 +3530,27 @@ const App: React.FC = () => {
           },
         }] : []),
         {
+          id: 'toggle-auto-quit',
+          title: (command.path && autoQuitAppPaths.has(command.path)) ? t('launcher.actions.disableAutoQuit') : t('launcher.actions.enableAutoQuit'),
+          enabled: command.category === 'app' && Boolean(command.path?.endsWith('.app')),
+          icon: <Timer className="w-4 h-4" />,
+          execute: async () => {
+            if (!command.path) return;
+            if (autoQuitAppPaths.has(command.path)) {
+              await window.electron.autoQuitRemoveApp(command.path);
+              setAutoQuitAppPaths(prev => { const next = new Set(prev); next.delete(command.path!); return next; });
+            } else {
+              const timeout = await window.electron.autoQuitGetDefaultTimeout();
+              await window.electron.autoQuitAddApp({ appPath: command.path, appName: command.title, timeoutSeconds: timeout });
+              setAutoQuitAppPaths(prev => new Set(prev).add(command.path!));
+            }
+          },
+        },
+        {
           id: 'disable',
-          title: t('launcher.actions.disableCommand'),
+          title: command.category === 'app' ? t('launcher.actions.disableApplication') : t('launcher.actions.disableCommand'),
           shortcut: 'Cmd+Shift+D',
+          separatorBefore: true,
           style: 'destructive' as const,
           icon: <EyeOff className="w-4 h-4" />,
           execute: () => disableCommand(command),
@@ -3536,7 +3574,6 @@ const App: React.FC = () => {
           execute: () => { try { if (command.path) openAppUninstall(command.path); } catch(e) { console.error('openAppUninstall error:', e); } },
         },
         {
-          id: 'move-up',
           title: t('launcher.actions.moveUp'),
           shortcut: 'Cmd+Alt+Up',
           enabled: isPinned && pinnedIndex > 0,
@@ -3551,7 +3588,7 @@ const App: React.FC = () => {
           icon: <ArrowDown className="w-4 h-4" />,
           execute: () => movePinnedCommand(command, 'down'),
         },
-      ].filter((action) => action.enabled !== false);
+      ] as LauncherAction[]).filter((action) => action.enabled !== false);
     },
     [
       pinnedCommands,
@@ -3573,6 +3610,7 @@ const App: React.FC = () => {
       setQuickLinkEditId,
       openAppUninstall,
       showLauncherFooterStatus,
+      autoQuitAppPaths,
       t,
     ]
   );
@@ -4865,8 +4903,11 @@ const App: React.FC = () => {
         >
           <div className="flex-1 overflow-y-auto py-1">
             {actionsOverlayActions.map((action, idx) => (
+              <React.Fragment key={action.id}>
+                {action.separatorBefore && (
+                  <div className="mx-2.5 my-1 border-t border-[var(--ui-divider)]" />
+                )}
               <div
-                key={action.id}
                 className={`mx-1 px-2.5 py-1.5 rounded-lg border border-transparent flex items-center gap-2.5 cursor-pointer transition-colors ${
                   idx === selectedActionIndex
                     ? action.style === 'destructive'
@@ -4917,6 +4958,7 @@ const App: React.FC = () => {
                   </span>
                 )}
               </div>
+              </React.Fragment>
             ))}
           </div>
         </div>

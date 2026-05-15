@@ -133,6 +133,13 @@
       "checkUpdates": {
         "label": "Vérifier les mises à jour automatiquement",
         "description": "Vérifier si une nouvelle version est disponible"
+      },
+      "autoQuit": {
+        "title": "Fermeture auto",
+        "timeout": "Délai par défaut",
+        "description": "Les apps avec fermeture auto activée se fermeront après cette durée d'inactivité",
+        "minute": "minute",
+        "minutes": "minutes"
       }
     },
     "ai": {
@@ -772,13 +779,17 @@
       "paste": "Coller",
       "delete": "Supprimer",
       "preferences": "Préférences",
-      "quit": "Quitter",
-      "forceQuit": "Forcer à quitter",
+      "quit": "Quitter l'application",
+      "forceQuit": "Forcer à quitter l'application",
       "quitApp": "Quitter {appName}",
       "forceQuitApp": "Forcer à quitter {appName}",
       "failedQuitting": "Échec de la fermeture de {appName}",
       "forceQuitConfirm": "Forcer à quitter « {appName} » ? Les modifications non enregistrées seront perdues.",
-      "uninstallApplication": "Désinstaller l'application"
+      "uninstallApplication": "Désinstaller l'application",
+      "enableAutoQuit": "Activer la fermeture auto",
+      "disableAutoQuit": "Désactiver la fermeture auto",
+      "disableApplication": "Désactiver l'application",
+      "disableCommand": "Désactiver la commande"
     },
     "empty": {
       "title": "Aucun résultat",

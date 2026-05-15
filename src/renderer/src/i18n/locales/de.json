@@ -133,6 +133,13 @@
       "checkUpdates": {
         "label": "Automatisch nach Updates suchen",
         "description": "Prüfen, ob eine neue Version verfügbar ist"
+      },
+      "autoQuit": {
+        "title": "Auto-Beenden",
+        "timeout": "Standard-Timeout",
+        "description": "Apps mit aktiviertem Auto-Beenden werden nach dieser Inaktivitätsdauer geschlossen",
+        "minute": "Minute",
+        "minutes": "Minuten"
       }
     },
     "ai": {
@@ -768,13 +775,17 @@
       "paste": "Einfügen",
       "delete": "Löschen",
       "preferences": "Einstellungen",
-      "quit": "Beenden",
-      "forceQuit": "Erzwungenes Beenden",
+      "quit": "Anwendung beenden",
+      "forceQuit": "Anwendung erzwungen beenden",
       "quitApp": "{appName} beenden",
       "forceQuitApp": "{appName} beenden erzwingen",
       "failedQuitting": "Beenden von {appName} fehlgeschlagen",
       "forceQuitConfirm": "\"{appName}\" beenden erzwingen? Nicht gesicherte Änderungen gehen verloren.",
-      "uninstallApplication": "Anwendung deinstallieren"
+      "uninstallApplication": "Anwendung deinstallieren",
+      "enableAutoQuit": "Auto-Beenden aktivieren",
+      "disableAutoQuit": "Auto-Beenden deaktivieren",
+      "disableApplication": "Anwendung deaktivieren",
+      "disableCommand": "Befehl deaktivieren"
     },
     "empty": {
       "title": "Keine Ergebnisse",

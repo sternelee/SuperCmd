@@ -13632,6 +13632,7 @@ app.whenReady().then(async () => {
       }
 
       saveSettings({ disabledCommands: disabled, enabledCommands: explicitlyEnabled });
+      broadcastCommandsUpdated();
       return true;
     }
   );
@@ -14747,6 +14748,87 @@ return appURL's |path|() as text`,
     }
 
     return { success: errors.length === 0, errors };
+  });
+
+  // ─── Auto Quit ─────────────────────────────────────────────────────────────
+  const autoQuitManager = require('./auto-quit-manager') as typeof import('./auto-quit-manager');
+
+  // Initialize auto-quit if there are apps configured
+  const initialAutoQuitApps = (loadSettings() as AppSettings).autoQuitApps || [];
+  if (initialAutoQuitApps.length > 0) {
+    autoQuitManager.startAutoQuit(initialAutoQuitApps);
+  }
+
+  ipcMain.handle('auto-quit-get-apps', () => {
+    return (loadSettings() as AppSettings).autoQuitApps || [];
+  });
+
+  ipcMain.handle('auto-quit-add-app', async (_event: any, entry: { appPath: string; appName: string; timeoutSeconds: number }) => {
+    // Validate inputs
+    if (!entry || typeof entry.appPath !== 'string' || typeof entry.appName !== 'string' || typeof entry.timeoutSeconds !== 'number') return;
+
+    // Validate appPath: must be absolute, end with .app, under known app directories, no traversal
+    const resolvedPath = path.resolve(entry.appPath);
+    if (resolvedPath !== entry.appPath) return; // reject relative or traversal paths
+    if (!resolvedPath.endsWith('.app')) return;
+    const allowedAppPrefixes = ['/Applications', '/System/Applications', path.join(os.homedir(), 'Applications')];
+    if (!allowedAppPrefixes.some(prefix => resolvedPath.startsWith(prefix + '/'))) return;
+
+    // Validate appName: strip anything suspicious, max 200 chars
+    const safeName = String(entry.appName).replace(/[^\w\s\-().]/g, '').slice(0, 200);
+    if (!safeName) return;
+
+    // Validate timeoutSeconds: clamp to 30–3600
+    const safeTimeout = Math.max(30, Math.min(3600, Math.floor(entry.timeoutSeconds)));
+    if (!Number.isFinite(safeTimeout)) return;
+
+    // Resolve bundle ID from app path
+    let bundleId = '';
+    try {
+      const plistPath = path.join(resolvedPath, 'Contents', 'Info.plist');
+      bundleId = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', plistPath], {
+        encoding: 'utf-8',
+        timeout: 3000,
+      }).trim();
+    } catch {
+      // Fallback: use app name as identifier
+      bundleId = 'supercmd.autoquit.' + safeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+    if (!bundleId) return;
+
+    // Validate bundle ID to prevent AppleScript injection
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9.\-]*$/.test(bundleId) || bundleId.length > 255) return;
+
+    const resolved = { bundleId, appName: safeName, appPath: resolvedPath, timeoutSeconds: safeTimeout };
+    const settings = loadSettings() as AppSettings;
+    const apps = [...(settings.autoQuitApps || [])];
+    const idx = apps.findIndex(a => a.bundleId === bundleId);
+    if (idx >= 0) {
+      apps[idx] = resolved;
+    } else {
+      apps.push(resolved);
+    }
+    saveSettings({ autoQuitApps: apps } as Partial<AppSettings>);
+    autoQuitManager.updateAutoQuitApps(apps);
+    return bundleId;
+  });
+
+  ipcMain.handle('auto-quit-remove-app', (_event: any, appPath: string) => {
+    if (typeof appPath !== 'string' || !path.isAbsolute(appPath)) return;
+    const settings = loadSettings() as AppSettings;
+    const apps = (settings.autoQuitApps || []).filter((a: any) => a.appPath !== appPath);
+    saveSettings({ autoQuitApps: apps } as Partial<AppSettings>);
+    autoQuitManager.updateAutoQuitApps(apps);
+  });
+
+  ipcMain.handle('auto-quit-get-default-timeout', () => {
+    return ((loadSettings() as AppSettings).autoQuitDefaultTimeoutSeconds) ?? 180;
+  });
+
+  ipcMain.handle('auto-quit-set-default-timeout', (_event: any, seconds: number) => {
+    if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return;
+    const clamped = Math.max(30, Math.min(3600, Math.floor(seconds)));
+    saveSettings({ autoQuitDefaultTimeoutSeconds: clamped } as Partial<AppSettings>);
   });
 
   // File system operations for extensions
