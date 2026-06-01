@@ -718,6 +718,10 @@ export function useLauncherCommandModel({
 
   const webSearchRootDirectCommand = useMemo<CommandInfo | null>(() => {
     if (aiMode) return null;
+    // Browser search master toggle gates the synthetic "Search 'X'" entry
+    // and its suggestions. An explicit bang is still allowed — the user
+    // typed "!g …" deliberately and expects it to run regardless.
+    if (!browserSearch.enabled && rootBangState.mode !== 'active') return null;
     if (rootBangState.mode === 'none' && rootResolvedBrowserInput?.type === 'url') return null;
     const subject = rootBangState.mode === 'active'
       ? rootBangState.query.trim()
@@ -759,6 +763,9 @@ export function useLauncherCommandModel({
 
   const webSearchRootSuggestionCommands = useMemo<CommandInfo[]>(() => {
     if (aiMode) return [];
+    // Mirror the direct-search gate: hide autocomplete suggestions when
+    // browser search is disabled (unless the user typed an explicit bang).
+    if (!browserSearch.enabled && rootBangState.mode !== 'active') return [];
     if (rootBangState.mode === 'none' && rootResolvedBrowserInput?.type === 'url') return [];
     const subject = rootBangState.mode === 'active'
       ? rootBangState.query.trim()
