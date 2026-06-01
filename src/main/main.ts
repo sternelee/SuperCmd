@@ -16198,6 +16198,10 @@ return appURL's |path|() as text`,
       // Invalidate command cache so new extensions appear in the launcher
       invalidateCache();
       broadcastExtensionsUpdated();
+      // The launcher's root list listens for 'commands-updated', not
+      // 'extensions-updated' — without this, the new extension wouldn't
+      // appear in the launcher until the next app restart.
+      broadcastCommandsUpdated();
       // Record the install in synced settings so the user's other Macs
       // auto-install on their next launch.
       addInstalledExtensionToSettings(name);
@@ -16217,6 +16221,8 @@ return appURL's |path|() as text`,
         // extension before its bundle keeps trying to re-mount itself.
         broadcastExtensionUninstalled(name);
         broadcastExtensionsUpdated();
+        // Mirror the install path: refresh the launcher's root list too.
+        broadcastCommandsUpdated();
         // Record the uninstall in synced settings so other Macs don't
         // re-install it on their next launch.
         removeInstalledExtensionFromSettings(name);
