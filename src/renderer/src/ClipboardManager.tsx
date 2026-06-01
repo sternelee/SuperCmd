@@ -407,7 +407,12 @@ const ClipboardManager: React.FC<ClipboardManagerProps> = ({ onClose }) => {
     (e: React.KeyboardEvent) => {
       if (e.key === 'k' && e.metaKey && !e.repeat) {
         e.preventDefault();
-        setShowActions(p => !p);
+        setShowActions(p => {
+          // When closing, return focus to the search input so the selected
+          // item stays keyboard-navigable (matches the Escape behavior).
+          if (p) requestAnimationFrame(() => inputRef.current?.focus());
+          return !p;
+        });
         return;
       }
 
