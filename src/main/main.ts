@@ -16195,8 +16195,12 @@ return appURL's |path|() as text`,
       if (!success) {
         throw new Error(`Failed to install extension "${name}". Check SuperCmd main-process logs for details.`);
       }
-      // Invalidate command cache so new extensions appear in the launcher
+      // Invalidate the command cache and rebuild it BEFORE we broadcast, so
+      // the renderer's follow-up get-commands fetch lands on fresh data
+      // rather than the stale fallback that getAvailableCommands() returns
+      // immediately after an invalidation.
       invalidateCache();
+      try { await refreshCommandsNow(); } catch (e) { console.warn('refreshCommandsNow after install failed:', e); }
       broadcastExtensionsUpdated();
       // The launcher's root list listens for 'commands-updated', not
       // 'extensions-updated' — without this, the new extension wouldn't
@@ -16214,8 +16218,10 @@ return appURL's |path|() as text`,
     async (_event: any, name: string) => {
       const success = await uninstallExtension(name);
       if (success) {
-        // Invalidate command cache so removed extensions disappear
+        // Invalidate the command cache and rebuild synchronously before
+        // broadcasting — see install-extension handler for context.
         invalidateCache();
+        try { await refreshCommandsNow(); } catch (e) { console.warn('refreshCommandsNow after uninstall failed:', e); }
         // Tell the launcher renderer to tear down any live runners (menu-bar
         // tray, background no-view loop, interval re-runner) for this
         // extension before its bundle keeps trying to re-mount itself.
